@@ -1,0 +1,12 @@
+[
+  {
+    "task_id": "legacy-1",
+    "node_id": "A",
+    "cpu": 4,
+    "memory": 16,
+    "bandwidth": 20,
+    "path": [
+      ["A", "B"]
+    ]
+  }
+]

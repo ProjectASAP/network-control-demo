@@ -1,0 +1,23 @@
+[
+  {
+    "node_id": "A",
+    "cpu_capacity": 16,
+    "memory_capacity": 64,
+    "used_cpu": 0,
+    "used_memory": 0
+  },
+  {
+    "node_id": "B",
+    "cpu_capacity": 12,
+    "memory_capacity": 48,
+    "used_cpu": 4,
+    "used_memory": 8
+  },
+  {
+    "node_id": "C",
+    "cpu_capacity": 20,
+    "memory_capacity": 80,
+    "used_cpu": 0,
+    "used_memory": 0
+  }
+]

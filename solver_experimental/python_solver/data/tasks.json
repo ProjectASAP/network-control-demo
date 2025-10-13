@@ -1,0 +1,31 @@
+[
+  {
+    "task_id": "video-analytics",
+    "cpu": 6,
+    "memory": 24,
+    "bandwidth": 25,
+    "priority": 3.0,
+    "communications": [
+      {"target_task": "telemetry", "bandwidth": 20},
+      {"target_task": "batch-job", "bandwidth": 5}
+    ]
+  },
+  {
+    "task_id": "telemetry",
+    "cpu": 2,
+    "memory": 8,
+    "bandwidth": 5,
+    "priority": 1.0,
+    "communications": [
+      {"target_task": "video-analytics", "bandwidth": 5}
+    ]
+  },
+  {
+    "task_id": "batch-job",
+    "cpu": 10,
+    "memory": 32,
+    "bandwidth": 0,
+    "priority": 2.0,
+    "communications": []
+  }
+]

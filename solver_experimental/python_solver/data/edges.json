@@ -1,0 +1,20 @@
+[
+  {
+    "source": "A",
+    "target": "B",
+    "capacity": 100,
+    "used_bandwidth": 0
+  },
+  {
+    "source": "B",
+    "target": "C",
+    "capacity": 60,
+    "used_bandwidth": 10
+  },
+  {
+    "source": "A",
+    "target": "C",
+    "capacity": 40,
+    "used_bandwidth": 0
+  }
+]
