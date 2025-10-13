@@ -6,6 +6,9 @@ CONFIG_FILE = "experiments/config/natural_query_config.yml"
 JINJA_TEMPLATE = "experiments/config/experiment_type/workshop_template.j2"
 OUTPUT_FILE = "experiments/config/experiment_type/workshop_demo.yaml"
 
+QUERY_TIME_OFFSET = 10
+MAXIMUM_WINDOW_SIZE = 0
+
 def load_config(path):
     with open(path, "r") as f:
         return yaml.safe_load(f)
@@ -42,6 +45,7 @@ def scale_duration(duration, multiplier):
 
 # ---------- Generate queries and complementary metrics ----------
 def generate_queries_and_metrics(config):
+    global MAXIMUM_WINDOW_SIZE
     queries = []
     complementary_metrics = []
 
@@ -73,6 +77,8 @@ def generate_queries_and_metrics(config):
                             duration = scale_duration(control_epoch, k_value)
                         else:
                             continue
+                        time_length = parse_duration_to_seconds(duration)
+                        MAXIMUM_WINDOW_SIZE = max(MAXIMUM_WINDOW_SIZE, time_length)
                         queries.append(build_promql(metric_name, stat, duration))
 
     return queries, complementary_metrics
@@ -87,7 +93,9 @@ def render_template(config, queries, complementary_metrics,
     rendered = template.render(
         queries=queries,
         repetition_delay=repetition_delay,
-        metrics=complementary_metrics
+        metrics=complementary_metrics,
+        query_time_offset=QUERY_TIME_OFFSET,
+        starting_delay=QUERY_TIME_OFFSET + MAXIMUM_WINDOW_SIZE,
     )
     with open(output_file, "w") as f:
         f.write(rendered)

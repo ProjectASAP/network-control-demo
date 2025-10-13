@@ -179,7 +179,7 @@ query_groups:
   client_options:
     repetitions: 10
     query_time_offset: 10
-    starting_delay: 610
+    starting_delay: 1210
 
   controller_options:
     accuracy_sla: 0.99
