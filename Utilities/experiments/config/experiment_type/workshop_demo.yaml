@@ -30,152 +30,152 @@ query_groups:
 - id: 1
   queries:
 
-    - quantile_over_time(0.5, cpu_usage[25m])
-
     - quantile_over_time(0.5, cpu_usage[150s])
 
-    - quantile_over_time(0.9, cpu_usage[25m])
+    - quantile_over_time(0.5, cpu_usage[20m])
 
     - quantile_over_time(0.9, cpu_usage[150s])
 
-    - quantile_over_time(0.95, cpu_usage[25m])
+    - quantile_over_time(0.9, cpu_usage[20m])
 
     - quantile_over_time(0.95, cpu_usage[150s])
 
-    - avg_over_time(cpu_usage[25m])
+    - quantile_over_time(0.95, cpu_usage[20m])
 
     - avg_over_time(cpu_usage[150s])
 
-    - quantile_over_time(0.5, cpu_usage_task_id[25m])
+    - avg_over_time(cpu_usage[20m])
 
     - quantile_over_time(0.5, cpu_usage_task_id[150s])
 
-    - quantile_over_time(0.9, cpu_usage_task_id[25m])
+    - quantile_over_time(0.5, cpu_usage_task_id[20m])
 
     - quantile_over_time(0.9, cpu_usage_task_id[150s])
 
-    - quantile_over_time(0.95, cpu_usage_task_id[25m])
+    - quantile_over_time(0.9, cpu_usage_task_id[20m])
 
     - quantile_over_time(0.95, cpu_usage_task_id[150s])
 
-    - avg_over_time(cpu_usage_task_id[25m])
+    - quantile_over_time(0.95, cpu_usage_task_id[20m])
 
     - avg_over_time(cpu_usage_task_id[150s])
 
-    - quantile_over_time(0.5, cpu_usage_node_id[25m])
+    - avg_over_time(cpu_usage_task_id[20m])
 
     - quantile_over_time(0.5, cpu_usage_node_id[150s])
 
-    - quantile_over_time(0.9, cpu_usage_node_id[25m])
+    - quantile_over_time(0.5, cpu_usage_node_id[20m])
 
     - quantile_over_time(0.9, cpu_usage_node_id[150s])
 
-    - quantile_over_time(0.95, cpu_usage_node_id[25m])
+    - quantile_over_time(0.9, cpu_usage_node_id[20m])
 
     - quantile_over_time(0.95, cpu_usage_node_id[150s])
 
-    - avg_over_time(cpu_usage_node_id[25m])
+    - quantile_over_time(0.95, cpu_usage_node_id[20m])
 
     - avg_over_time(cpu_usage_node_id[150s])
 
-    - quantile_over_time(0.5, memory_usage[25m])
+    - avg_over_time(cpu_usage_node_id[20m])
 
     - quantile_over_time(0.5, memory_usage[150s])
 
-    - quantile_over_time(0.9, memory_usage[25m])
+    - quantile_over_time(0.5, memory_usage[20m])
 
     - quantile_over_time(0.9, memory_usage[150s])
 
-    - quantile_over_time(0.95, memory_usage[25m])
+    - quantile_over_time(0.9, memory_usage[20m])
 
     - quantile_over_time(0.95, memory_usage[150s])
 
-    - avg_over_time(memory_usage[25m])
+    - quantile_over_time(0.95, memory_usage[20m])
 
     - avg_over_time(memory_usage[150s])
 
-    - quantile_over_time(0.5, memory_usage_task_id[25m])
+    - avg_over_time(memory_usage[20m])
 
     - quantile_over_time(0.5, memory_usage_task_id[150s])
 
-    - quantile_over_time(0.9, memory_usage_task_id[25m])
+    - quantile_over_time(0.5, memory_usage_task_id[20m])
 
     - quantile_over_time(0.9, memory_usage_task_id[150s])
 
-    - quantile_over_time(0.95, memory_usage_task_id[25m])
+    - quantile_over_time(0.9, memory_usage_task_id[20m])
 
     - quantile_over_time(0.95, memory_usage_task_id[150s])
 
-    - avg_over_time(memory_usage_task_id[25m])
+    - quantile_over_time(0.95, memory_usage_task_id[20m])
 
     - avg_over_time(memory_usage_task_id[150s])
 
-    - quantile_over_time(0.5, memory_usage_node_id[25m])
+    - avg_over_time(memory_usage_task_id[20m])
 
     - quantile_over_time(0.5, memory_usage_node_id[150s])
 
-    - quantile_over_time(0.9, memory_usage_node_id[25m])
+    - quantile_over_time(0.5, memory_usage_node_id[20m])
 
     - quantile_over_time(0.9, memory_usage_node_id[150s])
 
-    - quantile_over_time(0.95, memory_usage_node_id[25m])
+    - quantile_over_time(0.9, memory_usage_node_id[20m])
 
     - quantile_over_time(0.95, memory_usage_node_id[150s])
 
-    - avg_over_time(memory_usage_node_id[25m])
+    - quantile_over_time(0.95, memory_usage_node_id[20m])
 
     - avg_over_time(memory_usage_node_id[150s])
 
-    - quantile_over_time(0.5, bandwidth_usage[25m])
+    - avg_over_time(memory_usage_node_id[20m])
 
-    - quantile_over_time(0.5, bandwidth_usage[150s])
+    - quantile_over_time(0.5, available_bandwidth_usage[150s])
 
-    - quantile_over_time(0.9, bandwidth_usage[25m])
+    - quantile_over_time(0.5, available_bandwidth_usage[20m])
 
-    - quantile_over_time(0.9, bandwidth_usage[150s])
+    - quantile_over_time(0.9, available_bandwidth_usage[150s])
 
-    - quantile_over_time(0.95, bandwidth_usage[25m])
+    - quantile_over_time(0.9, available_bandwidth_usage[20m])
 
-    - quantile_over_time(0.95, bandwidth_usage[150s])
+    - quantile_over_time(0.95, available_bandwidth_usage[150s])
 
-    - avg_over_time(bandwidth_usage[25m])
+    - quantile_over_time(0.95, available_bandwidth_usage[20m])
 
-    - avg_over_time(bandwidth_usage[150s])
+    - avg_over_time(available_bandwidth_usage[150s])
 
-    - quantile_over_time(0.5, bandwidth_usage_source_task_id[25m])
+    - avg_over_time(available_bandwidth_usage[20m])
 
-    - quantile_over_time(0.5, bandwidth_usage_source_task_id[150s])
+    - quantile_over_time(0.5, available_bandwidth_usage_source_task_id[150s])
 
-    - quantile_over_time(0.9, bandwidth_usage_source_task_id[25m])
+    - quantile_over_time(0.5, available_bandwidth_usage_source_task_id[20m])
 
-    - quantile_over_time(0.9, bandwidth_usage_source_task_id[150s])
+    - quantile_over_time(0.9, available_bandwidth_usage_source_task_id[150s])
 
-    - quantile_over_time(0.95, bandwidth_usage_source_task_id[25m])
+    - quantile_over_time(0.9, available_bandwidth_usage_source_task_id[20m])
 
-    - quantile_over_time(0.95, bandwidth_usage_source_task_id[150s])
+    - quantile_over_time(0.95, available_bandwidth_usage_source_task_id[150s])
 
-    - avg_over_time(bandwidth_usage_source_task_id[25m])
+    - quantile_over_time(0.95, available_bandwidth_usage_source_task_id[20m])
 
-    - avg_over_time(bandwidth_usage_source_task_id[150s])
+    - avg_over_time(available_bandwidth_usage_source_task_id[150s])
 
-    - quantile_over_time(0.5, bandwidth_usage_target_task_id[25m])
+    - avg_over_time(available_bandwidth_usage_source_task_id[20m])
 
-    - quantile_over_time(0.5, bandwidth_usage_target_task_id[150s])
+    - quantile_over_time(0.5, available_bandwidth_usage_target_task_id[150s])
 
-    - quantile_over_time(0.9, bandwidth_usage_target_task_id[25m])
+    - quantile_over_time(0.5, available_bandwidth_usage_target_task_id[20m])
 
-    - quantile_over_time(0.9, bandwidth_usage_target_task_id[150s])
+    - quantile_over_time(0.9, available_bandwidth_usage_target_task_id[150s])
 
-    - quantile_over_time(0.95, bandwidth_usage_target_task_id[25m])
+    - quantile_over_time(0.9, available_bandwidth_usage_target_task_id[20m])
 
-    - quantile_over_time(0.95, bandwidth_usage_target_task_id[150s])
+    - quantile_over_time(0.95, available_bandwidth_usage_target_task_id[150s])
 
-    - avg_over_time(bandwidth_usage_target_task_id[25m])
+    - quantile_over_time(0.95, available_bandwidth_usage_target_task_id[20m])
 
-    - avg_over_time(bandwidth_usage_target_task_id[150s])
+    - avg_over_time(available_bandwidth_usage_target_task_id[150s])
+
+    - avg_over_time(available_bandwidth_usage_target_task_id[20m])
 
 
-  repetition_delay: 300
+  repetition_delay: 240
   client_options:
     repetitions: 10
     query_time_offset: 10
@@ -211,14 +211,14 @@ metrics:
     labels: ['task_id']
     exporter: fake_exporter
 
-  - metric: "bandwidth_usage"
+  - metric: "available_bandwidth_usage"
     labels: ['source_task_id', 'target_task_id']
     exporter: fake_exporter
 
-  - metric: "bandwidth_usage_source_task_id"
+  - metric: "available_bandwidth_usage_source_task_id"
     labels: ['target_task_id']
     exporter: fake_exporter
 
-  - metric: "bandwidth_usage_target_task_id"
+  - metric: "available_bandwidth_usage_target_task_id"
     labels: ['source_task_id']
     exporter: fake_exporter

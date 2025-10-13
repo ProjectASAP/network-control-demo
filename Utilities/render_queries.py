@@ -10,8 +10,9 @@ def load_config(path):
     with open(path, "r") as f:
         return yaml.safe_load(f)
 
-def build_metric_name(metric, entity=None):
-    if entity is None:
+def build_metric_name(metric, entity):
+    """Create metric name, skip 'none' entity"""
+    if entity.lower() == "none":
         return metric.lower()
     return f"{metric.lower()}_{entity.lower()}"
 
@@ -42,7 +43,7 @@ def scale_duration(duration, multiplier):
 # ---------- Generate queries and complementary metrics ----------
 def generate_queries_and_metrics(config):
     queries = []
-    complementary_metrics = []  # For Jinja template
+    complementary_metrics = []
 
     measurement_epoch = config["epochs"]["measurement_epoch"]
     control_epoch = config["epochs"]["control_epoch"]
@@ -50,34 +51,19 @@ def generate_queries_and_metrics(config):
     for metric_entry in config["metrics"]:
         metric = metric_entry["metric"]
         entities = metric_entry.get("entities", [])
+        labels = metric_entry.get("labels", [])
 
-        metric_name = build_metric_name(metric, None)
-        complementary_entities = entities.copy()
-        complementary_metrics.append({
-            "metric": metric_name,
-            "entities": complementary_entities
-        })
-        for stat in config["statistics"]:
-                for window in config["time_windows"]:
-                    for k_type, k_value in window.items():
-                        if "measurement" in k_type:
-                            duration = scale_duration(measurement_epoch, k_value)
-                        elif "control" in k_type:
-                            duration = scale_duration(control_epoch, k_value)
-                        else:
-                            continue
-                        queries.append(build_promql(metric_name, stat, duration))
-                        
         for entity in entities:
             metric_name = build_metric_name(metric, entity)
-            # Compute complementary entities
-            complementary_entities = [e for e in entities if e != entity]
+
+            # complementary entities = labels not in metric_name
+            complementary_entities = [e for e in entities if e != entity and e != "none"]
             complementary_metrics.append({
                 "metric": metric_name,
                 "entities": complementary_entities
             })
 
-            # Generate queries
+            # generate queries for each statistic & time window
             for stat in config["statistics"]:
                 for window in config["time_windows"]:
                     for k_type, k_value in window.items():
@@ -97,7 +83,7 @@ def render_template(config, queries, complementary_metrics,
                     output_file=OUTPUT_FILE):
     env = Environment(loader=FileSystemLoader("."))
     template = env.get_template(template_file)
-    repetition_delay = parse_duration_to_seconds(config["epochs"]["measurement_epoch"])
+    repetition_delay = parse_duration_to_seconds(config["epochs"]["control_epoch"])
     rendered = template.render(
         queries=queries,
         repetition_delay=repetition_delay,
@@ -115,5 +101,3 @@ if __name__ == "__main__":
     config = load_config(config_path)
     queries, complementary_metrics = generate_queries_and_metrics(config)
     render_template(config, queries, complementary_metrics)
-
-
