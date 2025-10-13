@@ -30,6 +30,22 @@ query_groups:
 - id: 1
   queries:
 
+    - quantile_over_time(0.5, cpu_usage[25m])
+
+    - quantile_over_time(0.5, cpu_usage[150s])
+
+    - quantile_over_time(0.9, cpu_usage[25m])
+
+    - quantile_over_time(0.9, cpu_usage[150s])
+
+    - quantile_over_time(0.95, cpu_usage[25m])
+
+    - quantile_over_time(0.95, cpu_usage[150s])
+
+    - avg_over_time(cpu_usage[25m])
+
+    - avg_over_time(cpu_usage[150s])
+
     - quantile_over_time(0.5, cpu_usage_task_id[25m])
 
     - quantile_over_time(0.5, cpu_usage_task_id[150s])
@@ -62,6 +78,22 @@ query_groups:
 
     - avg_over_time(cpu_usage_node_id[150s])
 
+    - quantile_over_time(0.5, mem_usage[25m])
+
+    - quantile_over_time(0.5, mem_usage[150s])
+
+    - quantile_over_time(0.9, mem_usage[25m])
+
+    - quantile_over_time(0.9, mem_usage[150s])
+
+    - quantile_over_time(0.95, mem_usage[25m])
+
+    - quantile_over_time(0.95, mem_usage[150s])
+
+    - avg_over_time(mem_usage[25m])
+
+    - avg_over_time(mem_usage[150s])
+
     - quantile_over_time(0.5, mem_usage_task_id[25m])
 
     - quantile_over_time(0.5, mem_usage_task_id[150s])
@@ -93,6 +125,22 @@ query_groups:
     - avg_over_time(mem_usage_node_id[25m])
 
     - avg_over_time(mem_usage_node_id[150s])
+
+    - quantile_over_time(0.5, bandwidth_usage[25m])
+
+    - quantile_over_time(0.5, bandwidth_usage[150s])
+
+    - quantile_over_time(0.9, bandwidth_usage[25m])
+
+    - quantile_over_time(0.9, bandwidth_usage[150s])
+
+    - quantile_over_time(0.95, bandwidth_usage[25m])
+
+    - quantile_over_time(0.95, bandwidth_usage[150s])
+
+    - avg_over_time(bandwidth_usage[25m])
+
+    - avg_over_time(bandwidth_usage[150s])
 
     - quantile_over_time(0.5, bandwidth_usage_source_task_id[25m])
 
@@ -139,6 +187,10 @@ query_groups:
 
 metrics:
 
+  - metric: "cpu_usage"
+    labels: ['task_id', 'node_id']
+    exporter: fake_exporter
+
   - metric: "cpu_usage_task_id"
     labels: ['node_id']
     exporter: fake_exporter
@@ -147,12 +199,20 @@ metrics:
     labels: ['task_id']
     exporter: fake_exporter
 
+  - metric: "mem_usage"
+    labels: ['task_id', 'node_id']
+    exporter: fake_exporter
+
   - metric: "mem_usage_task_id"
     labels: ['node_id']
     exporter: fake_exporter
 
   - metric: "mem_usage_node_id"
     labels: ['task_id']
+    exporter: fake_exporter
+
+  - metric: "bandwidth_usage"
+    labels: ['source_task_id', 'target_task_id']
     exporter: fake_exporter
 
   - metric: "bandwidth_usage_source_task_id"

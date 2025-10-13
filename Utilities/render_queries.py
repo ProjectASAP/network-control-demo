@@ -10,7 +10,9 @@ def load_config(path):
     with open(path, "r") as f:
         return yaml.safe_load(f)
 
-def build_metric_name(metric, entity):
+def build_metric_name(metric, entity=None):
+    if entity is None:
+        return metric.lower()
     return f"{metric.lower()}_{entity.lower()}"
 
 def build_promql(metric_name, stat, window_duration):
@@ -48,6 +50,24 @@ def generate_queries_and_metrics(config):
     for metric_entry in config["metrics"]:
         metric = metric_entry["metric"]
         entities = metric_entry.get("entities", [])
+
+        metric_name = build_metric_name(metric, None)
+        complementary_entities = entities.copy()
+        complementary_metrics.append({
+            "metric": metric_name,
+            "entities": complementary_entities
+        })
+        for stat in config["statistics"]:
+                for window in config["time_windows"]:
+                    for k_type, k_value in window.items():
+                        if "measurement" in k_type:
+                            duration = scale_duration(measurement_epoch, k_value)
+                        elif "control" in k_type:
+                            duration = scale_duration(control_epoch, k_value)
+                        else:
+                            continue
+                        queries.append(build_promql(metric_name, stat, duration))
+                        
         for entity in entities:
             metric_name = build_metric_name(metric, entity)
             # Compute complementary entities
