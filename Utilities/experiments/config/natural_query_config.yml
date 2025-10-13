@@ -3,7 +3,7 @@ metrics:
     entities: 
       - task_id
       - node_id
-  - metric: mem_usage
+  - metric: memory_usage
     entities: 
       - task_id
       - node_id
