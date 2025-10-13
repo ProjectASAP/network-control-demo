@@ -1,14 +1,16 @@
-entities:
-  - Task
-  - Node
-  - Edge
-  - Task,Node
-  - Task,Edge
-
 metrics:
-  - CPU
-  - Mem
-  - Bandwidth
+  - metric: cpu_usage
+    entities: 
+      - task_id
+      - node_id
+  - metric: mem_usage
+    entities: 
+      - task_id
+      - node_id
+  - metric: bandwidth_usage
+    entities: 
+      - source_task_id
+      - target_task_id
 
 statistics:
   - median
