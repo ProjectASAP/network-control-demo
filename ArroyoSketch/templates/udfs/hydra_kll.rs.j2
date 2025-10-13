@@ -12,8 +12,8 @@ use twox_hash::XxHash32;
 use dsrs::KllDoubleSketch;
 
 // KLL parameters
-// const DEFAULT_K: u16 = {{ k }};
-const DEFAULT_K: u16 = 20;
+const DEFAULT_K: u16 = {{ k }};
+// const DEFAULT_K: u16 = 20;
 // Kll Structure that will be used in HydraKllSketch
 #[derive(Serialize, Deserialize)]
 struct KllSketchData {
