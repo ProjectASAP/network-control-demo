@@ -1,0 +1,26 @@
+apiVersion: v2
+name: arroyo
+description: Helm chart for the Arroyo stream processing engine
+
+type: application
+version: 0.15.0-dev
+appVersion: "0.15.0-dev"
+
+keywords:
+  - stream-processing
+  - data
+  - sql
+  - real-time
+
+dependencies:
+  - name: postgresql
+    version: "^12"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.deploy
+
+maintainers:
+  - name: Arroyo Systems
+    email: support@arroyo.systems
+    url: https://arroyo.dev
+
+icon: https://raw.githubusercontent.com/ArroyoSystems/arroyo/afc004609351f6e4cd2c1f467bb7bf33ad044ccd/images/arroyo_logo.png

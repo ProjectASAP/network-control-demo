@@ -1,0 +1,102 @@
+[package]
+name = "arroyo-connectors"
+version = "0.15.0-dev"
+edition = "2021"
+
+[lints.clippy]
+to_string_trait_impl = "allow"
+
+[features]
+default = []
+
+[dependencies]
+arroyo-types = { path = "../arroyo-types" }
+arroyo-storage = { path = "../arroyo-storage" }
+arroyo-rpc = { path = "../arroyo-rpc" }
+arroyo-formats = { path = "../arroyo-formats" }
+arroyo-operator = { path = "../arroyo-operator" }
+arroyo-state = { path = "../arroyo-state" }
+arroyo-server-common = { path = "../arroyo-server-common" }
+
+arrow = { workspace = true }
+datafusion = { workspace = true }
+async-trait = "0.1"
+bincode = "2.0.0-rc.3"
+chrono = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+typify = "0.0.13"
+prost = {workspace = true}
+tonic = {workspace = true}
+governor = "0.8.0"
+anyhow = "1.0.71"
+tracing = "0.1.37"
+regress = "0.10.0"
+futures = "0.3.28"
+rand = { workspace = true }
+bytes = "1.5.0"
+url = "2.5.0"
+itertools = "0.14.0"
+regex = "1"
+
+##########################
+# connector dependencies #
+##########################
+
+# Kafka
+aws-msk-iam-sasl-signer = "1.0.0"
+rdkafka = { version = "0.37", features = ["cmake-build", "tracing", "sasl", "ssl-vendored", "zstd"] }
+sasl2-sys = { version = "0.1.22", features = ["vendored"] }
+
+# SSE
+eventsource-client = "0.13.0"
+
+# Websocket
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+
+# Webhook
+reqwest = { workspace = true, features = ["stream"] }
+
+# RabbitMQ Stream
+rabbitmq-stream-client = "0.7"
+
+# Redis
+redis = { version = "0.28", features = ["default", "tokio-rustls-comp", "cluster-async", "connection-manager"] }
+
+# Fluvio
+fluvio = {version = "0.24", features = ["openssl"]}
+
+# Kinesis
+aws-sdk-kinesis = { version = "1.44" }
+aws-config = { workspace = true }
+uuid = { version = "1.7.0", features = ["v4"] }
+
+# Filesystem
+parquet = { workspace = true, features = ["async"]}
+object_store = { workspace = true }
+deltalake = { workspace = true, features = ["s3", "gcs"] }
+async-compression = { version = "0.4.3", features = ["tokio", "zstd", "gzip"] }
+
+# MQTT
+rumqttc = { version = "0.24.0", features = ["url"] }
+rustls-native-certs =  "0.8"
+rustls-pemfile = "2"
+tokio-rustls = "0.25"
+rustls = "0.22"
+
+# NATS
+async-nats = "0.38.0"
+nkeys = "0.3.0"
+
+# Prometheus remote_write
+snap = "1.1.0"
+hyper = { version = "1.0", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+http-body-util = "0.1"
+tokio-util = { version = "0.7", features = ["codec"] }
+
+[build-dependencies]
+glob = "0.3"
+tonic-build = { workspace = true }

@@ -1,0 +1,17 @@
+You've successfully installed {{ .Chart.Name }}!
+
+This release is {{ .Release.Name }}
+
+Once the release is fully deployed, you can navigate to the web ui by running
+
+  $ open "http://$(kubectl get service/{{ .Release.Name }} -o jsonpath='{.spec.clusterIP}')"
+
+(note this might take a few minutes if you are also deploying Postgres)
+
+If that doesn't work (for example on MacOS or a remote Kubernetes cluster), you can also try
+
+  $ kubectl port-forward service/{{ .Release.Name }} 5115:80
+
+And opening http://localhost:5115 in your browser.
+
+See the documentation at https://doc.arroyo.dev, and ask questions on our discord: https://discord.gg/cjCr5rVmyR

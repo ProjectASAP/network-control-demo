@@ -1,0 +1,289 @@
+------------- SQL that works for SetAggregator --------------------
+// SQL that works (updating sink)
+CREATE TABLE debezium_sink (
+    labels TEXT[]
+) WITH (
+    connector = 'kafka',
+    type = 'sink',
+    topic = 'db_output',
+    format = 'debezium_json',
+    bootstrap_servers = 'localhost:9092'
+);
+
+INSERT INTO debezium_sink
+SELECT
+    array_distinct(array_agg(concat_ws(';', labels.instance, labels.label_0))) as current_set
+FROM flink_input_fake_metric_total
+
+// SQL that works (time windowing sink)
+CREATE TABLE debezium_sink (
+    window_times STRUCT<
+        start_timestamp TIMESTAMP,
+        end_timestamp TIMESTAMP
+    >,
+    labels TEXT[]
+) WITH (
+    connector = 'kafka',
+    type = 'sink',
+    topic = 'db_output',
+    format = 'json',
+    bootstrap_servers = 'localhost:9092'
+);
+
+INSERT INTO debezium_sink
+SELECT
+    TUMBLE(interval '10 seconds') as window,
+    array_distinct(array_agg(concat_ws(';', labels.instance, labels.label_0))) as current_set
+FROM flink_input_fake_metric_total
+GROUP BY window
+
+------------- SQL that I tried for DeltaSetAggregator --------------------
+
+// Incremental SQL queries that I tried
+WITH windowed_sets AS (
+    SELECT
+        TUMBLE(interval '10 seconds') as window,
+            array_distinct(array_agg(concat_ws(';', labels.instance, labels.label_0)))
+        as current_set,
+        1 as partition_key
+    FROM flink_input_fake_metric_total
+    GROUP BY window
+),
+with_previous AS (
+    SELECT
+        window,
+        current_set,
+        LAG(current_set, 1) OVER (PARTITION BY partition_key ORDER BY window.start) as previous_set
+    FROM windowed_sets
+)
+SELECT window.start, window.end, current_set -- , previous_set
+FROM with_previous
+
+// SQL works but wrong result
+// previous_set is always empty
+WITH windowed_sets AS (
+    SELECT
+        TUMBLE(interval '10 seconds') as window,
+        array_distinct(array_agg(concat_ws(';', labels.instance, labels.label_0))) as current_set,
+        1 as partition_key
+    FROM flink_input_fake_metric_total
+    GROUP BY window
+)
+SELECT
+    windowed_sets.window,
+    windowed_sets.current_set,
+    LAG(windowed_sets.current_set, 1) OVER (PARTITION BY window ORDER BY window.start) as previous_set
+FROM windowed_sets
+
+// Another pipeline that I tried that doesn't work
+CREATE TABLE current_state (current_set TEXT);
+CREATE TABLE previous_state (previous_set TEXT);
+
+INSERT INTO current_state
+SELECT
+    concat_ws(';', labels.instance, labels.label_0) as current_set
+    FROM flink_input_fake_metric_total;
+
+    INSERT INTO previous_state
+    SELECT '';
+
+    -- GROUP BY TUMBLE(interval '10 seconds'), labels.instance, labels.label_0;
+
+    -- SELECT is_previous, COUNT(*) FROM table_state GROUP BY TUMBLE(interval '10 seconds'), is_previous
+
+    SELECT COUNT(current_state.current_set), COUNT(previous_state.previous_set)
+    FROM current_state, previous_state;c
+
+
+------------- Dump from long Claude conversation --------------------
+
+-- Simplified UDFs for tracking set differences of concat_ws strings
+/*
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+*/
+
+use arroyo_udf_plugin::udf;
+use std::collections::HashSet;
+
+-- UDAF to collect unique concat_ws strings in a window
+#[udf]
+fn collect_unique_strings(strings: Vec<String>) -> String {
+    let unique_strings: HashSet<String> = strings.into_iter()
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let mut sorted_strings: Vec<String> = unique_strings.into_iter().collect();
+    sorted_strings.sort();
+
+    if sorted_strings.is_empty() {
+        String::new()
+    } else {
+        sorted_strings.join("|")
+    }
+}
+
+-- UDF to find set differences between two pipe-separated string sets
+#[udf]
+fn find_set_differences(current_set: &str, previous_set: &str) -> String {
+    let current: HashSet<&str> = if current_set.is_empty() {
+        HashSet::new()
+    } else {
+        current_set.split('|').collect()
+    };
+
+    let previous: HashSet<&str> = if previous_set.is_empty() {
+        HashSet::new()
+    } else {
+        previous_set.split('|').collect()
+    };
+
+    let mut changes = Vec::new();
+
+    // Find new strings (in current but not in previous)
+    for item in &current {
+        if !previous.contains(item) {
+            changes.push(format!("NEW:{}", item));
+        }
+    }
+
+    // Find missing strings (in previous but not in current)
+    for item in &previous {
+        if !current.contains(item) {
+            changes.push(format!("MISSING:{}", item));
+        }
+    }
+
+    if changes.is_empty() {
+        "NO_CHANGES".to_string()
+    } else {
+        changes.join("|")
+    }
+}
+
+-- UDF to check if there are any changes
+#[udf]
+fn has_changes(differences: &str) -> bool {
+    differences != "NO_CHANGES" && !differences.is_empty()
+}
+
+-- Source table (adjust columns to match your actual schema)
+CREATE TABLE metrics_data (
+    timestamp TIMESTAMP,
+    label_env TEXT,
+    label_service TEXT,
+    label_instance TEXT,
+    label_job TEXT,
+    metric_name TEXT,
+    metric_value DOUBLE
+) WITH (
+    connector = 'kafka',
+    bootstrap_servers = 'localhost:9092',
+    topic = 'metrics-topic',
+    format = 'json'
+);
+
+-- Sink table for outputting results
+CREATE TABLE string_set_changes (
+    window_start TIMESTAMP,
+    window_end TIMESTAMP,
+    changes TEXT,
+    current_set TEXT,
+    previous_set TEXT
+) WITH (
+    connector = 'kafka',
+    bootstrap_servers = 'localhost:9092',
+    topic = 'set-changes',
+    format = 'json'
+);
+
+-- Main query using LAG to compare consecutive windows
+WITH windowed_sets AS (
+    SELECT
+        window_start(TUMBLE(interval '10 seconds')) as window_start,
+        window_end(TUMBLE(interval '10 seconds')) as window_end,
+        collect_unique_strings(
+            array_agg(concat_ws(';', label_env, label_service, label_instance, label_job))
+        ) as current_set
+    FROM metrics_data
+    GROUP BY TUMBLE(interval '10 seconds')
+),
+with_previous AS (
+    SELECT
+        window_start,
+        window_end,
+        current_set,
+        LAG(current_set, 1) OVER (ORDER BY window_start) as previous_set
+    FROM windowed_sets
+),
+changes_detected AS (
+    SELECT
+        window_start,
+        window_end,
+        current_set,
+        COALESCE(previous_set, '') as previous_set,
+        find_set_differences(current_set, COALESCE(previous_set, '')) as changes
+    FROM with_previous
+)
+INSERT INTO string_set_changes
+SELECT
+    window_start,
+    window_end,
+    changes,
+    current_set,
+    previous_set
+FROM changes_detected
+WHERE has_changes(changes);
+
+-- Alternative: Simple query to see all window sets (for testing)
+SELECT
+    window_start(TUMBLE(interval '10 seconds')) as window_start,
+    window_end(TUMBLE(interval '10 seconds')) as window_end,
+    collect_unique_strings(
+        array_agg(concat_ws(';', label_env, label_service, label_instance, label_job))
+    ) as unique_strings,
+    count(*) as record_count
+FROM metrics_data
+GROUP BY TUMBLE(interval '10 seconds');
+
+-- Alternative: Memory table approach for explicit state management
+CREATE TABLE set_state (
+    state_key TEXT PRIMARY KEY,
+    last_window_end TIMESTAMP,
+    last_set TEXT
+) WITH (
+    connector = 'memory'
+);
+
+-- Initialize state
+INSERT INTO set_state VALUES ('current', TIMESTAMP '1970-01-01 00:00:00', '');
+
+-- Query with explicit state management
+WITH current_window AS (
+    SELECT
+        window_start(TUMBLE(interval '10 seconds')) as window_start,
+        window_end(TUMBLE(interval '10 seconds')) as window_end,
+        collect_unique_strings(
+            array_agg(concat_ws(';', label_env, label_service, label_instance, label_job))
+        ) as current_set
+    FROM metrics_data
+    GROUP BY TUMBLE(interval '10 seconds')
+),
+with_state AS (
+    SELECT
+        cw.window_start,
+        cw.window_end,
+        cw.current_set,
+        COALESCE(ss.last_set, '') as previous_set
+    FROM current_window cw
+    LEFT JOIN set_state ss ON ss.state_key = 'current'
+)
+SELECT
+    window_start,
+    window_end,
+    find_set_differences(current_set, previous_set) as changes,
+    current_set,
+    previous_set
+FROM with_state
+WHERE has_changes(find_set_differences(current_set, previous_set));

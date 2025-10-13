@@ -1,0 +1,50 @@
+[package]
+name = "arroyo-rpc"
+version = "0.15.0-dev"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+arroyo-types = { path = "../arroyo-types" }
+
+arrow = { workspace = true }
+arrow-array = { workspace = true }
+arrow-ord = { workspace = true }
+arrow-schema = {workspace = true, features = ["serde"]}
+tonic = { workspace = true, features = ["tls-native-roots", "tls-webpki-roots"] }
+prost = {workspace = true}
+tokio = { version = "1", features = ["full"] }
+futures = { version = "0.3.30" }
+serde = {version = "1.0", features = ["derive"]}
+serde_json = "1.0"
+nanoid = "0.4"
+utoipa = { workspace = true }
+anyhow = "1"
+reqwest = { workspace = true, features = ["default", "json"] }
+log = "0.4.20"
+tracing = "0.1.40"
+async-trait = "0.1.74"
+apache-avro = {workspace =  true}
+regex = "1.9.5"
+base64 = "0.22"
+ahash = { workspace = true }
+strum_macros = "0.27"
+strum = "0.27"
+figment = { version = "0.10", features = ["toml", "env", "yaml", "json"] }
+k8s-openapi = { workspace = true, features = ["v1_30"] }
+url = { version = "2", features = ["serde"] }
+dirs = "6"
+arc-swap = "1.7.1"
+datafusion = { workspace = true }
+rand = { workspace = true }
+percent-encoding = "2.3.1"
+rustls-native-certs = "0.8.1"
+rustls = {workspace = true}
+local-ip-address = "0.6"
+
+[build-dependencies]
+tonic-build = { workspace = true }
+
+[dev-dependencies]
+figment = {version = "0.10", features = ["test"]}

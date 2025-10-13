@@ -1,0 +1,15 @@
+# @package _global_
+# Development environment overrides
+
+cloudlab:
+  num_nodes: 2
+  hostname_suffix: "dev.cloudlab.us"
+
+logging:
+  level: "DEBUG"
+
+flow:
+  steady_state_wait: 60  # Shorter wait for development
+
+streaming:
+  do_local_flink: true

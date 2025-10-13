@@ -1,0 +1,56 @@
+# QueryEngine Rust Docker Compose Template
+# This template is rendered with Jinja2 to generate the final docker-compose.yml
+
+version: '3.8'
+
+services:
+  queryengine-rust:
+    image: sketchdb-queryengine-rust:latest
+    container_name: {{ container_name | default('sketchdb-queryengine-rust') }}
+    environment:
+      - RUST_LOG={{ rust_log_level | default('info') }}
+      - RUST_BACKTRACE=1
+    ports:
+      - "{{ http_port | default('8088') }}:8088"
+    volumes:
+      # Mount output directory for experiment results
+      - "{{ experiment_output_dir }}:/app/outputs"
+      # Mount controller output directory for configuration files (read-only)
+      - "{{ controller_remote_output_dir }}:/app/controller_output:ro"
+    networks:
+      - sketchdb-net
+    command: [
+      "--kafka-topic", "{{ kafka_topic }}",
+      "--kafka-broker", "{{ kafka_host | default('10.10.1.1') }}:9092",
+      "--input-format", "{{ input_format }}",
+      "--config", "/app/controller_output/inference_config.yaml",
+      "--streaming-config", "/app/controller_output/streaming_config.yaml",
+      "--prometheus-server", "http://{{ prometheus_host | default('10.10.1.1') }}:9090",
+      "--prometheus-scrape-interval", "{{ prometheus_scrape_interval }}",
+      "--delete-existing-db",
+      "--log-level", "{{ log_level }}",
+      "--output-dir", "/app/outputs",
+      "--streaming-engine", "{{ streaming_engine }}"{% if compress_json %},
+      "--decompress-json"{% endif %}{% if profile_query_engine %},
+      "--do-profiling"{% endif %}{% if forward_unsupported_queries %},
+      "--forward-unsupported-queries"{% endif %}{% if dump_precomputes %},
+      "--dump-precomputes"{% endif %}
+    ]
+    extra_hosts:
+      - "kafka:{{ kafka_host | default('10.10.1.1') }}"
+      - "prometheus:{{ prometheus_host | default('10.10.1.1') }}"
+    restart: no
+
+networks:
+  sketchdb-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Optional: Named volumes for development
+volumes:
+  queryengine_outputs:
+    driver: local
+  controller_configs:
+    driver: local

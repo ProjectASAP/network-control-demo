@@ -1,0 +1,12 @@
+INSERT INTO
+    {{ sink_table }}
+SELECT
+    gzip_compress({{ agg_function }}(concat_ws(';', {{ agg_columns }}))) as precompute,
+    {{ aggregation_id }} as aggregation_id,
+    {% if group_by_columns %}concat_ws(';', {{ group_by_columns }}){% else %}''{% endif %} as key,
+    TUMBLE(INTERVAL '{{ window_interval }}') as window
+FROM
+    {{ source_table }}
+GROUP BY
+    window, key
+;

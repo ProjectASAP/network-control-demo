@@ -1,0 +1,124 @@
+{
+    "type": "object",
+    "title": "KafkaConfig",
+    "properties": {
+        "bootstrapServers": {
+            "type": "string",
+            "title": "Bootstrap Servers",
+            "description": "Comma-separated list of Kafka servers to connect to",
+            "examples": ["broker-1:9092,broker-2:9092"],
+            "pattern": "^(([\\w\\.\\-]+:\\d+),)*([\\w\\.\\-]+:\\d+)$"
+        },
+        "authentication": {
+            "type": "object",
+            "oneOf": [
+                {
+                    "type": "object",
+                    "title": "None",
+                    "properties": {},
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "title": "SASL",
+                    "required": [
+                        "protocol",
+                        "mechanism",
+                        "username",
+                        "password"
+                    ],
+                    "sensitive": ["password"],
+                    "properties": {
+                        "protocol": {
+                            "type": "string",
+                            "description": "The SASL protocol to use (e.g., SASL_PLAINTEXT, SASL_SSL, etc."
+                        },
+                        "mechanism": {
+                            "type": "string",
+                            "description": "The SASL mechanism to use (e.g., SCRAM-SHA-256, SCRAM-SHA-512, etc.)"
+                        },
+                        "username": {
+                            "type": "string",
+                            "description": "The username to use for SASL authentication",
+                            "format": "var-str"
+                        },
+                        "password": {
+                            "type": "string",
+                            "description": "The password to use for SASL authentication",
+                            "format": "var-str"
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "title": "AWS_MSK_IAM",
+                    "required": ["region"],
+                    "properties": {
+                        "region": {
+                            "type": "string",
+                            "description": "The AWS region to connect to"
+                        }
+                    },
+                    "additionalProperties": false
+                }
+            ]
+        },
+        "schemaRegistryEnum": {
+            "type": "object",
+            "title": "Schema Registry",
+            "oneOf": [
+                {
+                    "type": "object",
+                    "title": "None",
+                    "properties": {},
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "title": "Confluent Schema Registry",
+                    "properties": {
+                        "endpoint": {
+                            "title": "Endpoint",
+                            "type": "string",
+                            "description": "The endpoint for your Confluent Schema Registry",
+                            "examples": ["http://localhost:8081"],
+                            "format": "uri"
+                        },
+                        "apiKey": {
+                            "title": "API Key",
+                            "type": "string",
+                            "description": "The API key for your Confluent Schema Registry",
+                            "format": "var-str",
+                            "examples": ["ABCDEFGHIJK01234"]
+                        },
+                        "apiSecret": {
+                            "title": "API Secret",
+                            "type": "string",
+                            "description": "Secret for your Confluent Schema Registry",
+                            "examples": [
+                                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/="
+                            ],
+                            "format": "var-str"
+                        }
+                    },
+                    "required": ["endpoint"],
+                    "sensitive": ["apiSecret"]
+                }
+            ]
+        },
+        "connectionProperties": {
+            "type": "object",
+            "title": "Connection Properties",
+            "description": "Key-value pairs of rdkafka configuration options",
+            "items": {
+                "type": "string",
+                "title": "property"
+            },
+            "additionalProperties": {
+                "type": "string"
+            }
+        }
+    },
+    "required": ["bootstrapServers", "authentication"]
+}

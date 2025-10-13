@@ -1,0 +1,9 @@
+[package]
+name = "arroyo-metrics"
+version = "0.15.0-dev"
+edition = "2021"
+
+[dependencies]
+arroyo-types = { path = "../arroyo-types" }
+prometheus = { workspace = true, features = ["process"] }
+lazy_static = "1.4.0"

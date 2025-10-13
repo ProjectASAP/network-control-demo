@@ -1,0 +1,29 @@
+[package]
+name = "arroyo-formats"
+version = "0.15.0-dev"
+edition = "2021"
+
+[dependencies]
+arroyo-types = { path = "../arroyo-types" }
+arroyo-rpc = { path = "../arroyo-rpc" }
+
+apache-avro = {workspace = true}
+serde = {version = "1.0", features = ["derive"]}
+serde_json = "1.0"
+arrow = { workspace = true }
+arrow-schema = { workspace = true }
+arrow-array = { workspace = true}
+arrow-json = { workspace = true }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+anyhow = "1"
+memchr = "2"
+typify = "0.0.13"
+schemars = "0.8"
+prost = { workspace = true}
+prost-reflect = { workspace = true}
+prost-build = { workspace = true }
+base64 = "0.22.1"
+uuid = { version = "1.10.0", features = ["v4"] }
+regex = "1.10.6"
+integer-encoding = "4.0.2"

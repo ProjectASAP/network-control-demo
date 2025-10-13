@@ -1,0 +1,6 @@
+{"before":null,"after":{"driver_id":200,"has_pickup":true,"has_dropoff":false},"op":"c"}
+{"before":null,"after":{"driver_id":100,"has_pickup":true,"has_dropoff":false},"op":"c"}
+{"before":null,"after":{"driver_id":100,"has_pickup":true,"has_dropoff":true},"op":"c"}
+{"before":{"driver_id":100,"has_pickup":true,"has_dropoff":false},"after":null,"op":"d"}
+{"before":null,"after":{"driver_id":200,"has_pickup":true,"has_dropoff":true},"op":"c"}
+{"before":{"driver_id":200,"has_pickup":true,"has_dropoff":false},"after":null,"op":"d"}

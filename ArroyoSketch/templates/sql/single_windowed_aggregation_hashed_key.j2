@@ -1,0 +1,13 @@
+INSERT INTO
+    {{ sink_table }}
+SELECT
+    {{ agg_function }}(string_to_hash(concat_ws(';', {{ agg_columns }})), value{% if include_timestamps_as_argument %}, cast(extract(epoch from timestamp) * 1000 as bigint){% endif %}) as precompute,
+    {{ aggregation_id }} as aggregation_id,
+    {# group_by_columns #}
+    {% if group_by_columns %}concat_ws(';', {{ group_by_columns }}){% else %}''{% endif %} as key,
+    TUMBLE(INTERVAL '{{ window_interval }}') as window
+FROM
+    {{ source_table }}
+GROUP BY
+    window, key
+;

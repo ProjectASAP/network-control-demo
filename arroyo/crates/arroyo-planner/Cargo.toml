@@ -1,0 +1,50 @@
+[package]
+name = "arroyo-planner"
+version = "0.15.0-dev"
+edition = "2021"
+
+
+[dependencies]
+arroyo-types = { path = "../arroyo-types" }
+arroyo-rpc = {path = "../arroyo-rpc"}
+arroyo-datastream = { path = "../arroyo-datastream" }
+arroyo-connectors = { path = "../arroyo-connectors" }
+arroyo-operator = { path = "../arroyo-operator" }
+arroyo-udf-host = { path = "../arroyo-udf/arroyo-udf-host" }
+arroyo-udf-python = { path = "../arroyo-udf/arroyo-udf-python" }
+
+datafusion = { workspace = true }
+datafusion-proto = { workspace = true }
+datafusion-functions = { workspace = true }
+datafusion-functions-json = { workspace = true }
+
+prost = {workspace = true}
+arrow-schema = {workspace = true, features = ["serde"] }
+serde = {version = "1", features = ["derive"]}
+serde_json = "1"
+
+petgraph = { workspace = true }
+tokio = "1.27"
+tokio-stream = { version = "0.1", features = ["full"] }
+futures = "0.3"
+arrow = { workspace = true, features = ["ffi"] }
+arrow-array = { workspace = true}
+anyhow = {version = "1.0.70", features = ["backtrace"]}
+async-trait = "0.1"
+
+syn = {version = "2", features = ["full", "parsing", "extra-traits"]}
+tracing = "0.1.37"
+
+serde_json_path = "0.7"
+unicase = "2.7.0"
+xxhash-rust = { version = "0.8.12", features = ["xxh3", "std"] }
+itertools = "0.14.0"
+
+sqlparser = { workspace = true}
+
+[dev-dependencies]
+test-log = {version = "0.2.15", default-features = false, features = ["trace"]}
+rstest = { version = "0.25" }
+
+[build-dependencies]
+glob = "0.3.1"

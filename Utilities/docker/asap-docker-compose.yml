@@ -1,0 +1,7 @@
+name: projectasap
+include:
+  - ./prometheus_docker/prometheus-compose.yml
+  - ./grafana_docker/grafana-compose.yml
+  - <path-to-controller-compose>.yml
+  - <path-to-query-engine-compose>.yml
+  - ../../arroyo/docker/docker-compose.yml
