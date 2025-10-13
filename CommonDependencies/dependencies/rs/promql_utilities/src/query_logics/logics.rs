@@ -16,7 +16,8 @@ pub fn map_statistic_to_precompute_operator(
             if treatment_type == QueryTreatmentType::Exact {
                 Err("Statistic Quantile cannot be computed exactly".to_string())
             } else {
-                Ok(("DatasketchesKLL".to_string(), "".to_string()))
+                // Ok(("DatasketchesKLL".to_string(), "".to_string()))
+                Ok(("HydraKLL".to_string(), "".to_string()))
             }
         }
         Statistic::Min | Statistic::Max => {
@@ -63,7 +64,7 @@ pub fn does_precompute_operator_support_subpopulations(
         "Increase" | "MinMax" | "Sum" | "DatasketchesKLL" => false,
 
         // Multi-key operators
-        "MultipleIncrease" | "MultipleMinMax" | "MultipleSum" => true,
+        "MultipleIncrease" | "MultipleMinMax" | "MultipleSum" | "HydraKLL" => true,
 
         // CountMinSketch supports subpopulations only for certain statistics
         "CountMinSketch" => matches!(statistic, Statistic::Sum | Statistic::Count),
