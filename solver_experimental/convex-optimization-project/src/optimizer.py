@@ -44,11 +44,11 @@ class Optimizer:
                 for node1_idx in range(len(self.resources)):
                     for node2_idx in range(len(self.resources)):
                         # If path between node1 and node2 uses this edge
-                        if edge.id in self.paths.get((node1_idx, node2_idx), []):
+                        if edge['edge_id'] in self.paths.get((node1_idx, node2_idx), []):
                             edge_load.append(
                                 bw * self.decision_vars[t1][node1_idx] * self.decision_vars[t2][node2_idx]
                             )
-            constraints.append(cvxpy.sum(edge_load) <= self.bandwidth[edge.id])
+            constraints.append(cvxpy.sum(edge_load) <= self.bandwidth.bandwidth_capacity[edge['edge_id']])
 
         return constraints
 
@@ -57,10 +57,10 @@ class Optimizer:
         constraints = self.set_constraints()
 
         objective = cvxpy.Maximize(
-            cvxpy.sum([cvxpy.sum(self.decision_vars[task.id]) for task in self.tasks])
+            cvxpy.sum([cvxpy.sum(self.decision_vars[task.task_id]) for task in self.tasks])
         )
 
         self.problem = cvxpy.Problem(objective, constraints)
         self.problem.solve()
 
-        return {task.id: self.decision_vars[task.id].value for task in self.tasks}
+        return {task.task_id: self.decision_vars[task.task_id].value for task in self.tasks}
