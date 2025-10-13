@@ -189,7 +189,6 @@ def generate_telemetry(
                     "task_id": task.task_id,
                     "cpu_usage": f"{cpu_series[step]:.3f}",
                     "memory_usage": f"{mem_series[step]:.3f}",
-                    "bandwidth_usage": f"{sum(series[step] for series in peer_series.values()):.3f}",
                 }
             )
 
@@ -288,9 +287,7 @@ def main() -> None:
             "initial_cpu": f"{task.initial_cpu:.3f}",
             "initial_memory": f"{task.initial_memory:.3f}",
             "peer_task_ids": ";".join(sorted(task.peer_bandwidths)),
-            "peer_bandwidths": ";".join(
-                f"{peer_id}:{bandwidth:.3f}" for peer_id, bandwidth in sorted(task.peer_bandwidths.items())
-            ),
+            "peer_bandwidths": ";".join(f"{bandwidth:.3f}" for bandwidth in [task.peer_bandwidths[p] for p in sorted(task.peer_bandwidths)]),
         }
         for task in tasks
     ]
@@ -320,7 +317,7 @@ def main() -> None:
         "peer_task_ids",
         "peer_bandwidths",
     ]
-    resource_fieldnames = ["timestamp", "node_id", "task_id", "cpu_usage", "memory_usage", "bandwidth_usage"]
+    resource_fieldnames = ["timestamp", "node_id", "task_id", "cpu_usage", "memory_usage"]
     bandwidth_fieldnames = ["timestamp", "source_task_id", "target_task_id", "bandwidth_usage"]
 
     write_csv(tasks_path, task_fieldnames, task_rows)
