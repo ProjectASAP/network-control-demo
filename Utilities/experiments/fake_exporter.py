@@ -349,10 +349,20 @@ class NetworkControlDemoCollector(Collector):
             "CPU usage percent (from CSV) merging task_id",
             labels=["node_id"],
         )
+        cpu_node_metric = GaugeMetricFamily(
+            "cpu_usage_node_id",
+            "CPU usage percent (from CSV) merging node_id",
+            labels=["task_id"],
+        )
         mem_task_metric = GaugeMetricFamily(
             "memory_usage_task_id",
             "Memory usage percent (from CSV) merging task_id",
             labels=["node_id"],
+        )
+        mem_node_metric = GaugeMetricFamily(
+            "memory_usage_node_id",
+            "Memory usage percent (from CSV) merging node_id",
+            labels=["task_id"],
         )
         bw_target_task_metric = GaugeMetricFamily(
             "bandwidth_usage_target_task_id",
@@ -389,14 +399,20 @@ class NetworkControlDemoCollector(Collector):
             # Aggregated by node (merge task_id)
             cpu_by_node: Dict[str, float] = defaultdict(float)
             mem_by_node: Dict[str, float] = defaultdict(float)
+            # Aggregated by task (merge node_id)
+            cpu_by_task: Dict[str, float] = defaultdict(float)
+            mem_by_task: Dict[str, float] = defaultdict(float)
             for row in res_rows:
                 node_id = row.get("node_id", "")
+                task_id = row.get("task_id", "")
                 cpu = row.get("cpu_usage", float("nan"))
                 mem = row.get("memory_usage", float("nan"))
                 if isinstance(cpu, (int, float)) and not math.isnan(cpu):
                     cpu_by_node[node_id] += float(cpu)
+                    cpu_by_task[task_id] += float(cpu)
                 if isinstance(mem, (int, float)) and not math.isnan(mem):
                     mem_by_node[node_id] += float(mem)
+                    mem_by_task[task_id] += float(mem)
             for node_id, val in cpu_by_node.items():
                 if res_epoch == res_epoch:
                     cpu_task_metric.add_metric(
@@ -409,6 +425,17 @@ class NetworkControlDemoCollector(Collector):
                         [node_id], val, timestamp=res_epoch)
                 else:
                     mem_task_metric.add_metric([node_id], val)
+            # Emit per-task aggregates (merge node_id)
+            for t_id, val in cpu_by_task.items():
+                if res_epoch == res_epoch:
+                    cpu_node_metric.add_metric([t_id], val, timestamp=res_epoch)
+                else:
+                    cpu_node_metric.add_metric([t_id], val)
+            for t_id, val in mem_by_task.items():
+                if res_epoch == res_epoch:
+                    mem_node_metric.add_metric([t_id], val, timestamp=res_epoch)
+                else:
+                    mem_node_metric.add_metric([t_id], val)
             # Advance pointer
             self._res_idx = (self._res_idx + 1) % len(self.resource_timestamps)
 
@@ -458,6 +485,8 @@ class NetworkControlDemoCollector(Collector):
         yield bw_metric
         yield cpu_task_metric
         yield mem_task_metric
+        yield cpu_node_metric
+        yield mem_node_metric
         yield bw_target_task_metric
         yield bw_source_task_metric
 
