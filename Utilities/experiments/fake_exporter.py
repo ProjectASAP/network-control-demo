@@ -237,7 +237,7 @@ def read_network_control_demo_data() -> Tuple[List[Dict[str, Any]], List[Dict[st
 
     telemetry_bandwidth_file_path = os.path.join(
         os.path.dirname(
-            __file__), "../../DataGen/sample_output/telemetry_bandwidth.csv"
+            __file__), "../../DataGen/sample_output/telemetry_edge_bandwidth.csv"
     )
     if not os.path.exists(telemetry_bandwidth_file_path):
         raise FileNotFoundError(
@@ -273,9 +273,11 @@ def read_network_control_demo_data() -> Tuple[List[Dict[str, Any]], List[Dict[st
             bandwidth.append(
                 {
                     "timestamp": row.get("timestamp", ""),
-                    "source_task_id": row.get("source_task_id", ""),
-                    "target_task_id": row.get("target_task_id", ""),
-                    "bandwidth_usage": float(row.get("bandwidth_usage", "nan")),
+                    "source_node_id": row.get("source_node_id", ""),
+                    "target_node_id": row.get("target_node_id", ""),
+                    "available_bandwidth_usage": float(
+                        row.get("available_bandwidth_usage", "nan")
+                    ),
                 }
             )
         except Exception:
@@ -340,9 +342,9 @@ class NetworkControlDemoCollector(Collector):
             labels=["node_id", "task_id"],
         )
         bw_metric = GaugeMetricFamily(
-            "bandwidth_usage",
-            "Bandwidth usage (from CSV)",
-            labels=["source_task_id", "target_task_id"],
+            "available_bandwidth_usage",
+            "Available bandwidth (from CSV)",
+            labels=["source_node_id", "target_node_id"],
         )
         cpu_task_metric = GaugeMetricFamily(
             "cpu_usage_task_id",
@@ -364,15 +366,15 @@ class NetworkControlDemoCollector(Collector):
             "Memory usage percent (from CSV) merging node_id",
             labels=["task_id"],
         )
-        bw_target_task_metric = GaugeMetricFamily(
-            "bandwidth_usage_target_task_id",
-            "Bandwidth usage (from CSV) merging target_task_id",
-            labels=["source_task_id"],
+        bw_target_node_metric = GaugeMetricFamily(
+            "available_bandwidth_usage_target_node_id",
+            "Available bandwidth (from CSV) merging target_node_id",
+            labels=["source_node_id"],
         )
-        bw_source_task_metric = GaugeMetricFamily(
-            "bandwidth_usage_source_task_id",
-            "Bandwidth usage (from CSV) merging source_task_id",
-            labels=["target_task_id"],
+        bw_source_node_metric = GaugeMetricFamily(
+            "available_bandwidth_usage_source_node_id",
+            "Available bandwidth (from CSV) merging source_node_id",
+            labels=["target_node_id"],
         )
 
         # Emit next resource timestamp group
@@ -428,12 +430,14 @@ class NetworkControlDemoCollector(Collector):
             # Emit per-task aggregates (merge node_id)
             for t_id, val in cpu_by_task.items():
                 if res_epoch == res_epoch:
-                    cpu_node_metric.add_metric([t_id], val, timestamp=res_epoch)
+                    cpu_node_metric.add_metric(
+                        [t_id], val, timestamp=res_epoch)
                 else:
                     cpu_node_metric.add_metric([t_id], val)
             for t_id, val in mem_by_task.items():
                 if res_epoch == res_epoch:
-                    mem_node_metric.add_metric([t_id], val, timestamp=res_epoch)
+                    mem_node_metric.add_metric(
+                        [t_id], val, timestamp=res_epoch)
                 else:
                     mem_node_metric.add_metric([t_id], val)
             # Advance pointer
@@ -446,9 +450,9 @@ class NetworkControlDemoCollector(Collector):
             bw_rows = self.bandwidth_groups.get(bw_ts_str, [])
             # Raw samples
             for row in bw_rows:
-                s = row.get("source_task_id", "")
-                t = row.get("target_task_id", "")
-                val = row.get("bandwidth_usage", float("nan"))
+                s = row.get("source_node_id", "")
+                t = row.get("target_node_id", "")
+                val = row.get("available_bandwidth_usage", float("nan"))
                 if val == val and bw_epoch == bw_epoch:
                     bw_metric.add_metric([s, t], val, timestamp=bw_epoch)
                 else:
@@ -459,24 +463,24 @@ class NetworkControlDemoCollector(Collector):
             by_target: Dict[str, float] = defaultdict(
                 float)  # merge source_task_id
             for row in bw_rows:
-                s = row.get("source_task_id", "")
-                t = row.get("target_task_id", "")
-                val = row.get("bandwidth_usage", float("nan"))
+                s = row.get("source_node_id", "")
+                t = row.get("target_node_id", "")
+                val = row.get("available_bandwidth_usage", float("nan"))
                 if isinstance(val, (int, float)) and not math.isnan(val):
                     by_source[s] += float(val)
                     by_target[t] += float(val)
             for source, val in by_source.items():
                 if bw_epoch == bw_epoch:
-                    bw_target_task_metric.add_metric(
+                    bw_target_node_metric.add_metric(
                         [source], val, timestamp=bw_epoch)
                 else:
-                    bw_target_task_metric.add_metric([source], val)
+                    bw_target_node_metric.add_metric([source], val)
             for target, val in by_target.items():
                 if bw_epoch == bw_epoch:
-                    bw_source_task_metric.add_metric(
+                    bw_source_node_metric.add_metric(
                         [target], val, timestamp=bw_epoch)
                 else:
-                    bw_source_task_metric.add_metric([target], val)
+                    bw_source_node_metric.add_metric([target], val)
             # Advance pointer
             self._bw_idx = (self._bw_idx + 1) % len(self.bandwidth_timestamps)
 
@@ -487,8 +491,8 @@ class NetworkControlDemoCollector(Collector):
         yield mem_task_metric
         yield cpu_node_metric
         yield mem_node_metric
-        yield bw_target_task_metric
-        yield bw_source_task_metric
+        yield bw_target_node_metric
+        yield bw_source_node_metric
 
 
 def main(args):

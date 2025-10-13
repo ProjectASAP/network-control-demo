@@ -44,6 +44,8 @@ query_groups:
     latency_sla: 1
 
 metrics:
-  - metric: "fake_metric_total"
-    labels: ['instance', 'job', 'label_0', 'label_1', 'label_2']
+{% for metric_entry in metrics %}
+  - metric: "{{ metric_entry.metric }}"
+    labels: {{ metric_entry.entities }}
     exporter: fake_exporter
+{% endfor %}
