@@ -1,0 +1,49 @@
+# @package experiment_params
+# Config file for workshop demo experiment type
+
+experiment:
+  - mode: sketchdb
+    query_prometheus_too: true
+
+servers:
+- name: prometheus
+  url: http://localhost:9090
+- name: sketchdb
+  url: http://localhost:8088
+
+exporters:
+  only_start_if_queries_exist: True
+  exporter_list:
+    node_exporter:
+      port: 9100
+      extra_flags: --collector.disable-defaults --collector.cpu
+    fake_exporter:
+      num_ports_per_server: 1
+      start_port: 50000
+      dataset: zipf
+      synthetic_data_value_scale: 10000
+      num_labels: 3
+      num_values_per_label: 20
+      metric_type: counter
+
+query_groups:
+- id: 1
+  queries:
+{% for query in queries %}
+    - {{ query }}
+{% endfor %}
+
+  repetition_delay: {{ repetition_delay }}
+  client_options:
+    repetitions: 10
+    query_time_offset: 10
+    starting_delay: 610
+
+  controller_options:
+    accuracy_sla: 0.99
+    latency_sla: 1
+
+metrics:
+  - metric: "fake_metric_total"
+    labels: ['instance', 'job', 'label_0', 'label_1', 'label_2']
+    exporter: fake_exporter

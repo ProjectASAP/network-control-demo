@@ -2,7 +2,7 @@
 
 This repository provides a Python-based utility for producing synthetic datasets for a network control task assignment scenario. It creates three CSV files:
 
-- `tasks.csv` lists each generated task with arrival time, duration, and initial resource requirements.
+- `tasks.csv` lists each generated task with arrival time, duration, and initial resource requirements, plus peer communication metadata.
 - `telemetry_resources.csv` captures time-series CPU and memory usage for each task on its assigned node.
 - `telemetry_bandwidth.csv` tracks bandwidth usage for individual task-to-task communications.
 
@@ -44,14 +44,14 @@ Run `python3 generate_network_tasks.py --help` to see every option.
 - `duration_s`: task duration in seconds.
 - `initial_cpu`, `initial_memory`: baseline compute and memory requirements.
 - `peer_task_ids`: semicolon-delimited list of peer tasks this task communicates with.
-- `peer_bandwidths`: semicolon-delimited `peer_id:bandwidth` pairs showing the required bandwidth to each peer (Gbps).
+- `peer_bandwidths`: semicolon-delimited bandwidth requirements aligned by index with `peer_task_ids` (Gbps).
 
 `telemetry_resources.csv` columns:
 
 - `timestamp`: ISO 8601 sample time.
 - `node_id`: node hosting the task at that timestamp.
 - `task_id`: emitting task.
-- `cpu_usage`, `memory_usage`, `bandwidth_usage`: sampled CPU, memory, and aggregated bandwidth consumption (sum across peers).
+- `cpu_usage`, `memory_usage`: sampled CPU and memory consumption.
 
 `telemetry_bandwidth.csv` columns:
 

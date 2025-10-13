@@ -1,0 +1,287 @@
+# @package experiment_params
+# Config file for workshop demo experiment type
+
+experiment:
+  - mode: sketchdb
+    query_prometheus_too: true
+
+servers:
+- name: prometheus
+  url: http://localhost:9090
+- name: sketchdb
+  url: http://localhost:8088
+
+exporters:
+  only_start_if_queries_exist: True
+  exporter_list:
+    node_exporter:
+      port: 9100
+      extra_flags: --collector.disable-defaults --collector.cpu
+    fake_exporter:
+      num_ports_per_server: 1
+      start_port: 50000
+      dataset: zipf
+      synthetic_data_value_scale: 10000
+      num_labels: 3
+      num_values_per_label: 20
+      metric_type: counter
+
+query_groups:
+- id: 1
+  queries:
+
+    - quantile_over_time(0.5, cpu_task[25m])
+
+    - quantile_over_time(0.5, cpu_task[150s])
+
+    - quantile_over_time(0.9, cpu_task[25m])
+
+    - quantile_over_time(0.9, cpu_task[150s])
+
+    - quantile_over_time(0.95, cpu_task[25m])
+
+    - quantile_over_time(0.95, cpu_task[150s])
+
+    - avg_over_time(cpu_task[25m])
+
+    - avg_over_time(cpu_task[150s])
+
+    - quantile_over_time(0.5, mem_task[25m])
+
+    - quantile_over_time(0.5, mem_task[150s])
+
+    - quantile_over_time(0.9, mem_task[25m])
+
+    - quantile_over_time(0.9, mem_task[150s])
+
+    - quantile_over_time(0.95, mem_task[25m])
+
+    - quantile_over_time(0.95, mem_task[150s])
+
+    - avg_over_time(mem_task[25m])
+
+    - avg_over_time(mem_task[150s])
+
+    - quantile_over_time(0.5, bandwidth_task[25m])
+
+    - quantile_over_time(0.5, bandwidth_task[150s])
+
+    - quantile_over_time(0.9, bandwidth_task[25m])
+
+    - quantile_over_time(0.9, bandwidth_task[150s])
+
+    - quantile_over_time(0.95, bandwidth_task[25m])
+
+    - quantile_over_time(0.95, bandwidth_task[150s])
+
+    - avg_over_time(bandwidth_task[25m])
+
+    - avg_over_time(bandwidth_task[150s])
+
+    - quantile_over_time(0.5, cpu_node[25m])
+
+    - quantile_over_time(0.5, cpu_node[150s])
+
+    - quantile_over_time(0.9, cpu_node[25m])
+
+    - quantile_over_time(0.9, cpu_node[150s])
+
+    - quantile_over_time(0.95, cpu_node[25m])
+
+    - quantile_over_time(0.95, cpu_node[150s])
+
+    - avg_over_time(cpu_node[25m])
+
+    - avg_over_time(cpu_node[150s])
+
+    - quantile_over_time(0.5, mem_node[25m])
+
+    - quantile_over_time(0.5, mem_node[150s])
+
+    - quantile_over_time(0.9, mem_node[25m])
+
+    - quantile_over_time(0.9, mem_node[150s])
+
+    - quantile_over_time(0.95, mem_node[25m])
+
+    - quantile_over_time(0.95, mem_node[150s])
+
+    - avg_over_time(mem_node[25m])
+
+    - avg_over_time(mem_node[150s])
+
+    - quantile_over_time(0.5, bandwidth_node[25m])
+
+    - quantile_over_time(0.5, bandwidth_node[150s])
+
+    - quantile_over_time(0.9, bandwidth_node[25m])
+
+    - quantile_over_time(0.9, bandwidth_node[150s])
+
+    - quantile_over_time(0.95, bandwidth_node[25m])
+
+    - quantile_over_time(0.95, bandwidth_node[150s])
+
+    - avg_over_time(bandwidth_node[25m])
+
+    - avg_over_time(bandwidth_node[150s])
+
+    - quantile_over_time(0.5, cpu_edge[25m])
+
+    - quantile_over_time(0.5, cpu_edge[150s])
+
+    - quantile_over_time(0.9, cpu_edge[25m])
+
+    - quantile_over_time(0.9, cpu_edge[150s])
+
+    - quantile_over_time(0.95, cpu_edge[25m])
+
+    - quantile_over_time(0.95, cpu_edge[150s])
+
+    - avg_over_time(cpu_edge[25m])
+
+    - avg_over_time(cpu_edge[150s])
+
+    - quantile_over_time(0.5, mem_edge[25m])
+
+    - quantile_over_time(0.5, mem_edge[150s])
+
+    - quantile_over_time(0.9, mem_edge[25m])
+
+    - quantile_over_time(0.9, mem_edge[150s])
+
+    - quantile_over_time(0.95, mem_edge[25m])
+
+    - quantile_over_time(0.95, mem_edge[150s])
+
+    - avg_over_time(mem_edge[25m])
+
+    - avg_over_time(mem_edge[150s])
+
+    - quantile_over_time(0.5, bandwidth_edge[25m])
+
+    - quantile_over_time(0.5, bandwidth_edge[150s])
+
+    - quantile_over_time(0.9, bandwidth_edge[25m])
+
+    - quantile_over_time(0.9, bandwidth_edge[150s])
+
+    - quantile_over_time(0.95, bandwidth_edge[25m])
+
+    - quantile_over_time(0.95, bandwidth_edge[150s])
+
+    - avg_over_time(bandwidth_edge[25m])
+
+    - avg_over_time(bandwidth_edge[150s])
+
+    - quantile_over_time(0.5, cpu_task_node[25m])
+
+    - quantile_over_time(0.5, cpu_task_node[150s])
+
+    - quantile_over_time(0.9, cpu_task_node[25m])
+
+    - quantile_over_time(0.9, cpu_task_node[150s])
+
+    - quantile_over_time(0.95, cpu_task_node[25m])
+
+    - quantile_over_time(0.95, cpu_task_node[150s])
+
+    - avg_over_time(cpu_task_node[25m])
+
+    - avg_over_time(cpu_task_node[150s])
+
+    - quantile_over_time(0.5, mem_task_node[25m])
+
+    - quantile_over_time(0.5, mem_task_node[150s])
+
+    - quantile_over_time(0.9, mem_task_node[25m])
+
+    - quantile_over_time(0.9, mem_task_node[150s])
+
+    - quantile_over_time(0.95, mem_task_node[25m])
+
+    - quantile_over_time(0.95, mem_task_node[150s])
+
+    - avg_over_time(mem_task_node[25m])
+
+    - avg_over_time(mem_task_node[150s])
+
+    - quantile_over_time(0.5, bandwidth_task_node[25m])
+
+    - quantile_over_time(0.5, bandwidth_task_node[150s])
+
+    - quantile_over_time(0.9, bandwidth_task_node[25m])
+
+    - quantile_over_time(0.9, bandwidth_task_node[150s])
+
+    - quantile_over_time(0.95, bandwidth_task_node[25m])
+
+    - quantile_over_time(0.95, bandwidth_task_node[150s])
+
+    - avg_over_time(bandwidth_task_node[25m])
+
+    - avg_over_time(bandwidth_task_node[150s])
+
+    - quantile_over_time(0.5, cpu_task_edge[25m])
+
+    - quantile_over_time(0.5, cpu_task_edge[150s])
+
+    - quantile_over_time(0.9, cpu_task_edge[25m])
+
+    - quantile_over_time(0.9, cpu_task_edge[150s])
+
+    - quantile_over_time(0.95, cpu_task_edge[25m])
+
+    - quantile_over_time(0.95, cpu_task_edge[150s])
+
+    - avg_over_time(cpu_task_edge[25m])
+
+    - avg_over_time(cpu_task_edge[150s])
+
+    - quantile_over_time(0.5, mem_task_edge[25m])
+
+    - quantile_over_time(0.5, mem_task_edge[150s])
+
+    - quantile_over_time(0.9, mem_task_edge[25m])
+
+    - quantile_over_time(0.9, mem_task_edge[150s])
+
+    - quantile_over_time(0.95, mem_task_edge[25m])
+
+    - quantile_over_time(0.95, mem_task_edge[150s])
+
+    - avg_over_time(mem_task_edge[25m])
+
+    - avg_over_time(mem_task_edge[150s])
+
+    - quantile_over_time(0.5, bandwidth_task_edge[25m])
+
+    - quantile_over_time(0.5, bandwidth_task_edge[150s])
+
+    - quantile_over_time(0.9, bandwidth_task_edge[25m])
+
+    - quantile_over_time(0.9, bandwidth_task_edge[150s])
+
+    - quantile_over_time(0.95, bandwidth_task_edge[25m])
+
+    - quantile_over_time(0.95, bandwidth_task_edge[150s])
+
+    - avg_over_time(bandwidth_task_edge[25m])
+
+    - avg_over_time(bandwidth_task_edge[150s])
+
+
+  repetition_delay: 300
+  client_options:
+    repetitions: 10
+    query_time_offset: 10
+    starting_delay: 610
+
+  controller_options:
+    accuracy_sla: 0.99
+    latency_sla: 1
+
+metrics:
+  - metric: "fake_metric_total"
+    labels: ['instance', 'job', 'label_0', 'label_1', 'label_2']
+    exporter: fake_exporter
