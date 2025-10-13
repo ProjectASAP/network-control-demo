@@ -133,7 +133,14 @@ class TaskScheduler:
                         # Set f values for edges in this path to 1 when tasks are assigned accordingly
                         for edge_key in path_edges:
                             frac = task_communication[(t_i, t_j)] / edge_bandwidth[edge_key]
-                            f[task_pair][edge_key] = frac * d[t_i][n_i] * d[t_j][n_j]
+
+                            # Whether task pair is assigned on node pair. z = 1 iff both d_i and d_j work.
+                            z = plp.LpVariable(f"z_{t_i}_{t_j}_{n_i}_{n_j}", cat='Binary')
+                            prob += z <= d[t_i][n_i]
+                            prob += z <= d[t_j][n_j]
+                            prob += z >= (d[t_i][n_i] + d[t_j][n_j] - 1)
+
+                            f[task_pair][edge_key] = frac * z
         
         # 4. Edge bandwidth constraints
         # For each edge, sum of fractions from all task pairs using that edge <= 1
