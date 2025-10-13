@@ -1,0 +1,432 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   0.615100334s  INFO prepare_target{force=false package_id=arroyo v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo) target="arroyo"}: cargo::core::compiler::fingerprint: fingerprint error for arroyo v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo)/Check { test: false }/TargetInner { name: "arroyo", doc: true, ..: with_path("/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo/src/main.rs", Edition2021) }
+   0.615770125s  INFO prepare_target{force=false package_id=arroyo v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo) target="arroyo"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/arroyo-6f3e3d31533bbebf/bin-arroyo`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   7: cargo::ops::cargo_compile::compile_ws
+   8: cargo::ops::cargo_compile::compile_with_exec
+   9: cargo::ops::cargo_compile::compile
+  10: cargo::commands::check::exec
+  11: <cargo::cli::Exec>::exec
+  12: cargo::main
+  13: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  14: std::rt::lang_start::<()>::{closure#0}
+  15: std::rt::lang_start_internal
+  16: _main
+   0.632733125s  INFO prepare_target{force=false package_id=arroyo-api v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api) target="arroyo_api"}: cargo::core::compiler::fingerprint: fingerprint error for arroyo-api v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("arroyo_api", ["lib"], "/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api/src/lib.rs", Edition2021) }
+   0.632757292s  INFO prepare_target{force=false package_id=arroyo-api v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api) target="arroyo_api"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/arroyo-api-29ed8663e0620d2a/lib-arroyo_api`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   8: cargo::ops::cargo_compile::compile_ws
+   9: cargo::ops::cargo_compile::compile_with_exec
+  10: cargo::ops::cargo_compile::compile
+  11: cargo::commands::check::exec
+  12: <cargo::cli::Exec>::exec
+  13: cargo::main
+  14: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  15: std::rt::lang_start::<()>::{closure#0}
+  16: std::rt::lang_start_internal
+  17: _main
+   0.639716875s  INFO prepare_target{force=false package_id=arroyo-api v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api) target="build-script-build"}: cargo::core::compiler::fingerprint: fingerprint error for arroyo-api v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api)/RunCustomBuild/TargetInner { ..: custom_build_target("build-script-build", "/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api/build.rs", Edition2021) }
+   0.639726292s  INFO prepare_target{force=false package_id=arroyo-api v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api) target="build-script-build"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/arroyo-api-d75949f067284c32/run-build-script-build-script-build`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::custom_build::build_work
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.669001792s  INFO prepare_target{force=false package_id=arroyo-controller v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-controller) target="arroyo_controller"}: cargo::core::compiler::fingerprint: fingerprint error for arroyo-controller v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-controller)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("arroyo_controller", ["lib"], "/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-controller/src/lib.rs", Edition2021) }
+   0.669014792s  INFO prepare_target{force=false package_id=arroyo-controller v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-controller) target="arroyo_controller"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/arroyo-controller-0f324d2f1e1685dd/lib-arroyo_controller`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   8: cargo::ops::cargo_compile::compile_ws
+   9: cargo::ops::cargo_compile::compile_with_exec
+  10: cargo::ops::cargo_compile::compile
+  11: cargo::commands::check::exec
+  12: <cargo::cli::Exec>::exec
+  13: cargo::main
+  14: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  15: std::rt::lang_start::<()>::{closure#0}
+  16: std::rt::lang_start_internal
+  17: _main
+   0.671091625s  INFO prepare_target{force=false package_id=arroyo-controller v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-controller) target="build-script-build"}: cargo::core::compiler::fingerprint: fingerprint error for arroyo-controller v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-controller)/RunCustomBuild/TargetInner { ..: custom_build_target("build-script-build", "/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-controller/build.rs", Edition2021) }
+   0.671099625s  INFO prepare_target{force=false package_id=arroyo-controller v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-controller) target="build-script-build"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/arroyo-controller-a01b3d417bef4d39/run-build-script-build-script-build`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::custom_build::build_work
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.672318417s  INFO prepare_target{force=false package_id=arroyo-openapi v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi) target="arroyo_openapi"}: cargo::core::compiler::fingerprint: fingerprint error for arroyo-openapi v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("arroyo_openapi", ["lib"], "/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi/src/lib.rs", Edition2021) }
+   0.672324500s  INFO prepare_target{force=false package_id=arroyo-openapi v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi) target="arroyo_openapi"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/arroyo-openapi-82e1549b21975845/lib-arroyo_openapi`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   8: cargo::ops::cargo_compile::compile_ws
+   9: cargo::ops::cargo_compile::compile_with_exec
+  10: cargo::ops::cargo_compile::compile
+  11: cargo::commands::check::exec
+  12: <cargo::cli::Exec>::exec
+  13: cargo::main
+  14: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  15: std::rt::lang_start::<()>::{closure#0}
+  16: std::rt::lang_start_internal
+  17: _main
+   0.673593375s  INFO prepare_target{force=false package_id=arroyo-openapi v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi) target="build-script-build"}: cargo::core::compiler::fingerprint: fingerprint error for arroyo-openapi v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi)/RunCustomBuild/TargetInner { ..: custom_build_target("build-script-build", "/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi/build.rs", Edition2021) }
+   0.673599459s  INFO prepare_target{force=false package_id=arroyo-openapi v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi) target="build-script-build"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/arroyo-openapi-02cc1439c7f734a8/run-build-script-build-script-build`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::custom_build::build_work
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.674083917s  INFO prepare_target{force=false package_id=arroyo-openapi v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi) target="build-script-build"}: cargo::core::compiler::fingerprint: fingerprint error for arroyo-openapi v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi)/Build/TargetInner { ..: custom_build_target("build-script-build", "/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi/build.rs", Edition2021) }
+   0.674088875s  INFO prepare_target{force=false package_id=arroyo-openapi v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi) target="build-script-build"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/arroyo-openapi-f3003d4745b6602f/build-script-build-script-build`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.675454000s  INFO prepare_target{force=false package_id=arroyo-api v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api) target="arroyo_api"}: cargo::core::compiler::fingerprint: fingerprint error for arroyo-api v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api)/Build/TargetInner { name_inferred: true, ..: lib_target("arroyo_api", ["lib"], "/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api/src/lib.rs", Edition2021) }
+   0.675459292s  INFO prepare_target{force=false package_id=arroyo-api v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api) target="arroyo_api"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/arroyo-api-9d9d4553476a2363/lib-arroyo_api`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  11: cargo::ops::cargo_compile::compile_ws
+  12: cargo::ops::cargo_compile::compile_with_exec
+  13: cargo::ops::cargo_compile::compile
+  14: cargo::commands::check::exec
+  15: <cargo::cli::Exec>::exec
+  16: cargo::main
+  17: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  18: std::rt::lang_start::<()>::{closure#0}
+  19: std::rt::lang_start_internal
+  20: _main
+   0.687853084s  INFO prepare_target{force=false package_id=arroyo v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo) target="arroyo"}: cargo::core::compiler::fingerprint: fingerprint error for arroyo v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo)/Check { test: true }/TargetInner { name: "arroyo", doc: true, ..: with_path("/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo/src/main.rs", Edition2021) }
+   0.687861959s  INFO prepare_target{force=false package_id=arroyo v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo) target="arroyo"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/arroyo-45f52481da167d15/test-bin-arroyo`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   7: cargo::ops::cargo_compile::compile_ws
+   8: cargo::ops::cargo_compile::compile_with_exec
+   9: cargo::ops::cargo_compile::compile
+  10: cargo::commands::check::exec
+  11: <cargo::cli::Exec>::exec
+  12: cargo::main
+  13: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  14: std::rt::lang_start::<()>::{closure#0}
+  15: std::rt::lang_start_internal
+  16: _main
+   0.691016125s  INFO prepare_target{force=false package_id=arroyo-api v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api) target="arroyo_api"}: cargo::core::compiler::fingerprint: fingerprint error for arroyo-api v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("arroyo_api", ["lib"], "/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api/src/lib.rs", Edition2021) }
+   0.691023542s  INFO prepare_target{force=false package_id=arroyo-api v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api) target="arroyo_api"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/arroyo-api-b3657ee226b3cdb4/test-lib-arroyo_api`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   7: cargo::ops::cargo_compile::compile_ws
+   8: cargo::ops::cargo_compile::compile_with_exec
+   9: cargo::ops::cargo_compile::compile
+  10: cargo::commands::check::exec
+  11: <cargo::cli::Exec>::exec
+  12: cargo::main
+  13: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  14: std::rt::lang_start::<()>::{closure#0}
+  15: std::rt::lang_start_internal
+  16: _main
+   0.694075459s  INFO prepare_target{force=false package_id=arroyo-controller v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-controller) target="arroyo_controller"}: cargo::core::compiler::fingerprint: fingerprint error for arroyo-controller v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-controller)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("arroyo_controller", ["lib"], "/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-controller/src/lib.rs", Edition2021) }
+   0.694082084s  INFO prepare_target{force=false package_id=arroyo-controller v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-controller) target="arroyo_controller"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/arroyo-controller-e69be2adf8b3f270/test-lib-arroyo_controller`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   7: cargo::ops::cargo_compile::compile_ws
+   8: cargo::ops::cargo_compile::compile_with_exec
+   9: cargo::ops::cargo_compile::compile
+  10: cargo::commands::check::exec
+  11: <cargo::cli::Exec>::exec
+  12: cargo::main
+  13: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  14: std::rt::lang_start::<()>::{closure#0}
+  15: std::rt::lang_start_internal
+  16: _main
+   0.696961375s  INFO prepare_target{force=false package_id=arroyo-openapi v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi) target="arroyo_openapi"}: cargo::core::compiler::fingerprint: fingerprint error for arroyo-openapi v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("arroyo_openapi", ["lib"], "/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi/src/lib.rs", Edition2021) }
+   0.696967000s  INFO prepare_target{force=false package_id=arroyo-openapi v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-openapi) target="arroyo_openapi"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/arroyo-openapi-547b5e13784e94b0/test-lib-arroyo_openapi`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   7: cargo::ops::cargo_compile::compile_ws
+   8: cargo::ops::cargo_compile::compile_with_exec
+   9: cargo::ops::cargo_compile::compile
+  10: cargo::commands::check::exec
+  11: <cargo::cli::Exec>::exec
+  12: cargo::main
+  13: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  14: std::rt::lang_start::<()>::{closure#0}
+  15: std::rt::lang_start_internal
+  16: _main
+   0.704081959s  INFO prepare_target{force=false package_id=integ v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/integ) target="integ"}: cargo::core::compiler::fingerprint: fingerprint error for integ v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/integ)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("integ", ["lib"], "/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/integ/src/lib.rs", Edition2021) }
+   0.704090667s  INFO prepare_target{force=false package_id=integ v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/integ) target="integ"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/integ-e31ba178d42f57c4/lib-integ`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   7: cargo::ops::cargo_compile::compile_ws
+   8: cargo::ops::cargo_compile::compile_with_exec
+   9: cargo::ops::cargo_compile::compile
+  10: cargo::commands::check::exec
+  11: <cargo::cli::Exec>::exec
+  12: cargo::main
+  13: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  14: std::rt::lang_start::<()>::{closure#0}
+  15: std::rt::lang_start_internal
+  16: _main
+   0.705410209s  INFO prepare_target{force=false package_id=integ v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/integ) target="integ"}: cargo::core::compiler::fingerprint: fingerprint error for integ v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/integ)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("integ", ["lib"], "/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/integ/src/lib.rs", Edition2021) }
+   0.705416084s  INFO prepare_target{force=false package_id=integ v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/integ) target="integ"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/integ-5fdc2ce2de57afe2/test-lib-integ`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   7: cargo::ops::cargo_compile::compile_ws
+   8: cargo::ops::cargo_compile::compile_with_exec
+   9: cargo::ops::cargo_compile::compile
+  10: cargo::commands::check::exec
+  11: <cargo::cli::Exec>::exec
+  12: cargo::main
+  13: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  14: std::rt::lang_start::<()>::{closure#0}
+  15: std::rt::lang_start_internal
+  16: _main
+   0.707006959s  INFO prepare_target{force=false package_id=integ v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/integ) target="api_tests"}: cargo::core::compiler::fingerprint: fingerprint error for integ v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/integ)/Check { test: true }/TargetInner { kind: "test", name: "api_tests", benched: false, ..: with_path("/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/integ/tests/api_tests.rs", Edition2021) }
+   0.707013209s  INFO prepare_target{force=false package_id=integ v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/integ) target="api_tests"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/.fingerprint/integ-8abaca23eedf5c83/test-integration-test-api_tests`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   7: cargo::ops::cargo_compile::compile_ws
+   8: cargo::ops::cargo_compile::compile_with_exec
+   9: cargo::ops::cargo_compile::compile
+  10: cargo::commands::check::exec
+  11: <cargo::cli::Exec>::exec
+  12: cargo::main
+  13: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  14: std::rt::lang_start::<()>::{closure#0}
+  15: std::rt::lang_start_internal
+  16: _main
+   Compiling arroyo-api v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api)
+   Compiling arroyo-controller v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-controller)
+error: failed to run custom build command for `arroyo-api v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-api)`
+note: To improve backtraces for build dependencies, set the CARGO_PROFILE_DEV_BUILD_OVERRIDE_DEBUG=true environment variable to enable debug information generation.
+
+Caused by:
+  process didn't exit successfully: `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/build/arroyo-api-e6a8b99166c33462/build-script-build` (exit status: 1)
+  --- stdout
+  cargo:rerun-if-changed=queries
+  cargo:rerun-if-changed=migrations
+  cargo:rerun-if-changed=sqlite_migrations
+
+  --- stderr
+  Error: PrepareQueries(Db { msg: "column \"event_spans\" does not exist", help: None, src: NamedSource { name: "queries/api_queries.sql", source: "<redacted>", err_span: Some(SourceSpan { offset: SourceOffset(10504), length: 0 }) })
+warning: build failed, waiting for other jobs to finish...
+error: failed to run custom build command for `arroyo-controller v0.15.0-dev (/Users/yancheng/ProjectASAP/network-control-demo/arroyo/crates/arroyo-controller)`
+note: To improve backtraces for build dependencies, set the CARGO_PROFILE_DEV_BUILD_OVERRIDE_DEBUG=true environment variable to enable debug information generation.
+
+Caused by:
+  process didn't exit successfully: `/Users/yancheng/ProjectASAP/network-control-demo/arroyo/target/debug/build/arroyo-controller-3227f4f9ed356d3e/build-script-build` (exit status: 1)
+  --- stdout
+  cargo:rerun-if-changed=queries
+  cargo:rerun-if-changed=../arroyo-api/migrations
+  cargo:rerun-if-changed=../arroyo-api/sqlite_migrations
+
+  --- stderr
+  Error: PrepareQueries(Db { msg: "column \"event_spans\" of relation \"checkpoints\" does not exist", help: None, src: NamedSource { name: "queries/controller_queries.sql", source: "<redacted>", err_span: Some(SourceSpan { offset: SourceOffset(1685), length: 0 }) })
