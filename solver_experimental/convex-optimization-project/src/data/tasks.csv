@@ -1,0 +1,4 @@
+id,cpu,gpu,memory
+task1,2,1,4
+task2,1,0,2
+task3,3,1,8
