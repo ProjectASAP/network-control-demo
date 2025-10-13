@@ -25,6 +25,8 @@ def get_precompute_operator_parameters(
         return {"depth": 3, "width": 65536}
     elif aggregation_type == "DatasketchesKLL":
         return {"K": 200}
+    elif aggregation_type == "HydraKLL":
+        return {"K": 200, "depth": 3, "width": 2048}
     # elif aggregation_type == "UnivMon":
     #     return {"depth": 3, "width": 2048, "levels": 16}
     else:

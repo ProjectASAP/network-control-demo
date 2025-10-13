@@ -42,7 +42,8 @@ def map_statistic_to_precompute_operator(
         if treatment_type == QueryTreatmentType.EXACT:
             raise ValueError(f"Statistic {statistic} cannot be computed exactly")
         else:
-            return ("DatasketchesKLL", "")
+            # return ("DatasketchesKLL", "")
+            return ("HydraKLL", "")
         # else:
         #     return [("UnivMon", "")]
     elif statistic in [Statistic.MIN, Statistic.MAX]:
@@ -77,7 +78,12 @@ def does_precompute_operator_support_subpopulations(
 ) -> bool:
     if precompute_operator in ["Increase", "MinMax", "Sum", "DatasketchesKLL"]:
         return False
-    elif precompute_operator in ["MultipleIncrease", "MultipleMinMax", "MultipleSum"]:
+    elif precompute_operator in [
+        "MultipleIncrease",
+        "MultipleMinMax",
+        "MultipleSum",
+        "HydraKLL",
+    ]:
         # TODO: do we need to check for statistic here? If not, remove the check from CountMinSketch
         return True
     elif precompute_operator == "CountMinSketch":
