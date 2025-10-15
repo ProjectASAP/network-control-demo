@@ -20,7 +20,6 @@ struct KllSketchData {
     sketch_bytes: Vec<u8>,
 }
 
-
 #[derive(Serialize, Deserialize)]
 struct HydraKllSketchData {
     row_num: usize,
@@ -42,27 +41,6 @@ impl HydraKllSketchAccumulator {
             col_num,
         }
     }
-
-    // fn _update(&mut self, key: &KeyByLabelValues, value: f64) {
-    //     // Match Python logic: ";".join(key.serialize_to_json())
-    //     let key_json = key.serialize_to_json();
-    //     let key_values: Vec<String> = if let Some(obj) = key_json.as_object() {
-    //         obj.values()
-    //             .map(|v| v.as_str().unwrap_or("").to_string())
-    //             .collect()
-    //     } else {
-    //         vec!["".to_string()]
-    //     };
-    //     let key_str = key_values.join(";");
-    //     let key_bytes = key_str.as_bytes();
-
-    //     // Update each row using different hash functions
-    //     for i in 0..self.row_num {
-    //         let hash_value = xxh32(key_bytes, i as u32);
-    //         let col_index = (hash_value as usize) % self.col_num;
-    //         self.sketch[i][col_index]._update(value);
-    //     }
-    // }
 
     pub fn deserialize_from_bytes_arroyo(buffer: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         let deserialized_sketch_data: HydraKllSketchData = rmp_serde::from_slice(buffer)
@@ -150,116 +128,201 @@ impl HydraKllSketchAccumulator {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dsrs::KllDoubleSketch;
-    use xxhash_rust::xxh32::xxh32;
 
-    const TEST_K: u16 = 20;
     const EPSILON: f64 = 1e-6;
-
-    fn build_kll_data(values: &[f64], k: u16) -> KllSketchData {
-        let mut sketch = KllDoubleSketch::with_k(k);
-        for value in values {
-            sketch.update(*value);
+    fn serialized_hydra(keys: &[&str], values: &[f64]) -> Vec<u8> {
+        let mut hydra = HydraKllSketch::new();
+        for key in keys {
+            for &value in values {
+                hydra.update(key, value);
+            }
         }
-        let serialized = sketch.serialize();
-        KllSketchData {
-            k,
-            sketch_bytes: serialized.as_ref().to_vec(),
-        }
+        hydra.serialize_bytes()
     }
 
     #[test]
     fn hydra_deserialize_and_query_single_label() {
-        let row_num = 3;
-        let col_num = 7;
-        let label = "foo".to_string();
+        let buffer =
+            serialized_hydra(&["key1;key2;key3", "key1;key3;key4"], &[10.0, 20.0, 30.0, 40.0, 50.0]);
 
-        let mut sketches = Vec::new();
-        for row in 0..row_num {
-            let mut row_data = Vec::new();
-            let target_col =
-                (xxh32(label.as_bytes(), row as u32) as usize) % col_num;
-            for col in 0..col_num {
-                if col == target_col {
-                    row_data.push(build_kll_data(&[5.0 + row as f64], TEST_K));
-                } else {
-                    row_data.push(build_kll_data(&[], TEST_K));
-                }
-            }
-            sketches.push(row_data);
-        }
-
-        let hydra_data = HydraKllSketchData {
-            row_num,
-            col_num,
-            sketches,
-        };
-
-        let buffer = rmp_serde::to_vec(&hydra_data).unwrap();
         let accumulator =
             HydraKllSketchAccumulator::deserialize_from_bytes_arroyo(&buffer).unwrap();
 
-        let key = KeyByLabelValues::new_with_labels(vec![label.clone()]);
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key1".to_string(),
+            "key2".to_string(),
+            "key3".to_string(),
+        ]);
+
         let result = accumulator.query_key(&key, 0.5);
-
-        let mut expected = Vec::new();
-        for row in 0..row_num {
-            expected.push(5.0 + row as f64);
-        }
-        expected.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let mid = expected.len() / 2;
-        let expected_median = expected[mid];
-
-        assert!((result - expected_median).abs() < EPSILON);
+        assert!((result - 30.0).abs() < EPSILON);
     }
 
     #[test]
-    fn hydra_deserialize_and_query_empty_key_even_rows() {
-        let row_num = 4;
-        let col_num = 5;
+    fn hydra_median_testing() {
+        let mut hydra = HydraKllSketch::new();
+        hydra.update("key1;key2;key3", 10.0);
+        hydra.update("key1;key2;key3", 20.0);
+        hydra.update("key1;key2;key3", 30.0);
+        hydra.update("key4;key5;key6", 40.0);
+        hydra.update("key4;key5;key6", 50.0);
+        hydra.update("key4;key5;key6", 60.0);
+        hydra.update("key7;key8;key9", 70.0);
+        hydra.update("key7;key8;key9", 80.0);
+        hydra.update("key7;key8;key9", 90.0);
 
-        let mut sketches = Vec::new();
-        for row in 0..row_num {
-            let mut row_data = Vec::new();
-            let target_col = (xxh32(&[], row as u32) as usize) % col_num;
-            for col in 0..col_num {
-                if col == target_col {
-                    row_data.push(build_kll_data(&[10.0 + row as f64], TEST_K));
-                } else {
-                    row_data.push(build_kll_data(&[], TEST_K));
-                }
-            }
-            sketches.push(row_data);
-        }
-
-        let hydra_data = HydraKllSketchData {
-            row_num,
-            col_num,
-            sketches,
-        };
-
-        let buffer = rmp_serde::to_vec(&hydra_data).unwrap();
         let accumulator =
-            HydraKllSketchAccumulator::deserialize_from_bytes_arroyo(&buffer).unwrap();
+            HydraKllSketchAccumulator::deserialize_from_bytes_arroyo(&hydra.serialize_bytes()).unwrap();
 
-        let key = KeyByLabelValues::new();
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key1".to_string(),
+        ]);
         let result = accumulator.query_key(&key, 0.5);
+        assert!((result - 20.0).abs() < EPSILON);
+        
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key2".to_string(),
+        ]);
+        let result = accumulator.query_key(&key, 0.5);
+        assert!((result - 20.0).abs() < EPSILON);
+        
+        // mysterious failure
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key3".to_string(),
+        ]);
+        let result = accumulator.query_key(&key, 0.3);
+        assert_eq!(result, 20.0, "result is {}", result);
+        assert!((result - 20.0).abs() < EPSILON);
 
-        let mut expected = Vec::new();
-        for row in 0..row_num {
-            expected.push(10.0 + row as f64);
-        }
-        expected.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let mid = expected.len() / 2;
-        let expected_median = (expected[mid - 1] + expected[mid]) / 2.0;
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key1".to_string(),
+            "key2".to_string(),
+            "key3".to_string(),
+        ]);
+        let result = accumulator.query_key(&key, 0.5);
+        assert!((result - 20.0).abs() < EPSILON);
 
-        assert!((result - expected_median).abs() < EPSILON);
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key4".to_string(),
+        ]);
+        let result = accumulator.query_key(&key, 0.5);
+        assert!((result - 50.0).abs() < EPSILON);
+        
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key5".to_string(),
+        ]);
+        let result = accumulator.query_key(&key, 0.5);
+        assert!((result - 50.0).abs() < EPSILON);
+            
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key6".to_string(),
+        ]);
+        let result = accumulator.query_key(&key, 0.5);
+        assert_eq!(result, 50.0, "result is {}", result);
+
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key4".to_string(),
+            "key5".to_string(),
+            "key6".to_string(),
+        ]);
+        let result = accumulator.query_key(&key, 0.5);
+        assert!((result -50.0).abs() < EPSILON);
+
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key7".to_string(),
+        ]);
+        let result = accumulator.query_key(&key, 0.5);
+        assert!((result - 80.0).abs() < EPSILON);
+        
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key8".to_string(),
+        ]);
+        let result = accumulator.query_key(&key, 0.5);
+        assert!((result - 80.0).abs() < EPSILON);
+            
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key9".to_string(),
+        ]);
+        let result = accumulator.query_key(&key, 0.5);
+        assert_eq!(result, 80.0, "result is {}", result);
+        
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key7".to_string(),
+            "key8".to_string(),
+            "key9".to_string(),
+        ]);
+        let result = accumulator.query_key(&key, 0.5);
+        assert!((result - 80.0).abs() < EPSILON);
     }
+
+    #[test]
+    fn hydra_min_max_testing() {
+        let mut hydra = HydraKllSketch::new();
+        for value in 1..=10 {
+            hydra.update("key1;key2;key3", value as f64);
+        }
+
+        let accumulator =
+            HydraKllSketchAccumulator::deserialize_from_bytes_arroyo(&hydra.serialize_bytes()).unwrap();
+
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key1".to_string(),
+            "key2".to_string(),
+            "key3".to_string(),
+        ]);
+
+        let min_val = accumulator.query_key(&key, 0.0);
+        let max_val = accumulator.query_key(&key, 1.0);
+
+        assert!(min_val >= 1.0 - EPSILON);
+        assert!(min_val <= 1.0 + EPSILON);
+        assert!(max_val <= 10.0 + EPSILON);
+        assert!(max_val >= 10.0 - EPSILON);
+        
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key1".to_string(),
+        ]);
+
+        let min_val = accumulator.query_key(&key, 0.0);
+        let max_val = accumulator.query_key(&key, 1.0);
+
+        assert!(min_val >= 1.0 - EPSILON);
+        assert!(min_val <= 1.0 + EPSILON);
+        assert!(max_val <= 10.0 + EPSILON);
+        assert!(max_val >= 10.0 - EPSILON);
+
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key2".to_string(),
+        ]);
+
+        let min_val = accumulator.query_key(&key, 0.0);
+        let max_val = accumulator.query_key(&key, 1.0);
+
+        assert!(min_val >= 1.0 - EPSILON);
+        assert!(min_val <= 1.0 + EPSILON);
+        assert!(max_val <= 10.0 + EPSILON);
+        assert!(max_val >= 10.0 - EPSILON);
+
+        let key = KeyByLabelValues::new_with_labels(vec![
+            "key3".to_string(),
+        ]);
+
+        let min_val = accumulator.query_key(&key, 0.0);
+        let max_val = accumulator.query_key(&key, 1.0);
+
+        assert!(min_val >= 1.0 - EPSILON);
+        assert!(min_val <= 1.0 + EPSILON);
+        assert!(max_val <= 10.0 + EPSILON);
+        assert!(max_val >= 10.0 - EPSILON);
+    } 
+
 }
 
+// Following part copied from UDF to make the test of deserialization possible 
 // KLL parameters
 const DEFAULT_K: u16 = 20;
 
