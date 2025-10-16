@@ -89,26 +89,43 @@ impl HydraKllSketchAccumulator {
     }
 
     pub fn query_key(&self, key: &KeyByLabelValues, quantile: f64) -> f64 {
-        if self.row_num == 0 || self.col_num == 0 {
-            return 0.0;
+        let mut quantiles = Vec::with_capacity(self.row_num);
+        // let mut kll = DatasketchesKLLAccumulator::new(DEFAULT_K);
+        // let key_string = key.labels.join(";");
+        let mut keys: Vec<&str> = key.labels.iter().map(|s| s.as_str()).collect();
+        keys.sort_unstable();
+        let key_string: String = keys.join(";");
+
+        let key_bytes = key_string.as_bytes();
+
+        // Query each row and take the minimum
+        for i in 0..self.row_num {
+            let hash_value = xxh32(key_bytes, i as u32);
+            let col_index = (hash_value as usize) % self.col_num;
+            quantiles.push(self.sketch[i][col_index].get_quantile(quantile));
+            // kll.sketch.merge(&self.sketch[i][col_index].sketch);
         }
 
-        let label_count = if key.labels.is_empty() { 1 } else { key.labels.len() };
-        let mut quantiles = Vec::with_capacity(self.row_num * label_count);
+        // if self.row_num == 0 || self.col_num == 0 {
+        //     return 0.0;
+        // }
 
-        for (i, row) in self.sketch.iter().enumerate() {
-            if key.labels.is_empty() {
-                let hash_value = xxh32(&[], i as u32);
-                let col_index = (hash_value as usize) % self.col_num;
-                quantiles.push(row[col_index].get_quantile(quantile));
-            } else {
-                for label in &key.labels {
-                    let hash_value = xxh32(label.as_bytes(), i as u32);
-                    let col_index = (hash_value as usize) % self.col_num;
-                    quantiles.push(row[col_index].get_quantile(quantile));
-                }
-            }
-        }
+        // let label_count = if key.labels.is_empty() { 1 } else { key.labels.len() };
+        // let mut quantiles = Vec::with_capacity(self.row_num * label_count);
+
+        // for (i, row) in self.sketch.iter().enumerate() {
+        //     if key.labels.is_empty() {
+        //         let hash_value = xxh32(&[], i as u32);
+        //         let col_index = (hash_value as usize) % self.col_num;
+        //         quantiles.push(row[col_index].get_quantile(quantile));
+        //     } else {
+        //         for label in &key.labels {
+        //             let hash_value = xxh32(label.as_bytes(), i as u32);
+        //             let col_index = (hash_value as usize) % self.col_num;
+        //             quantiles.push(row[col_index].get_quantile(quantile));
+        //         }
+        //     }
+        // }
 
         if quantiles.is_empty() {
             return 0.0;
@@ -125,6 +142,7 @@ impl HydraKllSketchAccumulator {
         } else {
             quantiles[mid]
         }
+        // kll.get_quantile(quantile)
     }
 }
 
@@ -159,6 +177,7 @@ mod tests {
         ]);
 
         let result = accumulator.query_key(&key, 0.5);
+        // assert_eq!(result, 20.0, "result is {}", result);
         assert!((result - 30.0).abs() < EPSILON);
     }
 
@@ -182,6 +201,7 @@ mod tests {
             "key1".to_string(),
         ]);
         let result = accumulator.query_key(&key, 0.5);
+        assert_eq!(result, 20.0, "result is {}", result);
         assert!((result - 20.0).abs() < EPSILON);
         
         let key = KeyByLabelValues::new_with_labels(vec![
@@ -190,7 +210,7 @@ mod tests {
         let result = accumulator.query_key(&key, 0.5);
         assert!((result - 20.0).abs() < EPSILON);
         
-        // mysterious failure
+        // // mysterious failure
         let key = KeyByLabelValues::new_with_labels(vec![
             "key3".to_string(),
         ]);
@@ -204,6 +224,7 @@ mod tests {
             "key3".to_string(),
         ]);
         let result = accumulator.query_key(&key, 0.5);
+        assert_eq!(result, 20.0, "result is {}", result);
         assert!((result - 20.0).abs() < EPSILON);
 
         let key = KeyByLabelValues::new_with_labels(vec![
@@ -370,7 +391,7 @@ impl Clone for KllSketchWrapper {
 
 // Count-Min Sketch parameters
 const DEPTH: usize = 3; // Number of hash functions
-const WIDTH: usize = 16; // Number of buckets per hash function
+const WIDTH: usize = 32; // Number of buckets per hash function
 
 struct HydraKllSketch {
     sketch: Vec<Vec<KllSketchWrapper>>,
@@ -389,11 +410,26 @@ impl HydraKllSketch {
 
     // Update the sketch with a key-value pair
     fn update(&mut self, key: &str, value: f64) {
+        let mut parts: Vec<&str> = key.split(';').filter(|s| !s.is_empty()).collect();
+        parts.sort_unstable();
+        parts.dedup();
+        let n = parts.len();
+        let mut result = Vec::new();
+        for i in 1..(1 << n) {
+            let mut current_combination: Vec<&str> = Vec::new();
+            for j in 0..n {
+                if (i >> j) & 1 == 1 {
+                    current_combination.push(parts[j]);
+                }
+            }
+            result.push(current_combination.join(";"));
+        }
+        // println!("result: {:?}", result);
         for i in 0..self.row_num {
-            for subkey in key.split(';') {
-                // already UTF-8
+            for subkey in &result {
                 let hash = xxh32(subkey.as_bytes(), i as u32);
                 let bucket = (hash as usize) % self.col_num;
+                // println!("bucket: {}", bucket);
                 self.sketch[i][bucket].update(value);
             }
         }
