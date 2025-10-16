@@ -91,9 +91,7 @@ impl HydraKllSketch {
 
     // Update the sketch with a key-value pair
     fn update(&mut self, key: &str, value: f64) {
-        let mut parts: Vec<&str> = key.split(';').filter(|s| !s.is_empty()).collect();
-        parts.sort_unstable();
-        parts.dedup();
+        let parts: Vec<&str> = key.split(';').filter(|s| !s.is_empty()).collect();
         let n = parts.len();
         let mut result = Vec::new();
         for i in 1..(1 << n) {

@@ -90,42 +90,16 @@ impl HydraKllSketchAccumulator {
 
     pub fn query_key(&self, key: &KeyByLabelValues, quantile: f64) -> f64 {
         let mut quantiles = Vec::with_capacity(self.row_num);
-        // let mut kll = DatasketchesKLLAccumulator::new(DEFAULT_K);
-        // let key_string = key.labels.join(";");
-        let mut keys: Vec<&str> = key.labels.iter().map(|s| s.as_str()).collect();
-        keys.sort_unstable();
-        let key_string: String = keys.join(";");
+        let key_string = key.labels.join(";");
 
         let key_bytes = key_string.as_bytes();
 
-        // Query each row and take the minimum
+        // Query each row and take the median
         for i in 0..self.row_num {
             let hash_value = xxh32(key_bytes, i as u32);
             let col_index = (hash_value as usize) % self.col_num;
             quantiles.push(self.sketch[i][col_index].get_quantile(quantile));
-            // kll.sketch.merge(&self.sketch[i][col_index].sketch);
         }
-
-        // if self.row_num == 0 || self.col_num == 0 {
-        //     return 0.0;
-        // }
-
-        // let label_count = if key.labels.is_empty() { 1 } else { key.labels.len() };
-        // let mut quantiles = Vec::with_capacity(self.row_num * label_count);
-
-        // for (i, row) in self.sketch.iter().enumerate() {
-        //     if key.labels.is_empty() {
-        //         let hash_value = xxh32(&[], i as u32);
-        //         let col_index = (hash_value as usize) % self.col_num;
-        //         quantiles.push(row[col_index].get_quantile(quantile));
-        //     } else {
-        //         for label in &key.labels {
-        //             let hash_value = xxh32(label.as_bytes(), i as u32);
-        //             let col_index = (hash_value as usize) % self.col_num;
-        //             quantiles.push(row[col_index].get_quantile(quantile));
-        //         }
-        //     }
-        // }
 
         if quantiles.is_empty() {
             return 0.0;
@@ -142,7 +116,6 @@ impl HydraKllSketchAccumulator {
         } else {
             quantiles[mid]
         }
-        // kll.get_quantile(quantile)
     }
 }
 
@@ -410,9 +383,7 @@ impl HydraKllSketch {
 
     // Update the sketch with a key-value pair
     fn update(&mut self, key: &str, value: f64) {
-        let mut parts: Vec<&str> = key.split(';').filter(|s| !s.is_empty()).collect();
-        parts.sort_unstable();
-        parts.dedup();
+        let parts: Vec<&str> = key.split(';').filter(|s| !s.is_empty()).collect();
         let n = parts.len();
         let mut result = Vec::new();
         for i in 1..(1 << n) {
