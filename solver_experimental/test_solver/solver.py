@@ -36,7 +36,7 @@ class TaskScheduler:
               prev_assignment: Dict[str, str],
               paths: Dict[Tuple[str, str], List[str]],
               reassignment_penalty: float = 1.0,
-              time_limit: int = 300) -> Tuple[Dict, float | None]:
+              time_limit: int = 300) -> Tuple[Dict, float | None, int]:
         """
         Solve the task scheduling optimization problem.
         
@@ -51,7 +51,7 @@ class TaskScheduler:
             time_limit: Solver time limit in seconds
             
         Returns:
-            (assignment, objective_value) - New assignment dict and objective value
+            (assignment, objective_value, status_code) - New assignment dict, objective value, and solver status code.
         """
         prob = plp.LpProblem("Task_Scheduling", plp.LpMinimize)
         
@@ -59,22 +59,6 @@ class TaskScheduler:
         # d[t][n] = 1 if task t assigned to node n, 0 otherwise
         d = {t: {n: plp.LpVariable(f"d_{t}_{n}", cat='Binary') 
                  for n in self.nodes} for t in self.tasks}
-        
-        # f[(t_i, t_j)][(n1, n2)] = fraction of edge capacity used by task pair (t_i, t_j) on edge (n1, n2)
-        # e.g., if (t_i, t_j) requires 700 bandwidth and edge has 1000 capacity, f = 0.7
-        f = {}
-        for t_i, t_j in task_communication.keys():
-            task_pair = (t_i, t_j) if t_i < t_j else (t_j, t_i)
-            f[task_pair] = {}
-            for edge in self.edges:
-                # Canonicalize edge
-                edge_key = (edge[0], edge[1]) if edge[0] < edge[1] else (edge[1], edge[0])
-                # f[task_pair][edge_key] = plp.LpVariable(
-                #     f"f_{task_pair[0]}_{task_pair[1]}_{edge_key[0]}_{edge_key[1]}", 
-                #     lowBound=0, upBound=1, cat='Continuous')
-                frac = task_communication[(t_i, t_j)] / edge_bandwidth[edge_key]
-                f[task_pair][edge_key] = frac
-                # f[task_pair][edge_key] = 0
         
         # Auxiliary variable for task allocation tracking
         allocated = {t: plp.LpVariable(f"allocated_{t}", cat='Binary') 
@@ -132,9 +116,19 @@ class TaskScheduler:
 
                     pair_bandwidth[k] += task_communication[(t_i, t_j)] * (z_ij + z_ji)
                     choose_path_constraints[(t_i, t_j)] += z_ij + z_ji
+
+        # Handle task pairs assigned to the same node. Assume no bandwidth cost.
+        for n in self.nodes:
+            for t_i, t_j in task_communication.keys():
+                # Whether task pair is assigned on the same node. z = 1 iff both d_i and d_j work.
+                z_ii = plp.LpVariable(f"z_{t_i}_{t_j}_{n}_{n}", cat='Binary')
+                prob += z_ii <= d[t_i][n]
+                prob += z_ii <= d[t_j][n]
+                prob += z_ii >= (d[t_i][n] + d[t_j][n] - 1)
+
+                choose_path_constraints[(t_i, t_j)] += z_ii
                     
         # Enforce that each task pair uses exactly one path if they are assigned to different nodes
-        # TODO: This currently forces task pairs to be assigned to different nodes (as long there exists a path between any node pair).
         for t_i, t_j in task_communication.keys():
             prob += choose_path_constraints[(t_i, t_j)] == 1
 
@@ -164,17 +158,16 @@ class TaskScheduler:
         
         # Extract solution
         assignment = {}
-        if plp.LpStatus[prob.status] != 'Optimal':
-            print("No optimal solution found.")
-            return assignment, None
-        
-        for t in self.tasks:
-            for n in self.nodes:
-                if plp.value(d[t][n]) == 1:
-                    assignment[t] = n
-                    break
-        
-        return assignment, plp.value(prob.objective)
+        status_code = prob.status
+        objective_value = None
+        if plp.LpStatus[status_code] == 'Optimal':
+            objective_value = plp.value(prob.objective)
+            for t in self.tasks:
+                for n in self.nodes:
+                    if plp.value(d[t][n]) == 1:
+                        assignment[t] = n
+                        break
+        return assignment, objective_value, status_code
 
 
 # Example usage
@@ -233,17 +226,19 @@ if __name__ == "__main__":
     
     # Solve
     scheduler = TaskScheduler(tasks, resources, nodes, edges)
-    assignment, obj_value = scheduler.solve(
+    assignment, obj_value, status_code = scheduler.solve(
         task_resources, node_capacity, task_communication,
         edge_bandwidth, prev_assignment, paths,
         reassignment_penalty=10.0, time_limit=300
     )
-    
-    print("Optimal Assignment:")
-    for task, node in sorted(assignment.items()):
-        print(f"  {task} -> {node}")
-    display_obj_value = f"{obj_value:.2f}" if obj_value is not None else "N/A"
-    print(f"\nObjective Value: {display_obj_value}")
+    if plp.LpStatus[status_code] == 'Optimal':
+        print("Optimal Assignment:")
+        for task, node in sorted(assignment.items()):
+            print(f"  {task} -> {node}")
+        display_obj_value = f"{obj_value:.2f}" if obj_value is not None else "N/A"
+        print(f"\nObjective Value: {display_obj_value}")
+    else:
+        print("No optimal assignment found.")
     
     # Show reassignments
     reassignments = [t for t in assignment if t in prev_assignment 
