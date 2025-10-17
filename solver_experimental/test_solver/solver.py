@@ -36,7 +36,7 @@ class TaskScheduler:
               prev_assignment: Dict[str, str],
               paths: Dict[Tuple[str, str], List[str]],
               reassignment_penalty: float = 1.0,
-              time_limit: int = 300) -> Tuple[Dict, float]:
+              time_limit: int = 300) -> Tuple[Dict, float | None]:
         """
         Solve the task scheduling optimization problem.
         
@@ -103,34 +103,8 @@ class TaskScheduler:
                         for t in self.tasks
                     ) <= node_capacity[n][r]
 
+        # 3. Construct path bandwidth usage variables. For each node pair, compute the bandwidth used on each path between that node pair.
         path_bandwidths = {}
-        # for t_i, t_j in task_communication.keys():
-        #     task_pair = (t_i, t_j) if t_i < t_j else (t_j, t_i)
-        #     path_bandwidths[task_pair] = {}
-        #     task_pair_bandwidths = path_bandwidths[task_pair]
-        #     for n_i, n_j in combinations(self.nodes, 2):
-        #         path_bandwidths[task_pair][(n_i, n_j)] = {}
-        #         bandwidths_btwn_nodes = task_pair_bandwidths[(n_i, n_j)]
-
-        #         path = paths.get((n_i, n_j), paths.get((n_j, n_i), []))
-        #         paths_btwn = []
-        #         if not paths_btwn:
-        #             continue
-
-        #         # Whether task pair is assigned on node pair. z = 1 iff both d_i and d_j work.
-        #         z_ij = plp.LpVariable(f"z_{t_i}_{t_j}_{n_i}_{n_j}", cat='Binary')
-        #         prob += z_ij <= d[t_i][n_i]
-        #         prob += z_ij <= d[t_j][n_j]
-        #         prob += z_ij >= (d[t_i][n_i] + d[t_j][n_j] - 1)
-
-        #         # Do both ways (t_i, t_j assigned to either n_i and n_j or n_j and n_i)
-        #         z_ji = plp.LpVariable(f"z_{t_i}_{t_j}_{n_j}_{n_i}", cat='Binary')
-        #         prob += z_ji <= d[t_i][n_j]
-        #         prob += z_ji <= d[t_j][n_i]
-        #         prob += z_ji >= (d[t_i][n_i] + d[t_j][n_j] - 1)
-
-        #         for k, path in enumerate(paths_btwn):
-        #             bandwidths_btwn_nodes[k] = z_ij * task_communication[(t_i, t_j)]
         choose_path_constraints = {(t_i, t_j): 0 for t_i, t_j in task_communication.keys()}
         for n_i, n_j in combinations(self.nodes, 2):
             path_bandwidths[(n_i, n_j)] = {}
@@ -150,7 +124,7 @@ class TaskScheduler:
                     prob += z_ij <= d[t_j][n_j]
                     prob += z_ij >= (d[t_i][n_i] + d[t_j][n_j] - 1)
 
-                    # Do both ways (t_i, t_j assigned to either n_i and n_j or n_j and n_i)
+                    # Do both ways (t_i, t_j assigned to either n_i and n_j or n_j and n_i) -> only one of z_ij or z_ji can be 1.0 at a time.
                     z_ji = plp.LpVariable(f"z_{t_i}_{t_j}_{n_j}_{n_i}", cat='Binary')
                     prob += z_ji <= d[t_i][n_j]
                     prob += z_ji <= d[t_j][n_i]
@@ -158,51 +132,13 @@ class TaskScheduler:
 
                     pair_bandwidth[k] += task_communication[(t_i, t_j)] * (z_ij + z_ji)
                     choose_path_constraints[(t_i, t_j)] += z_ij + z_ji
+                    
         # Enforce that each task pair uses exactly one path if they are assigned to different nodes
+        # TODO: This currently forces task pairs to be assigned to different nodes (as long there exists a path between any node pair).
         for t_i, t_j in task_communication.keys():
             prob += choose_path_constraints[(t_i, t_j)] == 1
 
-        # 3. Routing constraint: if tasks are on different nodes, use the specified path
-        # For each task pair and node pair, set f values based on whether they use that path
-        # for t_i, t_j in task_communication.keys():
-        #     task_pair = (t_i, t_j) if t_i < t_j else (t_j, t_i)
-        #     # TODO: Enforce that t_i, t_j must have a path if they are on different nodes.
-            
-        #     # For each pair of nodes, if task t_i is on n_i and task t_j is on n_j, use the path
-        #     for n_i in self.nodes:
-        #         for n_j in self.nodes:
-        #             if n_i == n_j:
-        #                 # Tasks on same node don't need routing
-        #                 continue
-                    
-        #             # Get path from n_i to n_j
-        #             if (n_i, n_j) in paths:
-        #                 path = paths[(n_i, n_j)]
-        #             elif (n_j, n_i) in paths:
-        #                 path = paths[(n_j, n_i)]
-        #             else:
-        #                 continue
-
-        #             # Whether task pair is assigned on node pair. z = 1 iff both d_i and d_j work.
-        #             z = plp.LpVariable(f"z_{t_i}_{t_j}_{n_i}_{n_j}", cat='Binary')
-        #             prob += z <= d[t_i][n_i]
-        #             prob += z <= d[t_j][n_j]
-        #             prob += z >= (d[t_i][n_i] + d[t_j][n_j] - 1)
-                    
-        #             # Extract edges on this path
-        #             path_edges = []
-        #             for k in range(len(path) - 1):
-        #                 edge_key = (path[k], path[k+1]) if path[k] < path[k+1] else (path[k+1], path[k])
-        #                 path_edges.append(edge_key)
-                    
-        #             # If t_i is on n_i and t_j is on n_j, then f[task_pair][edge] = 1 for all edges in path
-        #             if path_edges:
-        #                 # Set f values for edges in this path to 1 when tasks are assigned accordingly
-        #                 for edge_key in path_edges:
-        #                     frac = task_communication[(t_i, t_j)] / edge_bandwidth[edge_key]
-
-        #                     f[task_pair][edge_key] = frac * z
-        print(path_bandwidths)
+        # 4. Edge bandwidth constraints. Each edge's total bandwidth used by all task pairs <= edge capacity.
         edge_constraints = {}
         for n_i, n_j in path_bandwidths:
             for k, path in enumerate(paths.get((n_i, n_j), paths.get((n_j, n_i), []))):
@@ -219,19 +155,6 @@ class TaskScheduler:
         for edge_key, total_bandwidth in edge_constraints.items():
             prob += total_bandwidth <= edge_bandwidth[edge_key]
         
-        # 4. Edge bandwidth constraints
-        # For each edge, sum of fractions from all task pairs using that edge <= 1
-        # for edge in self.edges:
-        #     edge_key = (edge[0], edge[1]) if edge[0] < edge[1] else (edge[1], edge[0])
-            
-        #     # Sum of fractions of edge capacity used by all task pairs
-        #     total_fraction_on_edge = plp.lpSum(
-        #         f[task_pair][edge_key]
-        #         for task_pair in f.keys()
-        #     )
-        #     print(total_fraction_on_edge)
-        #     prob += total_fraction_on_edge <= 1.0
-        
         # Solve
         solver = plp.PULP_CBC_CMD(timeLimit=time_limit, msg=0)
         prob.solve(solver)
@@ -241,15 +164,15 @@ class TaskScheduler:
         
         # Extract solution
         assignment = {}
+        if plp.LpStatus[prob.status] != 'Optimal':
+            print("No optimal solution found.")
+            return assignment, None
+        
         for t in self.tasks:
             for n in self.nodes:
-                if plp.value(d[t][n]) > 0.5:
+                if plp.value(d[t][n]) == 1:
                     assignment[t] = n
                     break
-
-        print("Variable values:")
-        for v in prob.variables():
-            print(v.name, "=", v.varValue)
         
         return assignment, plp.value(prob.objective)
 
@@ -264,10 +187,10 @@ if __name__ == "__main__":
     
     # Task resource requirements
     task_resources = {
-        'task_0': {'cpu': 4000, 'memory': 8},
-        'task_1': {'cpu': 2000, 'memory': 4},
-        'task_2': {'cpu': 3000, 'memory': 6},
-        'task_3': {'cpu': 2000, 'memory': 3},
+        'task_0': {'cpu': 4, 'memory': 8},
+        'task_1': {'cpu': 2, 'memory': 4},
+        'task_2': {'cpu': 3, 'memory': 6},
+        'task_3': {'cpu': 2, 'memory': 3},
     }
     
     # Node capacity
@@ -286,9 +209,9 @@ if __name__ == "__main__":
     
     # Edge bandwidth capacities
     edge_bandwidth = {
-        ('node_0', 'node_1'): 2,
-        ('node_1', 'node_2'): 1,
-        ('node_0', 'node_2'): 3,
+        ('node_0', 'node_1'): 200,
+        ('node_1', 'node_2'): 150,
+        ('node_0', 'node_2'): 300,
     }
     
     # Previous assignment from prior epoch
@@ -319,7 +242,8 @@ if __name__ == "__main__":
     print("Optimal Assignment:")
     for task, node in sorted(assignment.items()):
         print(f"  {task} -> {node}")
-    print(f"\nObjective Value: {obj_value:.2f}")
+    display_obj_value = f"{obj_value:.2f}" if obj_value is not None else "N/A"
+    print(f"\nObjective Value: {display_obj_value}")
     
     # Show reassignments
     reassignments = [t for t in assignment if t in prev_assignment 
