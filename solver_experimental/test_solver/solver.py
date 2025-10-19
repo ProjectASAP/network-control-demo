@@ -19,15 +19,6 @@ class TaskScheduler:
         self.resources = resources
         self.nodes = nodes
         self.edges = edges
-        self.graph = self._build_graph()
-        
-    def _build_graph(self) -> Dict:
-        """Build adjacency structure for the network graph."""
-        graph = defaultdict(list)
-        for u, v in self.edges:
-            graph[u].append(v)
-            graph[v].append(u)
-        return dict(graph)
     
     def solve(self, task_resources: Dict[str, Dict[str, float]],
               node_capacity: Dict[str, Dict[str, float]],
@@ -153,8 +144,6 @@ class TaskScheduler:
         solver = plp.PULP_CBC_CMD(timeLimit=time_limit, msg=0)
         prob.solve(solver)
         prob.writeLP("task_scheduling.lp")
-
-        print("Status:", plp.LpStatus[prob.status])
         
         # Extract solution
         assignment = {}
