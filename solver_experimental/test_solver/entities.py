@@ -32,12 +32,12 @@ class NetworkTopology:
             self._graph.add_edge(u, v, data=edge)
 
     @property
-    def nodes(self) -> list[tuple[str, Node]]:
-        return list((node_id, node["data"]) for node_id, node in self._graph.nodes(data=True))
+    def nodes(self) -> dict[str, Node]:
+        return {node_id: node["data"] for node_id, node in self._graph.nodes(data=True)}
     
     @property
-    def edges(self) -> list[tuple[EdgeKey, Mapping[str, float]]]:
-        return list(((u, v), edge["data"]) for u, v, edge in self._graph.edges(data=True))
+    def edges(self) -> dict[EdgeKey, Edge]:
+        return {(u, v): edge["data"] for u, v, edge in self._graph.edges(data=True)}
 
     def get_node(self, node_id: str) -> Node:
         return self._graph.nodes[node_id]["data"]
@@ -49,13 +49,9 @@ class NetworkTopology:
     def has_path(self, source: str, target: str) -> bool:
         return nx.has_path(self._graph, source, target)
 
-    def find_shortest_path(self, source: str, target: str) -> List[EdgeKey]:
+    def find_shortest_path(self, source: str, target: str) -> List[str]:
         node_path = nx.shortest_path(self._graph, source, target)
-        edge_path: List[EdgeKey] = []
-        for i in range(len(node_path) - 1):
-            edge = (node_path[i], node_path[i + 1])
-            edge_path.append(_normalise_edge(edge, isinstance(self._graph, nx.Graph)))
-        return edge_path
+        return node_path
 
 
 @dataclass
@@ -78,18 +74,6 @@ class Edge:
     used_bandwidth: float = 0.0
 
 
-@dataclass
-class ExistingAssignment:
-    """A workload that is already running in the network."""
-
-    task_id: str
-    node_id: str
-    cpu: float
-    memory: float
-    bandwidth: float
-    path: Sequence[EdgeKey] = field(default_factory=tuple)
-
-
 @dataclass(frozen=True)
 class TaskCommunication:
     """Bandwidth demand between two tasks."""
@@ -105,7 +89,6 @@ class Task:
     task_id: str
     cpu: float
     memory: float
-    bandwidth: float
     duration: float
 
 
@@ -120,23 +103,9 @@ class CommunicationAllocation:
 
 
 @dataclass
-class AssignmentDecision:
-    """Final decision for a task."""
+class RunningTask:
+    """Final assignment decision for a task."""
 
-    task_id: str
-    task: Task
     node_id: str
-
-
-@dataclass
-class AssignmentResult:
-    """Solver result with the selected assignments."""
-
-    objective_value: float
-    decisions: Dict[str, AssignmentDecision]
-    unassigned_tasks: List[str]
-    moves_used: int
-    moved_tasks: List[str]
-
-    def assigned_tasks(self) -> List[str]:
-        return list(self.decisions.keys())
+    task: Task
+    

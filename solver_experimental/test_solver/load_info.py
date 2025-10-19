@@ -9,7 +9,7 @@ import datetime as dt
 from entities import Edge, EdgeKey, Node, Task, TaskCommunication
 
 
-def load_nodes(path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs) -> list[Node]:
+def load_nodes(path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs) -> dict[str, Node]:
     """
     Load node capacities from a CSV file. Specify mapping between column names and expected fields if they differ.
 
@@ -29,7 +29,7 @@ def load_nodes(path: str | Path, column_names: Mapping[str, str] | None = None, 
     if column_names is not None:
         df = df.rename(columns=column_names)
     payload = df.to_dict(orient="records")
-    result = []
+    result = {}
     for row in payload:
         node = Node(
             node_id=str(row["node_id"]),
@@ -38,11 +38,11 @@ def load_nodes(path: str | Path, column_names: Mapping[str, str] | None = None, 
             used_cpu=float(row.get("used_cpu", 0)),
             used_memory=float(row.get("used_memory", 0)),
         )
-        result.append(node)
+        result[node.node_id] = node
     return result
 
 
-def load_edges(path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs) -> list[Edge]:
+def load_edges(path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs) -> dict[EdgeKey, Edge]:
     """
     Load edge capacities from a CSV file. Specify mapping between column names and expected fields if they differ.
 
@@ -61,7 +61,7 @@ def load_edges(path: str | Path, column_names: Mapping[str, str] | None = None, 
     if column_names is not None:
         df = df.rename(columns=column_names)
     payload = df.to_dict(orient="records")
-    result = []
+    result = {}
     for row in payload:
         key: EdgeKey = (str(row["source"]), str(row["target"]))
         edge = Edge(
@@ -69,11 +69,11 @@ def load_edges(path: str | Path, column_names: Mapping[str, str] | None = None, 
             capacity=float(row["capacity"]),
             used_bandwidth=float(row.get("used_bandwidth", 0)),
         )
-        result.append(edge)
+        result[key] = edge
     return result
 
 
-def load_tasks(path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs) -> list[Task]:
+def load_tasks(path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs) -> dict[str, Task]:
     """
     Load task requests from a CSV file. Specify mapping between column names and expected fields if they differ.
 
@@ -84,7 +84,6 @@ def load_tasks(path: str | Path, column_names: Mapping[str, str] | None = None, 
                 "cpu": 10,
                 "memory": 50,
                 "bandwidth": 20,
-                "arrival_time": 1625247600,
                 "duration": 3600
             }
         ]
@@ -93,20 +92,19 @@ def load_tasks(path: str | Path, column_names: Mapping[str, str] | None = None, 
     if column_names is not None:
         df = df.rename(columns=column_names)
     payload = df.to_dict(orient="records")
-    result = []
+    result = {}
     for row in payload:
         task = Task(
             task_id=str(row["task_id"]),
             cpu=float(row["cpu"]),
             memory=float(row["memory"]),
-            bandwidth=float(row["bandwidth"]),
             duration=row["duration"],
         )
-        result.append(task)
+        result[task.task_id] = task
     return result
 
 
-def load_task_communications(path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs) -> list[TaskCommunication]:
+def load_task_communications(path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs) -> dict[tuple[str, str], TaskCommunication]:
     """
     Load task communication demands from a CSV file. Specify mapping between column names and expected fields if they differ.
 
@@ -124,12 +122,12 @@ def load_task_communications(path: str | Path, column_names: Mapping[str, str] |
     if column_names is not None:
         df = df.rename(columns=column_names)
     payload = df.to_dict(orient="records")
-    result = []
+    result = {}
     for row in payload:
         comm = TaskCommunication(
             source_task_id=str(row["source_task_id"]),
             target_task_id=str(row["target_task_id"]),
             bandwidth=float(row["bandwidth"]),
         )
-        result.append(comm)
+        result[(comm.source_task_id, comm.target_task_id)] = comm
     return result
