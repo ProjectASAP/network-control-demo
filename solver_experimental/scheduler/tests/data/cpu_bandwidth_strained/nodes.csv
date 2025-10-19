@@ -1,0 +1,5 @@
+node_id,cpu_capacity,memory_capacity
+n1,4,64
+n2,6,32
+n3,4,32
+n4,4,16
