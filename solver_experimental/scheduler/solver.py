@@ -24,6 +24,7 @@ class TaskScheduler:
               task_communication: Dict[Tuple[str, str], TaskCommunication],
               running_tasks: dict[str, RunningTask],
               paths: Dict[Tuple[str, str], List[str]],
+              max_reassignments=5,
               time_limit: int = 300) -> Tuple[Dict, float | None, int]:
         """
         Solve the task scheduling optimization problem.
@@ -48,18 +49,23 @@ class TaskScheduler:
         d = {t: {n: plp.LpVariable(f"d_{t}_{n}", cat='Binary') 
                  for n in self.nodes} for t in tasks}
         
-        # Auxiliary variable for task allocation tracking
+        # Auxiliary variable for task allocation tracking. Is 1 if task t has an assignment to any node (0 otherwise).
         allocated = {t: plp.LpVariable(f"allocated_{t}", cat='Binary') 
                      for t in tasks}
         
-        # Objective: Minimize reassignments, Maximize allocations
+        # For a given task t (from a previous epoch), we sum over all d[t][n] for all n besides the node t was assigned originally.
+        # Since only one d[t][n] can equal 1 (see constraint 1) for a given t, this sum is 1 if t is reassigned. Sum over all such tasks, and
+        # we get the total reassignments.
         reassignments = plp.lpSum(
             d[t][n] for t in tasks for n in self.nodes.keys()
             if t in running_tasks and running_tasks[t].node_id != n
         )
         total_allocated = plp.lpSum(allocated[t] for t in tasks)
         
+        # Objective: Minimize reassignments, Maximize allocations.
         prob += -total_allocated + self.reassignment_penalty * reassignments
+        
+        prob += total_allocated <= max_reassignments
         
         # Constraints
         # 1. Each task assigned to exactly one node if allocated
@@ -80,44 +86,47 @@ class TaskScheduler:
             ) <= node.memory_capacity
 
         # 3. Construct path bandwidth usage variables. For each node pair, compute the bandwidth used on each path between that node pair.
-        path_bandwidths = {}
+        used_path_bandwidths = {}
         choose_path_constraints = {(t_i, t_j): 0 for t_i, t_j in task_communication.keys()}
         for n_i, n_j in combinations(self.nodes, 2):
-            path_bandwidths[(n_i, n_j)] = {}
-            pair_bandwidth = path_bandwidths[(n_i, n_j)]
+            used_path_bandwidths[(n_i, n_j)] = {}
+            pair_bandwidth = used_path_bandwidths[(n_i, n_j)]
 
             paths_btwn = paths.get((n_i, n_j), paths.get((n_j, n_i), []))
             if not paths_btwn:
                 continue
 
+            # TODO: Right now optimization formulation doesn't support multiple paths, so there is only 1 path in paths_btwn.
             for k, path in enumerate(paths_btwn):
                 pair_bandwidth[k] = 0
                 for (t_i, t_j), task_comm in task_communication.items():
 
-                    # Whether task pair is assigned on node pair. z = 1 iff both d_i and d_j work.
+                    # Whether we assigned t_i -> n_i and t_j -> n_j.
                     z_ij = plp.LpVariable(f"z_{t_i}_{t_j}_{n_i}_{n_j}", cat='Binary')
                     prob += z_ij <= d[t_i][n_i]
                     prob += z_ij <= d[t_j][n_j]
                     prob += z_ij >= (d[t_i][n_i] + d[t_j][n_j] - 1)
 
-                    # Do both ways (t_i, t_j assigned to either n_i and n_j or n_j and n_i) -> only one of z_ij or z_ji can be 1.0 at a time.
+                    # Whether we assigned t_i -> n_j and t_j -> n_i (other way around from above).
                     z_ji = plp.LpVariable(f"z_{t_i}_{t_j}_{n_j}_{n_i}", cat='Binary')
                     prob += z_ji <= d[t_i][n_j]
                     prob += z_ji <= d[t_j][n_i]
                     prob += z_ji >= (d[t_i][n_j] + d[t_j][n_i] - 1)
 
+                    # Adding z_ij and z_ji together is a binary variable that indicates whether (t_i, t_j) were assigned to (n_i, n_j) in any order.
+                    # Alternatively, it indicates whether (t_i, t_j) is using the path between (n_i, n_j).
                     pair_bandwidth[k] += task_comm.bandwidth * (z_ij + z_ji)
                     choose_path_constraints[(t_i, t_j)] += z_ij + z_ji
 
         # Handle task pairs assigned to the same node. Assume no bandwidth cost.
         for n in self.nodes:
             for t_i, t_j in task_communication.keys():
-                # Whether task pair is assigned on the same node. z = 1 iff both d_i and d_j work.
+                # Whether task pair is assigned on the same node. z = 1 iff both d_i and d_j equal 1.
                 z_ii = plp.LpVariable(f"z_{t_i}_{t_j}_{n}_{n}", cat='Binary')
                 prob += z_ii <= d[t_i][n]
                 prob += z_ii <= d[t_j][n]
                 prob += z_ii >= (d[t_i][n] + d[t_j][n] - 1)
-
+                # Treat assignment to same node as a "path" option as well.
                 choose_path_constraints[(t_i, t_j)] += z_ii
                     
         # Enforce that each task pair uses exactly one path if they are assigned to different nodes
@@ -126,18 +135,20 @@ class TaskScheduler:
 
         # 4. Edge bandwidth constraints. Each edge's total bandwidth used by all task pairs <= edge capacity.
         edge_constraints = {}
-        for n_i, n_j in path_bandwidths:
-            for k, path in enumerate(paths.get((n_i, n_j), paths.get((n_j, n_i), []))):
+        for n_i, n_j in used_path_bandwidths:
+            paths_btwn = paths.get((n_i, n_j), paths.get((n_j, n_i), []))
+            for k, path in enumerate(paths_btwn):
                 # Extract edges on this path
                 path_edges = []
                 for idx in range(len(path) - 1):
                     edge_key: EdgeKey = (path[idx], path[idx+1]) if path[idx] < path[idx+1] else (path[idx+1], path[idx])
                     path_edges.append(edge_key)
-
+                # For each edge, add the bandwidth used by all paths that cross this edge.
                 for edge_key in path_edges:
                     if edge_key not in edge_constraints:
                         edge_constraints[edge_key] = 0
-                    edge_constraints[edge_key] += path_bandwidths[(n_i, n_j)][k]
+                    edge_constraints[edge_key] += used_path_bandwidths[(n_i, n_j)][k]
+        # Total used bandwidth should not exceed edge capacity.
         for edge_key, total_bandwidth in edge_constraints.items():
             prob += total_bandwidth <= self.edges[edge_key].capacity
         

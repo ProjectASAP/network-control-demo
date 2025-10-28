@@ -1,6 +1,8 @@
 import sys
+import os
 
-sys.path.append("/home/kolleida/repos/network-control-demo/solver_experimental/scheduler")
+parent_dir = os.path.dirname(os.path.dirname(__file__))
+sys.path.append(parent_dir)
 
 from entities import *
 from load_info import *
