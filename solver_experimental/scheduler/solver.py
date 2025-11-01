@@ -1,8 +1,8 @@
 import pulp as plp
 from typing import Dict, List, Tuple, Set
+import time
 from collections import defaultdict
-from itertools import combinations
-from entities import *
+from .entities import *
 
 class TaskScheduler:
 
@@ -25,7 +25,7 @@ class TaskScheduler:
               running_tasks: dict[str, RunningTask],
               paths: Dict[Tuple[str, str], List[str]],
               max_reassignments=5,
-              time_limit: int = 300) -> Tuple[Dict, float | None, int]:
+              time_limit: int = 300) -> Tuple[Dict[str, RunningTask], float | None, int]:
         """
         Solve the task scheduling optimization problem.
         
@@ -43,6 +43,9 @@ class TaskScheduler:
 
         # Include currently running tasks in optimization.
         tasks = tasks | {t: rt.task for t, rt in running_tasks.items()}
+
+        # Ignore task pairs that are not part of the tasks.
+        task_communication = {(t_i, t_j): task_comm for (t_i, t_j), task_comm in task_communication.items() if t_i in tasks and t_j in tasks}
 
         # Decision variables
         # d[t][n] = 1 if task t assigned to node n, 0 otherwise
@@ -88,7 +91,7 @@ class TaskScheduler:
         # 3. Construct path bandwidth usage variables. For each node pair, compute the bandwidth used on each path between that node pair.
         used_path_bandwidths = {}
         choose_path_constraints = {(t_i, t_j): 0 for t_i, t_j in task_communication.keys()}
-        for n_i, n_j in combinations(self.nodes, 2):
+        for n_i, n_j in paths.keys():
             used_path_bandwidths[(n_i, n_j)] = {}
             pair_bandwidth = used_path_bandwidths[(n_i, n_j)]
 
@@ -97,7 +100,7 @@ class TaskScheduler:
                 continue
 
             # TODO: Right now optimization formulation doesn't support multiple paths, so there is only 1 path in paths_btwn.
-            for k, path in enumerate(paths_btwn):
+            for k in range(len(paths_btwn)):
                 pair_bandwidth[k] = 0
                 for (t_i, t_j), task_comm in task_communication.items():
 
@@ -165,7 +168,7 @@ class TaskScheduler:
             for t, task in tasks.items():
                 for n in self.nodes:
                     if plp.value(d[t][n]) == 1:
-                        assigned_task = RunningTask(node_id=n, task=task)
+                        assigned_task = RunningTask(node_id=n, start_time_s=time.time(), task=task)
                         assignments[t] = assigned_task
                         break
         return assignments, objective_value, status_code

@@ -19,7 +19,8 @@ class NetworkTopology:
     """Graph representation of the network."""
 
     def __init__(self, nodes: Iterable[Node], edges: Iterable[Edge], undirected: bool = True) -> None:
-        self._graph = nx.Graph()
+        self._graph = nx.Graph() if undirected else nx.DiGraph()
+        self.undirected = undirected
         for node in nodes:
             self._graph.add_node(
                 node.node_id,
@@ -37,14 +38,13 @@ class NetworkTopology:
     
     @property
     def edges(self) -> dict[EdgeKey, Edge]:
-        return {(u, v): edge["data"] for u, v, edge in self._graph.edges(data=True)}
+        return {_normalise_edge((u, v), self.undirected): edge["data"] for u, v, edge in self._graph.edges(data=True)}
 
     def get_node(self, node_id: str) -> Node:
         return self._graph.nodes[node_id]["data"]
     
     def get_edge(self, edge_id: EdgeKey) -> Edge:
-        norm_edge = _normalise_edge(edge_id, isinstance(self._graph, nx.Graph))
-        return self._graph.edges[norm_edge]["data"]
+        return self._graph.edges[edge_id]["data"]
 
     def has_path(self, source: str, target: str) -> bool:
         return nx.has_path(self._graph, source, target)
@@ -108,5 +108,6 @@ class RunningTask:
     """Final assignment decision for a task."""
 
     node_id: str
+    start_time_s: float
     task: Task
     

@@ -26,14 +26,17 @@ def solve_scheduling_problem(node_path, edge_path, task_path, task_comms_path):
 
     tasks = load_tasks(task_path)
     task_comms = load_task_communications(task_comms_path)
-    paths = {(n_i, n_j): [network.find_shortest_path(n_i, n_j)] if network.has_path(n_i, n_j) else [] for (n_i, n_j) in combinations(network.nodes, 2)}
+    paths = {}
+    for n_i, n_j in combinations(network.nodes, 2):
+        if network.has_path(n_i, n_j):
+            paths[(n_i, n_j)] = [network.find_shortest_path(n_i, n_j)]
 
     scheduler = TaskScheduler(network, reassignment_penalty=10.0)
 
     assignment, obj_value, status_code = scheduler.solve(
         tasks,
         task_comms,
-        running_tasks={"t1": RunningTask("n4", tasks["t1"])},
+        running_tasks={"t1": RunningTask("n4", time.time(), tasks["t1"])},
         paths=paths
     )
     return assignment, obj_value, status_code

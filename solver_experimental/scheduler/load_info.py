@@ -6,7 +6,7 @@ from typing import Dict, Iterable, List, Mapping, MutableMapping, Sequence, Tupl
 import pandas as pd
 import datetime as dt
 
-from entities import Edge, EdgeKey, Node, Task, TaskCommunication
+from .entities import Edge, EdgeKey, Node, Task, TaskCommunication
 
 
 def load_nodes(path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs) -> dict[str, Node]:
@@ -31,6 +31,8 @@ def load_nodes(path: str | Path, column_names: Mapping[str, str] | None = None, 
     payload = df.to_dict(orient="records")
     result = {}
     for row in payload:
+        if row["node_id"] in result:
+            continue
         node = Node(
             node_id=str(row["node_id"]),
             cpu_capacity=float(row["cpu_capacity"]),
@@ -49,7 +51,7 @@ def load_edges(path: str | Path, column_names: Mapping[str, str] | None = None, 
     Expected format:
         [
             {
-                "source": "A",
+                "source_node_id": "A",
                 "target": "B",
                 "capacity": 100,
                 "used_bandwidth": 10    # optional
@@ -63,7 +65,11 @@ def load_edges(path: str | Path, column_names: Mapping[str, str] | None = None, 
     payload = df.to_dict(orient="records")
     result = {}
     for row in payload:
+        # Assume undirected graph topology.
         key: EdgeKey = (str(row["source"]), str(row["target"]))
+        key = tuple(sorted(key)) # type: ignore
+        if key in result:
+            continue
         edge = Edge(
             edge_id=key,
             capacity=float(row["capacity"]),
@@ -94,8 +100,11 @@ def load_tasks(path: str | Path, column_names: Mapping[str, str] | None = None, 
     payload = df.to_dict(orient="records")
     result = {}
     for row in payload:
+        task_id = str(row["task_id"])
+        if task_id in result:
+            continue
         task = Task(
-            task_id=str(row["task_id"]),
+            task_id=task_id,
             arrival_offset_s=float(row["arrival_offset_s"]),
             duration_s=float(row["duration_s"]),
             initial_cpu=float(row["initial_cpu"]),
@@ -125,9 +134,12 @@ def load_task_communications(path: str | Path, column_names: Mapping[str, str] |
     payload = df.to_dict(orient="records")
     result = {}
     for row in payload:
+        t_i, t_j = str(row["source_task_id"]), str(row["target_task_id"])
+        if (t_i, t_j) in result:
+            continue
         comm = TaskCommunication(
-            source_task_id=str(row["source_task_id"]),
-            target_task_id=str(row["target_task_id"]),
+            source_task_id=t_i,
+            target_task_id=t_j,
             bandwidth=float(row["bandwidth"]),
         )
         result[(comm.source_task_id, comm.target_task_id)] = comm
