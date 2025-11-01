@@ -76,12 +76,12 @@ class TaskScheduler:
         for n, node in self.nodes.items():
             # CPU.
             prob += plp.lpSum(
-                tasks[t].cpu * d[t][n] 
+                tasks[t].initial_cpu * d[t][n] 
                 for t in tasks.keys()
             ) <= node.cpu_capacity
             # Memory.
             prob += plp.lpSum(
-                tasks[t].memory * d[t][n] 
+                tasks[t].initial_memory * d[t][n] 
                 for t in tasks.keys()
             ) <= node.memory_capacity
 

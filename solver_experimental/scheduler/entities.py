@@ -87,9 +87,10 @@ class Task:
     """Specification for a task that needs placement."""
 
     task_id: str
-    cpu: float
-    memory: float
-    duration: float
+    arrival_offset_s: float
+    duration_s: float
+    initial_cpu: float
+    initial_memory: float
 
 
 @dataclass

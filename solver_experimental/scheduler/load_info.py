@@ -81,10 +81,10 @@ def load_tasks(path: str | Path, column_names: Mapping[str, str] | None = None, 
         [
             {
                 "task_id": "task1",
-                "cpu": 10,
-                "memory": 50,
-                "bandwidth": 20,
-                "duration": 3600
+                "arrival_offset_s": 22.10
+                "initial_cpu": 10,
+                "initial_memory": 50,
+                "duration_s": 3600.0
             }
         ]
     """
@@ -96,9 +96,10 @@ def load_tasks(path: str | Path, column_names: Mapping[str, str] | None = None, 
     for row in payload:
         task = Task(
             task_id=str(row["task_id"]),
-            cpu=float(row["cpu"]),
-            memory=float(row["memory"]),
-            duration=row["duration"],
+            arrival_offset_s=float(row["arrival_offset_s"]),
+            duration_s=float(row["duration_s"]),
+            initial_cpu=float(row["initial_cpu"]),
+            initial_memory=float(row["initial_memory"]),
         )
         result[task.task_id] = task
     return result
