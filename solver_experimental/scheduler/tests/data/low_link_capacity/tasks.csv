@@ -1,4 +1,4 @@
-task_id,cpu,memory,duration
-t1,4,4,32.7
-t2,6,8,65.0
-t3,2,4,42.12
+task_id,initial_cpu,initial_memory,duration_s,arrival_offset_s
+t1,4,4,32.7,12.2
+t2,6,8,65.0,14.4
+t3,2,4,42.12,16.6
