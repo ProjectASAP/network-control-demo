@@ -4,9 +4,9 @@ import os
 parent_dir = os.path.dirname(os.path.dirname(__file__))
 sys.path.append(parent_dir)
 
-from entities import *
-from load_info import *
-from solver import *
+from scheduler.entities import *
+from scheduler.load_info import *
+from scheduler.solver import *
 import networkx as nx
 from pathlib import Path
 from itertools import combinations
