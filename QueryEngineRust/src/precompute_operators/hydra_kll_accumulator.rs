@@ -26,7 +26,8 @@ struct HydraKllSketchData {
     col_num: usize,
     sketches: Vec<Vec<KllSketchData>>,
 }
-struct HydraKllSketchAccumulator {
+#[derive(Debug, Clone)]
+pub struct HydraKllSketchAccumulator {
     sketch: Vec<Vec<DatasketchesKLLAccumulator>>,
     row_num: usize,
     col_num: usize,
@@ -119,6 +120,134 @@ impl HydraKllSketchAccumulator {
     }
 }
 
+impl SerializableToSink for HydraKllSketchAccumulator {
+    fn serialize_to_json(&self) -> Value {
+        // Mirror Python implementation: {"sketch": base64_encoded_string}
+        let sketch_bytes = self.serialize_to_bytes();
+        let sketch_b64 = general_purpose::STANDARD.encode(&sketch_bytes);
+
+        serde_json::json!({
+            "sketch": sketch_b64
+        })
+    }
+
+    fn serialize_to_bytes(&self) -> Vec<u8> {
+        let mut sketches = Vec::with_capacity(self.row_num);
+        for row in &self.sketch {
+            let mut row_data = Vec::with_capacity(self.col_num);
+            for cell in row {
+                // Serialize each DatasketchesKLLAccumulator to KllSketchData
+                let cell_bytes = cell.serialize_to_bytes();
+                let kll_data: KllSketchData = rmp_serde::from_slice(&cell_bytes)
+                    .expect("Failed to deserialize KllSketchData from cell");
+                row_data.push(kll_data);
+            }
+            sketches.push(row_data);
+        }
+
+        let serialized = HydraKllSketchData {
+            row_num: self.row_num,
+            col_num: self.col_num,
+            sketches,
+        };
+
+        let mut buf = Vec::new();
+        rmp_serde::encode::write(&mut buf, &serialized).unwrap();
+        buf
+    }
+}
+
+impl MergeableAccumulator<HydraKllSketchAccumulator> for HydraKllSketchAccumulator {
+    fn merge_accumulators(
+        accumulators: Vec<HydraKllSketchAccumulator>,
+    ) -> Result<HydraKllSketchAccumulator, Box<dyn std::error::Error + Send + Sync>> {
+        if accumulators.is_empty() {
+            return Err("No accumulators to merge".into());
+        }
+
+        // Check dimensions match
+        let row_num = accumulators[0].row_num;
+        let col_num = accumulators[0].col_num;
+        for acc in &accumulators {
+            if acc.row_num != row_num || acc.col_num != col_num {
+                return Err(
+                    "Cannot merge HydraKllSketchAccumulator with different dimensions".into(),
+                );
+            }
+        }
+
+        // Merge each cell independently
+        let mut merged_sketch = Vec::with_capacity(row_num);
+        for i in 0..row_num {
+            let mut merged_row = Vec::with_capacity(col_num);
+            for j in 0..col_num {
+                // Collect all cells at position [i][j] from all accumulators
+                let cells_to_merge: Vec<DatasketchesKLLAccumulator> = accumulators
+                    .iter()
+                    .map(|acc| acc.sketch[i][j].clone())
+                    .collect();
+
+                // Merge the cells
+                let merged_cell = DatasketchesKLLAccumulator::merge_accumulators(cells_to_merge)?;
+                merged_row.push(merged_cell);
+            }
+            merged_sketch.push(merged_row);
+        }
+
+        Ok(HydraKllSketchAccumulator {
+            sketch: merged_sketch,
+            row_num,
+            col_num,
+        })
+    }
+}
+
+impl AggregateCore for HydraKllSketchAccumulator {
+    fn clone_boxed_core(&self) -> Box<dyn AggregateCore> {
+        Box::new(self.clone())
+    }
+
+    fn type_name(&self) -> &'static str {
+        "HydraKllSketchAccumulator"
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn merge_with(
+        &self,
+        other: &dyn AggregateCore,
+    ) -> Result<Box<dyn AggregateCore>, Box<dyn std::error::Error + Send + Sync>> {
+        // Check if other is also a HydraKllSketchAccumulator
+        if other.get_accumulator_type() != self.get_accumulator_type() {
+            return Err(format!(
+                "Cannot merge HydraKllSketchAccumulator with {}",
+                other.get_accumulator_type()
+            )
+            .into());
+        }
+
+        // Downcast to HydraKllSketchAccumulator
+        let hk = other
+            .as_any()
+            .downcast_ref::<HydraKllSketchAccumulator>()
+            .ok_or("Failed to downcast to HydraKllSketchAccumulator")?;
+
+        // Use the existing merge_accumulators method
+        let merged = Self::merge_accumulators(vec![self.clone(), hk.clone()])?;
+
+        Ok(Box::new(merged))
+    }
+
+    fn get_accumulator_type(&self) -> &'static str {
+        "HydraKllSketchAccumulator"
+    }
+
+    fn get_keys(&self) -> Option<Vec<crate::KeyByLabelValues>> {
+        None
+    }
+}
 
 #[cfg(test)]
 mod tests {
