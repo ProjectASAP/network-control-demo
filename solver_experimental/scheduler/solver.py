@@ -68,7 +68,7 @@ class TaskScheduler:
         # Objective: Minimize reassignments, Maximize allocations.
         prob += -total_allocated + self.reassignment_penalty * reassignments
         
-        prob += total_allocated <= max_reassignments
+        prob += reassignments <= max_reassignments
         
         # Constraints
         # 1. Each task assigned to exactly one node if allocated
@@ -104,13 +104,14 @@ class TaskScheduler:
                 pair_bandwidth[k] = 0
                 for (t_i, t_j), task_comm in task_communication.items():
 
-                    # Whether we assigned t_i -> n_i and t_j -> n_j.
+                    # The following constraints are for mimicking the behavior of logical AND (i.e. z_ij = d[t_i][n_i] * d[t_j][n_j]).
+                    # The result is a binary variable that represents whether we assigned t_i -> n_i and t_j -> n_j.
                     z_ij = plp.LpVariable(f"z_{t_i}_{t_j}_{n_i}_{n_j}", cat='Binary')
                     prob += z_ij <= d[t_i][n_i]
                     prob += z_ij <= d[t_j][n_j]
                     prob += z_ij >= (d[t_i][n_i] + d[t_j][n_j] - 1)
 
-                    # Whether we assigned t_i -> n_j and t_j -> n_i (other way around from above).
+                    # Binary variable representing whether we assigned t_i -> n_j and t_j -> n_i (other way around from above).
                     z_ji = plp.LpVariable(f"z_{t_i}_{t_j}_{n_j}_{n_i}", cat='Binary')
                     prob += z_ji <= d[t_i][n_j]
                     prob += z_ji <= d[t_j][n_i]
@@ -132,9 +133,18 @@ class TaskScheduler:
                 # Treat assignment to same node as a "path" option as well.
                 choose_path_constraints[(t_i, t_j)] += z_ii
                     
-        # Enforce that each task pair uses exactly one path if they are assigned to different nodes
+        # Force communicating task pairs to use exactly one path (or assign both to the same node if not possible). 
+        # Note that we do not have to choose a path if neither task is assigned.
         for t_i, t_j in task_communication.keys():
-            prob += choose_path_constraints[(t_i, t_j)] == 1
+            # These constraints mimick logical OR. The binary variable indicates whether either t_i or t_j is allocated anywhere.
+            allocated_ij = plp.LpVariable(f"allocated_{t_i}_{t_j}", cat='Binary')
+            prob += allocated_ij >= allocated[t_i]
+            prob += allocated_ij >= allocated[t_j]
+            prob += allocated_ij <= (allocated[t_i] + allocated[t_j])
+
+            # If any of one of the tasks in the pair are allocated (allocated_ij = 1), we must choose a path to communicate over, which will force the other task to be allocated
+            # somewhere as well (at least one of the z_ij's or z_ji's for a given t_i, t_j must equal 1).
+            prob += choose_path_constraints[(t_i, t_j)] == allocated_ij
 
         # 4. Edge bandwidth constraints. Each edge's total bandwidth used by all task pairs <= edge capacity.
         edge_constraints = {}
