@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # PREDEFINED_COMPONENTS=("benchmarks" "exporters" "flink" "grafana" "kafka" "prometheus" "prometheus_kafka_adapter" "asprof")
 PREDEFINED_COMPONENTS=("benchmarks" "exporters" "flink" "grafana" "kafka" "prometheus" "asprof")
