@@ -1,17 +1,23 @@
 import yaml
 from jinja2 import Environment, FileSystemLoader
+from pathlib import Path
 
 CONFIG_FILE = "experiments/config/natural_query_config.yml"
 JINJA_TEMPLATE = "experiments/config/experiment_type/workshop_template.j2"
 OUTPUT_FILE = "experiments/config/experiment_type/workshop_demo.yaml"
 
-def load_config(yaml_path):
-    with open(yaml_path, 'r') as f:
+QUERY_TIME_OFFSET = 10
+MAXIMUM_WINDOW_SIZE = 0
+
+def load_config(path):
+    with open(path, "r") as f:
         return yaml.safe_load(f)
 
 def build_metric_name(metric, entity):
-    entity_part = "_".join(e.strip().lower() for e in entity.split(","))
-    return f"{metric.lower()}_{entity_part}"
+    """Create metric name, skip 'none' entity"""
+    if entity.lower() == "none":
+        return metric.lower()
+    return f"{metric.lower()}_{entity.lower()}"
 
 def build_promql(metric_name, stat, window_duration):
     stat = stat.lower()
@@ -26,70 +32,80 @@ def build_promql(metric_name, stat, window_duration):
     else:
         raise ValueError(f"Unknown statistic: {stat}")
 
-def parse_duration_to_seconds(duration_str):
-    """
-    Convert PromQL-style duration (e.g., "5m", "30s", "1h") to seconds.
-    """
-    units = {'s': 1, 'm': 60, 'h': 3600}
-    num = int(''.join(filter(str.isdigit, duration_str)))
-    unit = ''.join(filter(str.isalpha, duration_str))
+def parse_duration_to_seconds(duration):
+    units = {"s":1, "m":60, "h":3600}
+    num = int(''.join(filter(str.isdigit, duration)))
+    unit = ''.join(filter(str.isalpha, duration))
     return num * units.get(unit, 1)
 
-def scale_duration(base_duration, multiplier):
-    """
-    Multiply a PromQL duration string (e.g., 5m) by an integer multiplier.
-    """
-    num = int(''.join(filter(str.isdigit, base_duration)))
-    unit = ''.join(filter(str.isalpha, base_duration))
+def scale_duration(duration, multiplier):
+    num = int(''.join(filter(str.isdigit, duration)))
+    unit = ''.join(filter(str.isalpha, duration))
     return f"{num * multiplier}{unit}"
 
-def generate_queries(config):
+# ---------- Generate queries and complementary metrics ----------
+def generate_queries_and_metrics(config):
+    global MAXIMUM_WINDOW_SIZE
     queries = []
+    complementary_metrics = []
 
     measurement_epoch = config["epochs"]["measurement_epoch"]
     control_epoch = config["epochs"]["control_epoch"]
 
-    for entity in config["entities"]:
-        for metric in config["metrics"]:
+    for metric_entry in config["metrics"]:
+        metric = metric_entry["metric"]
+        entities = metric_entry.get("entities", [])
+        labels = metric_entry.get("labels", [])
+
+        for entity in entities:
             metric_name = build_metric_name(metric, entity)
+
+            # complementary entities = labels not in metric_name
+            complementary_entities = [e for e in entities if e != entity and e != "none"]
+            complementary_metrics.append({
+                "metric": metric_name,
+                "entities": complementary_entities
+            })
+
+            # generate queries for each statistic & time window
             for stat in config["statistics"]:
                 for window in config["time_windows"]:
                     for k_type, k_value in window.items():
                         if "measurement" in k_type:
-                            window_duration = scale_duration(measurement_epoch, k_value)
+                            duration = scale_duration(measurement_epoch, k_value)
                         elif "control" in k_type:
-                            window_duration = scale_duration(control_epoch, k_value)
+                            duration = scale_duration(control_epoch, k_value)
                         else:
                             continue
-                        queries.append(build_promql(metric_name, stat, window_duration))
-    return queries
+                        time_length = parse_duration_to_seconds(duration)
+                        MAXIMUM_WINDOW_SIZE = max(MAXIMUM_WINDOW_SIZE, time_length)
+                        queries.append(build_promql(metric_name, stat, duration))
 
-def render_experiment_template(
-    queries,
-    measurement_epoch,
-    template_dir=".",
-    template_name=JINJA_TEMPLATE,
-    output_file=OUTPUT_FILE
-):
-    env = Environment(loader=FileSystemLoader(template_dir))
-    template = env.get_template(template_name)
+    return queries, complementary_metrics
 
-    repetition_delay = parse_duration_to_seconds(measurement_epoch)
-
+# ---------- Render Jinja template ----------
+def render_template(config, queries, complementary_metrics,
+                    template_file=JINJA_TEMPLATE,
+                    output_file=OUTPUT_FILE):
+    env = Environment(loader=FileSystemLoader("."))
+    template = env.get_template(template_file)
+    repetition_delay = parse_duration_to_seconds(config["epochs"]["control_epoch"])
     rendered = template.render(
         queries=queries,
-        repetition_delay=repetition_delay
+        repetition_delay=repetition_delay,
+        metrics=complementary_metrics,
+        query_time_offset=QUERY_TIME_OFFSET,
+        starting_delay=QUERY_TIME_OFFSET + MAXIMUM_WINDOW_SIZE,
     )
-
     with open(output_file, "w") as f:
         f.write(rendered)
+    print(f"✅ Experiment config generated: {output_file} ({len(queries)} queries)")
 
-    print(f"✅ Generated {output_file} with {len(queries)} queries (repetition_delay={repetition_delay}s)")
-
+# ---------- Main ----------
 if __name__ == "__main__":
-    config = load_config(CONFIG_FILE)
-    queries = generate_queries(config)
-    render_experiment_template(
-        queries,
-        measurement_epoch=config["epochs"]["measurement_epoch"]
-    )
+    config_path = Path(CONFIG_FILE)
+    if not config_path.exists():
+        raise FileNotFoundError("config.yml not found")
+    config = load_config(config_path)
+    queries, complementary_metrics = generate_queries_and_metrics(config)
+    render_template(config, queries, complementary_metrics)
