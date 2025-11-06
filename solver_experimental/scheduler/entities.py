@@ -91,6 +91,7 @@ class Task:
     duration_s: float
     initial_cpu: float
     initial_memory: float
+    peer_bandwidths: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass

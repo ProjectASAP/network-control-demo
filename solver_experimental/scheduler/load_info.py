@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, MutableMapping, Sequence, Tuple
 import pandas as pd
 import datetime as dt
+import math
+import networkx as nx
 
 from .entities import Edge, EdgeKey, Node, Task, TaskCommunication
 
@@ -94,7 +96,7 @@ def load_tasks(path: str | Path, column_names: Mapping[str, str] | None = None, 
             }
         ]
     """
-    df = pd.read_csv(path, **kwargs)
+    df = pd.read_csv(path, **kwargs).fillna("") # Fill NaN in case certain tasks don't have peers.
     if column_names is not None:
         df = df.rename(columns=column_names)
     payload = df.to_dict(orient="records")
@@ -103,15 +105,28 @@ def load_tasks(path: str | Path, column_names: Mapping[str, str] | None = None, 
         task_id = str(row["task_id"])
         if task_id in result:
             continue
+        peer_task_ids = row.get("peer_task_ids", "")
+        peer_task_ids = peer_task_ids.split(";") if peer_task_ids else []
+        peer_bandwidths = str(row.get("peer_bandwidths", ""))
+        peer_bandwidths = [float(bw) for bw in str(peer_bandwidths).split(";")] if peer_bandwidths else []
         task = Task(
             task_id=task_id,
             arrival_offset_s=float(row["arrival_offset_s"]),
             duration_s=float(row["duration_s"]),
             initial_cpu=float(row["initial_cpu"]),
             initial_memory=float(row["initial_memory"]),
+            peer_bandwidths={t: bw for t, bw in zip(peer_task_ids, peer_bandwidths)}
         )
         result[task.task_id] = task
     return result
+
+
+def build_task_graph(tasks: dict[str, Task]) -> nx.DiGraph:
+    task_graph = nx.DiGraph()
+    for t_i, task in tasks.items():
+        for t_j, bw in task.peer_bandwidths.items():
+            task_graph.add_edge(t_i, t_j, bandwidth=bw)
+    return task_graph
 
 
 def load_task_communications(path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs) -> dict[tuple[str, str], TaskCommunication]:

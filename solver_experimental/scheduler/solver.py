@@ -3,10 +3,34 @@ from typing import Dict, List, Tuple, Set
 import time
 from collections import defaultdict
 from .entities import *
+from .load_info import build_task_graph
+import networkx as nx
+
+
+def get_valid_task_graph(tasks: dict[str, Task], task_graph: nx.DiGraph):
+        """
+        Given some current tasks, filters out tasks that are invalid (cannot be scheduled), and returns a dictionary mapping between
+        valid task pairs and their bandwidth requirements. A task cannot be scheduled unless all its peer tasks are present.
+
+        Returns:
+            task_communication: {(t_i, t_j): bandwidth (float)} - t_i, t_j represents task ids
+            valid_tasks: {task_id: Task} - Tasks that can be scheduled.
+        """
+        weak_comps = nx.weakly_connected_components(task_graph)
+        valid_tasks = tasks.copy()
+        for comp in weak_comps:
+            for t in comp:
+                if t not in tasks:
+                    for t in comp:
+                        valid_tasks.pop(t)
+                    break
+        task_communication = {(t_i, t_j): bw for t_i, t_j, bw in task_graph.edges.data('bandwidth') if t_i in valid_tasks and t_j in valid_tasks}
+        return task_communication, valid_tasks
+
 
 class TaskScheduler:
 
-    def __init__(self, network: NetworkTopology, reassignment_penalty: float = 1.0):
+    def __init__(self, network: NetworkTopology, reassignment_penalty: float = 1.0, max_reassignments: int = 5,):
         """
         Initialize the task scheduler.
         
@@ -18,14 +42,14 @@ class TaskScheduler:
         self.edges = network.edges
 
         self.reassignment_penalty = reassignment_penalty
+        self.max_reassignments = max_reassignments
     
     def solve(self, 
               tasks: dict[str, Task],
-              task_communication: Dict[Tuple[str, str], TaskCommunication],
               running_tasks: dict[str, RunningTask],
-              paths: Dict[Tuple[str, str], List[str]],
-              max_reassignments=5,
-              time_limit: int = 300) -> Tuple[Dict[str, RunningTask], float | None, int]:
+              paths: dict[tuple[str, str], List[str]],
+              task_graph: nx.DiGraph,
+              time_limit: int = 300) -> Tuple[Dict[str, RunningTask], dict[str, Task], float | None, int]:
         """
         Solve the task scheduling optimization problem.
         
@@ -37,15 +61,16 @@ class TaskScheduler:
             time_limit: Solver time limit in seconds
             
         Returns:
-            (assignment, objective_value, status_code) - New assignment dict, objective value, and solver status code.
+            (assignment, leftover_tasks, objective_value, status_code) - New assignment dict, objective value, and solver status code.
         """
         prob = plp.LpProblem("Task_Scheduling", plp.LpMinimize)
 
         # Include currently running tasks in optimization.
         tasks = tasks | {t: rt.task for t, rt in running_tasks.items()}
 
-        # Ignore task pairs that are not part of the tasks.
-        task_communication = {(t_i, t_j): task_comm for (t_i, t_j), task_comm in task_communication.items() if t_i in tasks and t_j in tasks}
+        # Get task communication requirements and filter out tasks whose peers are not here as well.
+        task_communication, tasks = get_valid_task_graph(tasks, task_graph=task_graph)
+        leftover_tasks = {task_id: tasks[task_id] for task_id in tasks.keys() - tasks.keys()}
 
         # Decision variables
         # d[t][n] = 1 if task t assigned to node n, 0 otherwise
@@ -68,7 +93,7 @@ class TaskScheduler:
         # Objective: Minimize reassignments, Maximize allocations.
         prob += -total_allocated + self.reassignment_penalty * reassignments
         
-        prob += reassignments <= max_reassignments
+        prob += reassignments <= self.max_reassignments
         
         # Constraints
         # 1. Each task assigned to exactly one node if allocated
@@ -102,7 +127,7 @@ class TaskScheduler:
             # TODO: Right now optimization formulation doesn't support multiple paths, so there is only 1 path in paths_btwn.
             for k in range(len(paths_btwn)):
                 pair_bandwidth[k] = 0
-                for (t_i, t_j), task_comm in task_communication.items():
+                for (t_i, t_j), bandwidth in task_communication.items():
 
                     # The following constraints are for mimicking the behavior of logical AND (i.e. z_ij = d[t_i][n_i] * d[t_j][n_j]).
                     # The result is a binary variable that represents whether we assigned t_i -> n_i and t_j -> n_j.
@@ -119,7 +144,7 @@ class TaskScheduler:
 
                     # Adding z_ij and z_ji together is a binary variable that indicates whether (t_i, t_j) were assigned to (n_i, n_j) in any order.
                     # Alternatively, it indicates whether (t_i, t_j) is using the path between (n_i, n_j).
-                    pair_bandwidth[k] += task_comm.bandwidth * (z_ij + z_ji)
+                    pair_bandwidth[k] += bandwidth * (z_ij + z_ji)
                     choose_path_constraints[(t_i, t_j)] += z_ij + z_ji
 
         # Handle task pairs assigned to the same node. Assume no bandwidth cost.
@@ -181,4 +206,6 @@ class TaskScheduler:
                         assigned_task = RunningTask(node_id=n, start_time_s=time.time(), task=task)
                         assignments[t] = assigned_task
                         break
-        return assignments, objective_value, status_code
+                else:
+                    leftover_tasks[t] = task
+        return assignments, leftover_tasks, objective_value, status_code
