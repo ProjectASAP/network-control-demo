@@ -16,10 +16,10 @@ class QueryGroupConfig:
         self,
         id: int,
         queries: List[str],
-        repetitions: int,
+        # repetitions: int,
         repetition_delay: int,
         options: Dict[str, Any],
-        starting_delay: int,
+        # starting_delay: int,
         # options: Dict[str, Any],
     ):
         # set defaults
@@ -28,30 +28,30 @@ class QueryGroupConfig:
 
         self.id = id
         self.queries = queries
-        self.repetitions = repetitions
+        # self.repetitions = repetitions
         self.repetition_delay = repetition_delay
         self.__dict__.update(options)
-        self.starting_delay = starting_delay
-        self.options = options
+        # self.starting_delay = starting_delay
+        # self.options = options
 
         assert self.repetitions is not None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]):
-        return cls(
-            id=data["id"],
-            repetitions=data["repetitions"],
-            repetition_delay=data["repetition_delay"],
-            starting_delay=data["starting_delay"] if "starting_delay" in data else 0,
-            options=data["options"],
-            queries=data["queries"],
-        )
         # return cls(
         #     id=data["id"],
-        #     queries=data["queries"],
+        #     repetitions=data["repetitions"],
         #     repetition_delay=data["repetition_delay"],
-        #     options=data["client_options"],
+        #     starting_delay=data["starting_delay"] if "starting_delay" in data else 0,
+        #     options=data["options"],
+        #     queries=data["queries"],
         # )
+        return cls(
+            id=data["id"],
+            queries=data["queries"],
+            repetition_delay=data["repetition_delay"],
+            options=data["client_options"],
+        )
 
 
 class Config:
