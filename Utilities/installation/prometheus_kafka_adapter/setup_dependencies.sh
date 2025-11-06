@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 DOCKER_DATA_DIR=/scratch/var_lib_docker
 
 # Add Docker's official GPG key:

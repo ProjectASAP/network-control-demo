@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if [ $# -ne 4 ]; then
   echo "Usage: $0 <path to prometheus-kafka-adapter directory> <kafka broker> <kafka topic> <serialization_format>"
