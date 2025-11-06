@@ -24,11 +24,11 @@ exporters:
     fake_exporter:
       num_ports_per_server: 1 # number of exporter per server
       start_port: 50000
-      dataset: zipf
+      dataset: network_control_demo
       synthetic_data_value_scale: 10000 # [0, value_scale]
       num_labels: 2
       num_values_per_label: 10
-      metric_type: counter # Metric name: "fake_metric" for gauge, "fake_metric_total" for counter
+      metric_type: gauge # Metric name: "fake_metric" for gauge, "fake_metric_total" for counter
 
 query_groups:
 - id: 1

@@ -1,14 +1,28 @@
-entities:
-  - Task
-  - Node
-  - Edge
-  - Task,Node
-  - Task,Edge
-
 metrics:
-  - CPU
-  - Mem
-  - Bandwidth
+  - metric: cpu_usage
+    labels: 
+      - task_id
+      - node_id
+    entities: 
+      - none
+      - task_id
+      - node_id
+  - metric: memory_usage
+    labels: 
+      - task_id
+      - node_id
+    entities: 
+      - none
+      - task_id
+      - node_id
+  - metric: available_bandwidth_usage
+    labels: 
+      - source_task_id
+      - target_task_id
+    entities: 
+      - none
+      - source_task_id
+      - target_task_id
 
 statistics:
   - median
@@ -21,5 +35,5 @@ time_windows:
   - K_of_control_epochs: 5
 
 epochs:
-  measurement_epoch: 5m
-  control_epoch: 30s
+  measurement_epoch: 30s
+  control_epoch: 4m 

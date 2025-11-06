@@ -1,0 +1,4 @@
+task_id,cpu,memory,duration
+t1,4,4,32.7
+t2,6,8,65.0
+t3,4,4,42.12

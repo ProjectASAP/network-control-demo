@@ -20,7 +20,7 @@ import datetime as dt
 import math
 import random
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Tuple
 
 
 @dataclasses.dataclass
@@ -207,6 +207,56 @@ def generate_telemetry(
     return resource_rows, bandwidth_rows
 
 
+def generate_edge_bandwidth_telemetry(
+    tasks: Iterable[TaskSpec],
+    telemetry_bandwidth_rows: Iterable[dict],
+    link_capacity_gbps: float = 100.0,
+) -> List[dict]:
+    """Aggregate per-task bandwidth into per-node edge availability.
+
+    Output rows:
+      - timestamp (ISO seconds)
+      - source_node_id
+      - target_node_id
+      - available_bandwidth_usage (Gbps)
+    """
+    task_to_node: Dict[str, str] = {t.task_id: t.node_id for t in tasks}
+
+    # Sum usage per (timestamp, source_node, target_node)
+    used_by_edge: Dict[Tuple[str, str, str], float] = {}
+    for row in telemetry_bandwidth_rows:
+        ts = row.get("timestamp", "")
+        s_task = row.get("source_task_id", "")
+        t_task = row.get("target_task_id", "")
+        try:
+            used = float(row.get("bandwidth_usage", 0.0))
+        except Exception:
+            used = 0.0
+
+        s_node = task_to_node.get(s_task, "")
+        t_node = task_to_node.get(t_task, "")
+        if not ts or not s_node or not t_node:
+            continue
+
+        key = (ts, s_node, t_node)
+        used_by_edge[key] = used_by_edge.get(key, 0.0) + used
+
+    rows: List[dict] = []
+    for (ts, s_node, t_node), used_sum in used_by_edge.items():
+        available = max(link_capacity_gbps - used_sum, 0.0)
+        rows.append(
+            {
+                "timestamp": ts,
+                "source_node_id": s_node,
+                "target_node_id": t_node,
+                "available_bandwidth_usage": f"{available:.3f}",
+            }
+        )
+
+    rows.sort(key=lambda r: (r["timestamp"], r["source_node_id"], r["target_node_id"]))
+    return rows
+
+
 def write_csv(path: Path, fieldnames: List[str], rows: Iterable[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as fh:
@@ -233,6 +283,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--daily-oscillation", type=float, default=0.25, help="Amplitude of oscillation in the telemetry time series.")
     parser.add_argument("--volatility", type=float, default=0.12, help="Random noise level for telemetry time series.")
     parser.add_argument("--peer-dropout", type=float, default=0.1, help="Probability that a telemetry sample has no peer task.")
+    parser.add_argument("--edge-link-capacity", type=float, default=100.0, help="Per-edge capacity (Gbps) for availability calc.")
     parser.add_argument("--seed", type=int, default=2024, help="Random seed for reproducibility.")
     parser.add_argument("--output-dir", type=Path, default=Path("output"), help="Directory to place generated CSV files.")
     parser.add_argument("--base-timestamp", type=str, default=None, help="ISO timestamp for task arrival time zero (defaults to now).")
@@ -303,9 +354,16 @@ def main() -> None:
         base_timestamp=base_timestamp,
     )
 
+    telemetry_edge_bandwidth_rows = generate_edge_bandwidth_telemetry(
+        tasks=tasks,
+        telemetry_bandwidth_rows=telemetry_bandwidth_rows,
+        link_capacity_gbps=args.edge_link_capacity,
+    )
+
     tasks_path = args.output_dir / "tasks.csv"
     telemetry_resource_path = args.output_dir / "telemetry_resources.csv"
     telemetry_bandwidth_path = args.output_dir / "telemetry_bandwidth.csv"
+    telemetry_edge_bandwidth_path = args.output_dir / "telemetry_edge_bandwidth.csv"
 
     task_fieldnames = [
         "task_id",
@@ -319,14 +377,24 @@ def main() -> None:
     ]
     resource_fieldnames = ["timestamp", "node_id", "task_id", "cpu_usage", "memory_usage"]
     bandwidth_fieldnames = ["timestamp", "source_task_id", "target_task_id", "bandwidth_usage"]
+    edge_bandwidth_fieldnames = [
+        "timestamp",
+        "source_node_id",
+        "target_node_id",
+        "available_bandwidth_usage",
+    ]
 
     write_csv(tasks_path, task_fieldnames, task_rows)
     write_csv(telemetry_resource_path, resource_fieldnames, telemetry_resource_rows)
     write_csv(telemetry_bandwidth_path, bandwidth_fieldnames, telemetry_bandwidth_rows)
+    write_csv(telemetry_edge_bandwidth_path, edge_bandwidth_fieldnames, telemetry_edge_bandwidth_rows)
 
     print(f"Wrote {len(task_rows)} tasks to {tasks_path}")
     print(f"Wrote {len(telemetry_resource_rows)} resource telemetry samples to {telemetry_resource_path}")
     print(f"Wrote {len(telemetry_bandwidth_rows)} bandwidth telemetry samples to {telemetry_bandwidth_path}")
+    print(
+        f"Wrote {len(telemetry_edge_bandwidth_rows)} edge-bandwidth telemetry samples to {telemetry_edge_bandwidth_path}"
+    )
 
 
 if __name__ == "__main__":

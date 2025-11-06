@@ -492,6 +492,15 @@ impl PrecomputedOutput {
                 .map_err(|e| format!("Failed to deserialize DeltaSetAggregatorAccumulator: {e}"))?;
                 Ok(Box::new(accumulator))
             }
+            "HydraKLL" => {
+                let accumulator = if streaming_engine == "flink" {
+                    HydraKllSketchAccumulator::deserialize_from_bytes_arroyo(buffer)
+                } else {
+                    HydraKllSketchAccumulator::deserialize_from_bytes_arroyo(buffer)
+                }
+                .map_err(|e| format!("Failed to deserialize HydraKllSketchAccumulator: {e}"))?;
+                Ok(Box::new(accumulator))
+            }
             _ => Err(format!("Unknown precompute type: {precompute_type}").into()),
         }
     }

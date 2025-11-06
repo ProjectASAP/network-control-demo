@@ -7,7 +7,11 @@ import numpy
 import os
 import itertools
 import numpy as np
-from typing import List
+from typing import List, Dict, Any, Tuple
+import csv
+import datetime
+import math
+from collections import defaultdict
 
 
 class CustomCollector(Collector):
@@ -69,7 +73,8 @@ class CustomCollector(Collector):
             ]
             self.values_per_label.append(values)
 
-        label_value_combinations = list(itertools.product(*self.values_per_label))
+        label_value_combinations = list(
+            itertools.product(*self.values_per_label))
         assert len(label_value_combinations) == num_timeseries
         # convert from list[tuple[str]] to list[list[str]]
         label_value_combinations = [
@@ -154,19 +159,22 @@ class CustomCollector(Collector):
         if self.metric_type == "counter":
             fake_metric = CounterMetricFamily(
                 "fake_metric",
-                "Generating fake time series data with {} dataset".format(self.dataset),
+                "Generating fake time series data with {} dataset".format(
+                    self.dataset),
                 labels=self.labels,
             )
         elif self.metric_type == "gauge":
             fake_metric = GaugeMetricFamily(
                 "fake_metric",
-                "Generating fake time series data with {} dataset".format(self.dataset),
+                "Generating fake time series data with {} dataset".format(
+                    self.dataset),
                 labels=self.labels,
             )
         else:
             fake_metric = GaugeMetricFamily(
                 "fake_metric",
-                "Generating fake time series data with {} dataset".format(self.dataset),
+                "Generating fake time series data with {} dataset".format(
+                    self.dataset),
                 labels=self.labels,
             )
 
@@ -201,17 +209,310 @@ class CustomCollector(Collector):
         yield fake_metric
 
 
-def main(args):
-    os.makedirs(args.output_dir, exist_ok=True)
+"""
+Module-level caches for the network control demo datasets.
+These allow the collector to access parsed CSV rows if needed.
+"""
+_NCD_RESOURCES: List[Dict[str, Any]] = []
+_NCD_BANDWIDTH: List[Dict[str, Any]] = []
 
-    metric_collector = CustomCollector(
-        args.valuescale,
-        args.dataset,
-        args.num_labels,
-        args.num_values_per_label,
-        args.metric_type,
+
+def _read_csv_as_dicts(path: str) -> List[Dict[str, str]]:
+    with open(path, "r", newline="") as f:
+        reader = csv.DictReader(f)
+        return [row for row in reader]
+
+
+def read_network_control_demo_data() -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    telemetry_resource_file_path = os.path.join(
+        os.path.dirname(
+            __file__), "../../DataGen/sample_output/telemetry_resources.csv"
     )
-    REGISTRY.register(metric_collector)
+    if not os.path.exists(telemetry_resource_file_path):
+        raise FileNotFoundError(
+            "CSV file not found at {}. Please make sure the file exists.".format(
+                telemetry_resource_file_path
+            )
+        )
+
+    telemetry_bandwidth_file_path = os.path.join(
+        os.path.dirname(
+            __file__), "../../DataGen/sample_output/telemetry_edge_bandwidth.csv"
+    )
+    if not os.path.exists(telemetry_bandwidth_file_path):
+        raise FileNotFoundError(
+            "CSV file not found at {}. Please make sure the file exists.".format(
+                telemetry_bandwidth_file_path
+            )
+        )
+
+    # Parse CSVs
+    resources_raw = _read_csv_as_dicts(telemetry_resource_file_path)
+    bandwidth_raw = _read_csv_as_dicts(telemetry_bandwidth_file_path)
+
+    # Convert numeric fields to appropriate types while keeping labels as strings
+    resources: List[Dict[str, Any]] = []
+    for row in resources_raw:
+        try:
+            resources.append(
+                {
+                    "timestamp": row.get("timestamp", ""),
+                    "node_id": row.get("node_id", ""),
+                    "task_id": row.get("task_id", ""),
+                    "cpu_usage": float(row.get("cpu_usage", "nan")),
+                    "memory_usage": float(row.get("memory_usage", "nan")),
+                }
+            )
+        except Exception:
+            # Skip malformed rows
+            continue
+
+    bandwidth: List[Dict[str, Any]] = []
+    for row in bandwidth_raw:
+        try:
+            bandwidth.append(
+                {
+                    "timestamp": row.get("timestamp", ""),
+                    "source_node_id": row.get("source_node_id", ""),
+                    "target_node_id": row.get("target_node_id", ""),
+                    "available_bandwidth_usage": float(
+                        row.get("available_bandwidth_usage", "nan")
+                    ),
+                }
+            )
+        except Exception:
+            # Skip malformed rows
+            continue
+
+    # Populate module-level caches for potential use by the collector
+    global _NCD_RESOURCES, _NCD_BANDWIDTH
+    _NCD_RESOURCES = resources
+    _NCD_BANDWIDTH = bandwidth
+
+    return resources, bandwidth
+
+
+class NetworkControlDemoCollector(Collector):
+    """
+    Collector that replays the CSV data, one timestamp chunk per scrape.
+    Emits three metrics:
+      - cpu_usage{node_id, task_id}
+      - memory_usage{node_id, task_id}
+      - bandwidth_usage{source_task_id, target_task_id}
+    """
+
+    def __init__(self, resources: List[Dict[str, Any]], bandwidth: List[Dict[str, Any]]):
+        self.resources = resources
+        self.bandwidth = bandwidth
+
+        # Group rows by timestamp string for efficient per-scrape replay
+        self.resource_groups: Dict[str, List[Dict[str, Any]]] = {}
+        for row in self.resources:
+            ts = row.get("timestamp", "")
+            self.resource_groups.setdefault(ts, []).append(row)
+        self.resource_timestamps = sorted(self.resource_groups.keys())
+
+        self.bandwidth_groups: Dict[str, List[Dict[str, Any]]] = {}
+        for row in self.bandwidth:
+            ts = row.get("timestamp", "")
+            self.bandwidth_groups.setdefault(ts, []).append(row)
+        self.bandwidth_timestamps = sorted(self.bandwidth_groups.keys())
+
+        self._res_idx = 0
+        self._bw_idx = 0
+
+    @staticmethod
+    def _ts_to_epoch_seconds(ts_str: str) -> float:
+        # Expecting format like 2025-10-13T20:56:53
+        try:
+            dt = datetime.datetime.strptime(ts_str, "%Y-%m-%dT%H:%M:%S").replace(
+                tzinfo=datetime.timezone.utc
+            )
+            return dt.timestamp()
+        except Exception:
+            return float("nan")
+
+    def collect(self):
+        cpu_metric = GaugeMetricFamily(
+            "cpu_usage", "CPU usage percent (from CSV)", labels=["node_id", "task_id"]
+        )
+        mem_metric = GaugeMetricFamily(
+            "memory_usage",
+            "Memory usage percent (from CSV)",
+            labels=["node_id", "task_id"],
+        )
+        bw_metric = GaugeMetricFamily(
+            "available_bandwidth_usage",
+            "Available bandwidth (from CSV)",
+            labels=["source_node_id", "target_node_id"],
+        )
+        cpu_task_metric = GaugeMetricFamily(
+            "cpu_usage_task_id",
+            "CPU usage percent (from CSV) merging task_id",
+            labels=["node_id"],
+        )
+        cpu_node_metric = GaugeMetricFamily(
+            "cpu_usage_node_id",
+            "CPU usage percent (from CSV) merging node_id",
+            labels=["task_id"],
+        )
+        mem_task_metric = GaugeMetricFamily(
+            "memory_usage_task_id",
+            "Memory usage percent (from CSV) merging task_id",
+            labels=["node_id"],
+        )
+        mem_node_metric = GaugeMetricFamily(
+            "memory_usage_node_id",
+            "Memory usage percent (from CSV) merging node_id",
+            labels=["task_id"],
+        )
+        bw_target_node_metric = GaugeMetricFamily(
+            "available_bandwidth_usage_target_node_id",
+            "Available bandwidth (from CSV) merging target_node_id",
+            labels=["source_node_id"],
+        )
+        bw_source_node_metric = GaugeMetricFamily(
+            "available_bandwidth_usage_source_node_id",
+            "Available bandwidth (from CSV) merging source_node_id",
+            labels=["target_node_id"],
+        )
+
+        # Emit next resource timestamp group
+        if self.resource_timestamps:
+            res_ts_str = self.resource_timestamps[self._res_idx]
+            res_epoch = self._ts_to_epoch_seconds(res_ts_str)
+            res_rows = self.resource_groups.get(res_ts_str, [])
+            # Raw samples
+            for row in res_rows:
+                node_id = row.get("node_id", "")
+                task_id = row.get("task_id", "")
+                cpu = row.get("cpu_usage", float("nan"))
+                mem = row.get("memory_usage", float("nan"))
+                if cpu == cpu and res_epoch == res_epoch:  # not NaN
+                    cpu_metric.add_metric(
+                        [node_id, task_id], cpu, timestamp=res_epoch)
+                else:
+                    cpu_metric.add_metric([node_id, task_id], cpu)
+                if mem == mem and res_epoch == res_epoch:
+                    mem_metric.add_metric(
+                        [node_id, task_id], mem, timestamp=res_epoch)
+                else:
+                    mem_metric.add_metric([node_id, task_id], mem)
+            # Aggregated by node (merge task_id)
+            cpu_by_node: Dict[str, float] = defaultdict(float)
+            mem_by_node: Dict[str, float] = defaultdict(float)
+            # Aggregated by task (merge node_id)
+            cpu_by_task: Dict[str, float] = defaultdict(float)
+            mem_by_task: Dict[str, float] = defaultdict(float)
+            for row in res_rows:
+                node_id = row.get("node_id", "")
+                task_id = row.get("task_id", "")
+                cpu = row.get("cpu_usage", float("nan"))
+                mem = row.get("memory_usage", float("nan"))
+                if isinstance(cpu, (int, float)) and not math.isnan(cpu):
+                    cpu_by_node[node_id] += float(cpu)
+                    cpu_by_task[task_id] += float(cpu)
+                if isinstance(mem, (int, float)) and not math.isnan(mem):
+                    mem_by_node[node_id] += float(mem)
+                    mem_by_task[task_id] += float(mem)
+            for node_id, val in cpu_by_node.items():
+                if res_epoch == res_epoch:
+                    cpu_task_metric.add_metric(
+                        [node_id], val, timestamp=res_epoch)
+                else:
+                    cpu_task_metric.add_metric([node_id], val)
+            for node_id, val in mem_by_node.items():
+                if res_epoch == res_epoch:
+                    mem_task_metric.add_metric(
+                        [node_id], val, timestamp=res_epoch)
+                else:
+                    mem_task_metric.add_metric([node_id], val)
+            # Emit per-task aggregates (merge node_id)
+            for t_id, val in cpu_by_task.items():
+                if res_epoch == res_epoch:
+                    cpu_node_metric.add_metric(
+                        [t_id], val, timestamp=res_epoch)
+                else:
+                    cpu_node_metric.add_metric([t_id], val)
+            for t_id, val in mem_by_task.items():
+                if res_epoch == res_epoch:
+                    mem_node_metric.add_metric(
+                        [t_id], val, timestamp=res_epoch)
+                else:
+                    mem_node_metric.add_metric([t_id], val)
+            # Advance pointer
+            self._res_idx = (self._res_idx + 1) % len(self.resource_timestamps)
+
+        # Emit next bandwidth timestamp group
+        if self.bandwidth_timestamps:
+            bw_ts_str = self.bandwidth_timestamps[self._bw_idx]
+            bw_epoch = self._ts_to_epoch_seconds(bw_ts_str)
+            bw_rows = self.bandwidth_groups.get(bw_ts_str, [])
+            # Raw samples
+            for row in bw_rows:
+                s = row.get("source_node_id", "")
+                t = row.get("target_node_id", "")
+                val = row.get("available_bandwidth_usage", float("nan"))
+                if val == val and bw_epoch == bw_epoch:
+                    bw_metric.add_metric([s, t], val, timestamp=bw_epoch)
+                else:
+                    bw_metric.add_metric([s, t], val)
+            # Aggregations
+            by_source: Dict[str, float] = defaultdict(
+                float)  # merge target_task_id
+            by_target: Dict[str, float] = defaultdict(
+                float)  # merge source_task_id
+            for row in bw_rows:
+                s = row.get("source_node_id", "")
+                t = row.get("target_node_id", "")
+                val = row.get("available_bandwidth_usage", float("nan"))
+                if isinstance(val, (int, float)) and not math.isnan(val):
+                    by_source[s] += float(val)
+                    by_target[t] += float(val)
+            for source, val in by_source.items():
+                if bw_epoch == bw_epoch:
+                    bw_target_node_metric.add_metric(
+                        [source], val, timestamp=bw_epoch)
+                else:
+                    bw_target_node_metric.add_metric([source], val)
+            for target, val in by_target.items():
+                if bw_epoch == bw_epoch:
+                    bw_source_node_metric.add_metric(
+                        [target], val, timestamp=bw_epoch)
+                else:
+                    bw_source_node_metric.add_metric([target], val)
+            # Advance pointer
+            self._bw_idx = (self._bw_idx + 1) % len(self.bandwidth_timestamps)
+
+        yield cpu_metric
+        yield mem_metric
+        yield bw_metric
+        yield cpu_task_metric
+        yield mem_task_metric
+        yield cpu_node_metric
+        yield mem_node_metric
+        yield bw_target_node_metric
+        yield bw_source_node_metric
+
+
+def main(args):
+    if args.output_dir is not None:
+        os.makedirs(args.output_dir, exist_ok=True)
+
+    if args.dataset == "network_control_demo":
+        resources, bandwidth = read_network_control_demo_data()
+        network_control_demo_collector = NetworkControlDemoCollector(
+            resources, bandwidth)
+        REGISTRY.register(network_control_demo_collector)
+    else:
+        metric_collector = CustomCollector(
+            args.valuescale,
+            args.dataset,
+            args.num_labels,
+            args.num_values_per_label,
+            args.metric_type,
+        )
+        REGISTRY.register(metric_collector)
     start_http_server(port=args.port)
     print("Fake exporter started on port {}".format(args.port))
     while True:
@@ -220,18 +521,20 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output_dir", type=str, required=True)
+    parser.add_argument("--output_dir", type=str, required=False)
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--valuescale", type=int, required=True)
+    parser.add_argument("--valuescale", type=int, required=False)
     # parser.add_argument("--start_instanceid", type=int, required=True)
     # parser.add_argument("--batchsize", type=int, required=True)
     parser.add_argument("--dataset", type=str, required=True)
-    parser.add_argument("--num_labels", type=int, required=True)
-    parser.add_argument("--num_values_per_label", type=str, required=True)
-    parser.add_argument("--metric_type", type=str, required=True)
+    parser.add_argument("--num_labels", type=int, required=False)
+    parser.add_argument("--num_values_per_label", type=str, required=False)
+    parser.add_argument("--metric_type", type=str, required=False)
     args = parser.parse_args()
 
-    args.num_values_per_label = [int(i) for i in args.num_values_per_label.split(",")]
+    if not (args.num_values_per_label is None):
+        args.num_values_per_label = [
+            int(i) for i in args.num_values_per_label.split(",")]
 
     # if (
     #     args.port is None
