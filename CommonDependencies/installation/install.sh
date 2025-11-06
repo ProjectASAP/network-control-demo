@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Build script for SketchDB shared base image
 # This script builds the base image that contains common dependencies
