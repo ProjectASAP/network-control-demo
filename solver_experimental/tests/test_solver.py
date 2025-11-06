@@ -25,7 +25,7 @@ def solve_scheduling_problem(node_path, edge_path, task_path, task_comms_path):
     network = load_network_topology(node_path, edge_path)
 
     tasks = load_tasks(task_path)
-    task_comms = load_task_communications(task_comms_path)
+    task_graph = build_task_graph(tasks)
     paths = {}
     for n_i, n_j in combinations(network.nodes, 2):
         if network.has_path(n_i, n_j):
@@ -33,9 +33,9 @@ def solve_scheduling_problem(node_path, edge_path, task_path, task_comms_path):
 
     scheduler = TaskScheduler(network, reassignment_penalty=10.0)
 
-    assignment, obj_value, status_code = scheduler.solve(
+    assignment, _, obj_value, status_code = scheduler.solve(
         tasks,
-        task_comms,
+        task_graph=task_graph,
         running_tasks={"t1": RunningTask("n4", time.time(), tasks["t1"])},
         paths=paths
     )
