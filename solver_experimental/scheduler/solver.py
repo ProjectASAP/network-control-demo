@@ -22,7 +22,7 @@ def get_valid_task_graph(tasks: dict[str, Task], task_graph: nx.DiGraph):
             for t in comp:
                 if t not in tasks:
                     for t in comp:
-                        valid_tasks.pop(t)
+                        valid_tasks.pop(t, None)
                     break
         task_communication = {(t_i, t_j): bw for t_i, t_j, bw in task_graph.edges.data('bandwidth') if t_i in valid_tasks and t_j in valid_tasks}
         return task_communication, valid_tasks
@@ -66,11 +66,11 @@ class TaskScheduler:
         prob = plp.LpProblem("Task_Scheduling", plp.LpMinimize)
 
         # Include currently running tasks in optimization.
-        tasks = tasks | {t: rt.task for t, rt in running_tasks.items()}
+        original_tasks = tasks | {t: rt.task for t, rt in running_tasks.items()}
 
         # Get task communication requirements and filter out tasks whose peers are not here as well.
         task_communication, tasks = get_valid_task_graph(tasks, task_graph=task_graph)
-        leftover_tasks = {task_id: tasks[task_id] for task_id in tasks.keys() - tasks.keys()}
+        leftover_tasks = {task_id: original_tasks[task_id] for task_id in original_tasks.keys() - tasks.keys()}
 
         # Decision variables
         # d[t][n] = 1 if task t assigned to node n, 0 otherwise
