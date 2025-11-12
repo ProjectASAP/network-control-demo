@@ -16,6 +16,7 @@ from typing import Dict
 import threading
 import subprocess
 import concurrent.futures
+import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -29,6 +30,11 @@ from urllib3.util.retry import Retry
 from scheduler.entities import RunningTask, Task, NetworkTopology
 from scheduler.load_info import load_nodes, load_edges, load_tasks, build_task_graph
 from scheduler.solver import TaskScheduler
+
+
+QUERIES = [
+    'quantile_over_time(0.5, cpu_usage[150s])'
+]
 
 
 def main(args: argparse.Namespace):
@@ -54,10 +60,21 @@ def main(args: argparse.Namespace):
     # Mapping between task id and running task.
     running_tasks: dict[str, RunningTask] = {}
     unassigned_tasks: dict[str, Task] = {}
-    while running_tasks or task_queue:
+    while task_queue:
         time.sleep(args.interval)
         curr_offset = (time.time() - start_time) * 100 
-        print(curr_offset)
+
+        for query in QUERIES:
+            try:
+                params = {
+                    'query': query
+                }
+                response = requests.get("http://localhost:8088", params=params)
+                response.raise_for_status()
+                data = response.json()
+            except requests.RequestException as e:
+                print(f"Could not fetch telemetry information: {e}")
+                continue
 
         # Filter out finished tasks. For now, don't account for solver time and variable finish times.
         running_tasks = {task_id: rt for task_id, rt in running_tasks.items() if curr_offset - rt.start_time_s >= rt.task.duration_s}
@@ -71,8 +88,9 @@ def main(args: argparse.Namespace):
                 task_queue.popleft()
             else:
                 break
+        tasks_to_schedule = arrived_tasks | unassigned_tasks
         assignments, leftover_tasks, objective_value, status_code = solver.solve(
-            tasks=arrived_tasks | unassigned_tasks,
+            tasks=tasks_to_schedule,
             task_graph=task_graph,
             running_tasks=running_tasks,
             paths=paths
@@ -97,7 +115,7 @@ if __name__ == "__main__":
     parser.add_argument("--node-path", type=str, required=True)
     parser.add_argument("--edge-path", type=str, required=True)
     parser.add_argument("--task-path", type=str, required=True)
-    parser.add_argument("--task-communication-path", type=str, required=True)
+    # parser.add_argument("--task-communication-path", type=str, required=True)
     parser.add_argument("--interval", type=float, default=10.0)
 
     args = parser.parse_args()
