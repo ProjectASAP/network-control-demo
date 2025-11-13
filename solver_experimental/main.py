@@ -21,21 +21,11 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-# import similarity_scores
-# from prometheus_api_client import PrometheusConnect
-# from classes.config import Config
-# from classes.QueryLatencyExporter import QueryLatencyExporter
-# from promql_utilities.query_results.classes import QueryResult, QueryResultAcrossTime
-# from promql_utilities.query_results.serializers import SerializerFactory
-
 from scheduler.entities import RunningTask, Task, NetworkTopology
 from scheduler.load_info import load_nodes, load_edges, load_tasks, build_task_graph
 from scheduler.solver import TaskScheduler
-
-
-QUERIES = [
-    'quantile_over_time(0.5, cpu_usage[150s])'
-]
+from query_engine_utils.config import QueryManagerConfig, QueryGroupConfig, load_query_config
+from query_engine_utils.server_querying import QueryManager
 
 
 def main(args: argparse.Namespace):
@@ -61,77 +51,74 @@ def main(args: argparse.Namespace):
     solver = TaskScheduler(network=network)
     start_time = time.time()
 
-    # Mapping between task id and running task.
-    running_tasks: dict[str, RunningTask] = {}
-    unassigned_tasks: dict[str, Task] = {}
-    while task_queue:
-        time.sleep(args.interval)
-        curr_offset = (time.time() - start_time) * 100 
-        logger.debug(f"Current time offset: {curr_offset:.2f} ms")
+    query_config = load_query_config(args.query_manager_config)
+    with QueryManager(server_url=args.server_url, query_config=query_config) as query_manager:
+        # Mapping between task id and running task.
+        running_tasks: dict[str, RunningTask] = {}
+        unassigned_tasks: dict[str, Task] = {}
 
-        for query in QUERIES:
-            try:
-                params = {
-                    'query': query
-                }
-                response = requests.get(args.server_url, params=params)
-                response.raise_for_status()
-                data = response.json()
-            except requests.RequestException as e:
-                logger.debug(f"Could not fetch telemetry information: {e}")
-                continue
-
-        # Filter out finished tasks. For now, don't account for solver time and variable finish times.
-        running_tasks = {task_id: rt for task_id, rt in running_tasks.items() if curr_offset - rt.start_time_s >= rt.task.duration_s}
-        logger.debug(f"Currently running tasks: {list(running_tasks.keys())}")
-
-        arrived_tasks: dict[str, Task] = {}
-        # Schedule newly arrived tasks.
         while task_queue:
-            task = task_queue[0]
-            if task.arrival_offset_s < curr_offset:
-                arrived_tasks[task.task_id] = task
-                task_queue.popleft()
+            time.sleep(args.interval)
+            curr_offset = (time.time() - start_time) * 100 
+            logger.debug(f"Current time offset: {curr_offset:.2f} ms")
+
+            # TODO: Execute PromQL queries and do something with results (e.g. update task spec estimates).
+            promql_query_results = query_manager.execute_queries()
+            for group_id, group_results in promql_query_results.items():
+                if group_results['status'] == 'success':
+                    logger.debug(f"Query Group ID: {group_id} Results: {group_results}")
+
+            # Filter out finished tasks. For now, don't account for solver time and variable finish times.
+            running_tasks = {task_id: rt for task_id, rt in running_tasks.items() if curr_offset - rt.start_time_s >= rt.task.duration_s}
+            logger.debug(f"Currently running tasks: {list(running_tasks.keys())}")
+
+            arrived_tasks: dict[str, Task] = {}
+            # Schedule newly arrived tasks.
+            while task_queue:
+                task = task_queue[0]
+                if task.arrival_offset_s < curr_offset:
+                    arrived_tasks[task.task_id] = task
+                    task_queue.popleft()
+                else:
+                    break
+            logger.debug(f"Arrived tasks: {list(arrived_tasks.keys())}")
+            logger.debug(f"Unassigned tasks from previous rounds: {list(unassigned_tasks.keys())}")
+            
+            tasks_to_schedule = arrived_tasks | unassigned_tasks
+
+            logger.info(f"Scheduling {len(tasks_to_schedule)} tasks...")
+            assignments, leftover_tasks, objective_value, status_code = solver.solve(
+                tasks=tasks_to_schedule,
+                task_graph=task_graph,
+                running_tasks=running_tasks,
+                paths=paths
+            )
+            logger.debug(f"Solver status: {pulp.LpStatus[status_code]}")
+
+            unassigned_tasks = leftover_tasks
+            running_tasks.update(assignments)
+
+            logger.info(f"Number of unassigned tasks after scheduling: {len(unassigned_tasks)}")
+            if pulp.LpStatus[status_code] == 'Optimal' and assignments:
+                assignment_repr = "Assignment: "
+                for task, rt in sorted(assignments.items()):
+                    assignment_repr += f"{task} -> {rt.node_id}, "
+                logger.info(assignment_repr.rstrip(", "))
+                display_obj_value = f"{objective_value:.2f}" if objective_value is not None else "N/A"
+                logger.debug(f"Objective Value: {display_obj_value}")
             else:
-                break
-        logger.debug(f"Arrived tasks: {list(arrived_tasks.keys())}")
-        logger.debug(f"Unassigned tasks from previous rounds: {list(unassigned_tasks.keys())}")
-        
-        tasks_to_schedule = arrived_tasks | unassigned_tasks
-
-        logger.info(f"Scheduling {len(tasks_to_schedule)} tasks...")
-        assignments, leftover_tasks, objective_value, status_code = solver.solve(
-            tasks=tasks_to_schedule,
-            task_graph=task_graph,
-            running_tasks=running_tasks,
-            paths=paths
-        )
-        logger.debug(f"Solver status: {pulp.LpStatus[status_code]}")
-
-        unassigned_tasks = leftover_tasks
-        running_tasks.update(assignments)
-
-        logger.info(f"Number of unassigned tasks after scheduling: {len(unassigned_tasks)}")
-        if pulp.LpStatus[status_code] == 'Optimal' and assignments:
-            assignment_repr = "Assignment: "
-            for task, rt in sorted(assignments.items()):
-                assignment_repr += f"{task} -> {rt.node_id}, "
-            logger.info(assignment_repr.rstrip(", "))
-            display_obj_value = f"{objective_value:.2f}" if objective_value is not None else "N/A"
-            logger.debug(f"Objective Value: {display_obj_value}")
-        else:
-            logger.info("Could not assign tasks.")
+                logger.info("Could not assign tasks.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Network demo controller.")
-    # parser.add_argument("--config-file", type=str, required=True)
     parser.add_argument("--node-path", type=str, required=True)
     parser.add_argument("--edge-path", type=str, required=True)
     parser.add_argument("--task-path", type=str, required=True)
     # parser.add_argument("--task-communication-path", type=str, required=True)
     parser.add_argument("--interval", type=float, default=10.0)
     parser.add_argument("--server-url", type=str, default="http://localhost:8088/api/v1")
+    parser.add_argument("--query-manager-config", type=str, required=True)
     parser.add_argument("--log-level", type=str, default="INFO")
 
     args = parser.parse_args()

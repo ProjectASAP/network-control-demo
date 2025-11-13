@@ -1,0 +1,6 @@
+query_groups:
+- id: 1
+  options:
+    query_time_offset: 10
+  queries:
+  - 'sum_over_time(node_cpu_seconds_total[1m])'
