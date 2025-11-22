@@ -1,6 +1,6 @@
 task_update_rules:
   - query_group_id: 1
-    update_function: median_cpu_by_task
+    update_method: median_cpu_by_task
 query_groups:
 - id: 1
   options:

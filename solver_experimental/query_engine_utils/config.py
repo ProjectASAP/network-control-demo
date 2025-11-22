@@ -16,7 +16,7 @@ class QueryGroupConfig:
 @dataclass
 class TaskUpdateRules:
     query_group_id: int
-    update_function: UpdateMethod = UpdateMethod.IDENTITY
+    update_method: UpdateMethod = UpdateMethod.IDENTITY
 
 
 @dataclass

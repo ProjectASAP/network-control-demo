@@ -26,11 +26,12 @@ def median_cpu_by_task(group_results: dict, running_tasks: dict[str, RunningTask
         Dictionary mapping task ids to the median value for the queried metrics.
     """
     metric_values_by_task = {task_id: [] for task_id in running_tasks.keys()}
-    for query_string, results in group_results:
-        data = results['data']
-        subresults = data['results']
-        for metric in subresults:
-            metric_values = metric['metric']['task_id']
+    for query_string, query_results in group_results:
+        data = query_results['data']
+        result = data['result']
+        for metric in result:
+            task_id = metric['metric']['task_id']
+            metric_values = metric_values_by_task[task_id]
             metric_value = float(metric['value'][1])
             metric_values.append(metric_value)
     for task_id, metric_vals in metric_values_by_task.items():
