@@ -59,14 +59,11 @@ def main(args: argparse.Namespace):
 
         while task_queue:
             time.sleep(args.interval)
-            curr_offset = (time.time() - start_time) * 100 
+            curr_offset = (time.time() - start_time) 
             logger.debug(f"Current time offset: {curr_offset:.2f} ms")
 
             # TODO: Execute PromQL queries and do something with results (e.g. update task spec estimates).
-            promql_query_results = query_manager.execute_queries()
-            for group_id, group_results in promql_query_results.items():
-                if group_results['status'] == 'success':
-                    logger.debug(f"Query Group ID: {group_id} Results: {group_results}")
+            query_manager.update_task_metrics(running_tasks=running_tasks)
 
             # Filter out finished tasks. For now, don't account for solver time and variable finish times.
             running_tasks = {task_id: rt for task_id, rt in running_tasks.items() if curr_offset - rt.start_time_s >= rt.task.duration_s}
@@ -115,9 +112,8 @@ if __name__ == "__main__":
     parser.add_argument("--node-path", type=str, required=True)
     parser.add_argument("--edge-path", type=str, required=True)
     parser.add_argument("--task-path", type=str, required=True)
-    # parser.add_argument("--task-communication-path", type=str, required=True)
     parser.add_argument("--interval", type=float, default=10.0)
-    parser.add_argument("--server-url", type=str, default="http://localhost:8088/api/v1")
+    parser.add_argument("--server-url", type=str, default="http://localhost:8088/api/v1/query")
     parser.add_argument("--query-manager-config", type=str, required=True)
     parser.add_argument("--log-level", type=str, default="INFO")
 
