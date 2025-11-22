@@ -61,6 +61,7 @@ class QueryManager():
             A dictionary mapping query strings to their respective results (follows Prometheus format).
         """
         results = {}
+        delay = max(query_group.options.get('query_time_offset', 0), 0)
         for query in query_group.queries:
             try:
                 response = self.session.get(
@@ -74,6 +75,8 @@ class QueryManager():
                 # Process data as needed
             except requests.RequestException as e:
                 logger.error(f"Error executing query '{query}': {e}")
+            if delay > 0:
+                time.sleep(delay)
         return results
     
     def update_task_metrics(self, running_tasks: Dict[str, RunningTask]) -> None:

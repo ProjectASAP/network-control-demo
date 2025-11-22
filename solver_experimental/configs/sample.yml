@@ -4,7 +4,7 @@ task_update_rules:
 query_groups:
 - id: 1
   options:
-    query_time_offset: 10
+    query_time_offset: 1
   queries:
   - quantile_over_time(0.5, cpu_usage_node_id[150s])
 
