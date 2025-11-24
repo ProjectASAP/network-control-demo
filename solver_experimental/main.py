@@ -60,7 +60,7 @@ def main(args: argparse.Namespace):
         while task_queue:
             time.sleep(args.interval)
             curr_offset = (time.time() - start_time) 
-            logger.debug(f"Current time offset: {curr_offset:.2f} ms")
+            logger.debug(f"Current time offset: {curr_offset:.2f} s")
 
             # TODO: Execute PromQL queries and do something with results (e.g. update task spec estimates).
             query_manager.update_task_metrics(running_tasks=running_tasks)

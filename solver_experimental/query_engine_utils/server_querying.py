@@ -70,8 +70,10 @@ class QueryManager():
                 )
                 response.raise_for_status()
                 data = response.json()
+                logger.debug(f'PromQL Query (status={data["status"]}): {query}')
                 if data['status'] == 'success':
                     results[query] = data
+                    logger.trace(f'Query Response Data: {data}')
                 # Process data as needed
             except requests.RequestException as e:
                 logger.error(f"Error executing query '{query}': {e}")
@@ -83,19 +85,23 @@ class QueryManager():
         """
         Update the metrics of running tasks based on query results and update rules (which may be a udf).
         """
+        if not running_tasks:
+            logger.debug("No running tasks found. Skipping task resource specification updates.")
+            return
+            
         query_results = self.execute_queries()
-        update_rules = self.query_config.task_update_rules
         if not query_results:
             logger.warning("No query results found. Skipping task resource specification updates (this could lead to stale resource requirement estimates).")
             return
 
+        update_rules = self.query_config.task_update_rules
         for rule in update_rules:
             query_group_id = rule.query_group_id
             if query_group_id not in query_results:
                 logger.warning(f"Query Group ID {query_group_id} not found in results.")
                 continue
 
-            update_func = UPDATE_METHOD_NAME_MAPPING[rule.update_function]
+            update_func = UPDATE_METHOD_NAME_MAPPING[rule.update_method]
             group_results = query_results[query_group_id]
             
             update_func(group_results, running_tasks)
