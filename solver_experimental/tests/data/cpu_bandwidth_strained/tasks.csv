@@ -1,0 +1,4 @@
+task_id,initial_cpu,initial_memory,duration_s,arrival_offset_s,peer_task_ids,peer_bandwidths
+t1,4,4,32.7,1,t2,10
+t2,6,8,65.0,12.4,t3,10
+t3,4,4,42.12,15.6,t1,15

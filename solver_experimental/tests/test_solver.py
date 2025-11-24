@@ -4,9 +4,9 @@ import os
 parent_dir = os.path.dirname(os.path.dirname(__file__))
 sys.path.append(parent_dir)
 
-from entities import *
-from load_info import *
-from solver import *
+from scheduler.entities import *
+from scheduler.load_info import *
+from scheduler.solver import *
 import networkx as nx
 from pathlib import Path
 from itertools import combinations
@@ -25,15 +25,18 @@ def solve_scheduling_problem(node_path, edge_path, task_path, task_comms_path):
     network = load_network_topology(node_path, edge_path)
 
     tasks = load_tasks(task_path)
-    task_comms = load_task_communications(task_comms_path)
-    paths = {(n_i, n_j): [network.find_shortest_path(n_i, n_j)] if network.has_path(n_i, n_j) else [] for (n_i, n_j) in combinations(network.nodes, 2)}
+    task_graph = build_task_graph(tasks)
+    paths = {}
+    for n_i, n_j in combinations(network.nodes, 2):
+        if network.has_path(n_i, n_j):
+            paths[(n_i, n_j)] = [network.find_shortest_path(n_i, n_j)]
 
     scheduler = TaskScheduler(network, reassignment_penalty=10.0)
 
-    assignment, obj_value, status_code = scheduler.solve(
+    assignment, _, obj_value, status_code = scheduler.solve(
         tasks,
-        task_comms,
-        running_tasks={"t1": RunningTask("n4", tasks["t1"])},
+        task_graph=task_graph,
+        running_tasks={"t1": RunningTask("n4", time.time(), tasks["t1"])},
         paths=paths
     )
     return assignment, obj_value, status_code
