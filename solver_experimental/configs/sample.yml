@@ -1,0 +1,19 @@
+task_update_rules:
+  - query_group_id: 1
+    update_method: median_cpu_by_task
+query_groups:
+- id: 1
+  options:
+    query_time_offset: 1
+  queries:
+  - quantile_over_time(0.5, cpu_usage_node_id[150s])
+
+  - quantile_over_time(0.5, cpu_usage_node_id[20m])
+
+  - quantile_over_time(0.9, cpu_usage_node_id[150s])
+
+  - quantile_over_time(0.9, cpu_usage_node_id[20m])
+
+  - quantile_over_time(0.95, cpu_usage_node_id[150s])
+
+  - quantile_over_time(0.95, cpu_usage_node_id[20m])
