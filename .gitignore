@@ -1,3 +1,6 @@
 misc/*
 target
-__pycache__
+target-*/
+__pycache__/
+.venv/
+dummy_data/
