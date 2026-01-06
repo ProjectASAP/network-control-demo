@@ -1,0 +1,6 @@
+supported_aggs:
+  percentiles:
+    fields:
+      - cpu_cores
+      - memory_gb
+      - network_mbps

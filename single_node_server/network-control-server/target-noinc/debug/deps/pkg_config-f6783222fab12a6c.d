@@ -1,0 +1,7 @@
+/users/yuanyc/network-control-server/./target-noinc/debug/deps/pkg_config-f6783222fab12a6c.d: /users/yuanyc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkg-config-0.3.32/src/lib.rs
+
+/users/yuanyc/network-control-server/./target-noinc/debug/deps/libpkg_config-f6783222fab12a6c.rlib: /users/yuanyc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkg-config-0.3.32/src/lib.rs
+
+/users/yuanyc/network-control-server/./target-noinc/debug/deps/libpkg_config-f6783222fab12a6c.rmeta: /users/yuanyc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkg-config-0.3.32/src/lib.rs
+
+/users/yuanyc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkg-config-0.3.32/src/lib.rs:

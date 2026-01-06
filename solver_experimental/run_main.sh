@@ -1,0 +1,11 @@
+#!/bin/bash
+
+python main.py \
+    --node-path "dummy_data/nodes.csv" \
+    --edge-path "dummy_data/edges.csv" \
+    --task-path "dummy_data/tasks.csv" \
+    --interval 1.0 \
+    --server-url "http://localhost:9090" \
+    --query-manager-config "configs/sample.yml" \
+    --log-level "INFO"
+
