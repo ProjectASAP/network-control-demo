@@ -13,19 +13,17 @@ from typing import Dict
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-<<<<<<< HEAD
-from elasticsearch import Elasticsearch
-=======
 from dataclasses import dataclass
 from cattrs import structure, unstructure
 import jsonlines
->>>>>>> emit_assignments
 
 from scheduler.entities import RunningTask, Task, NetworkTopology
 from scheduler.load_info import load_nodes, load_edges, load_tasks, build_task_graph
 from scheduler.solver import TaskScheduler
 from query_engine_utils.config import QueryManagerConfig, QueryGroupConfig, load_query_config
 from query_engine_utils.server_querying import QueryManager
+
+from es_query import update_tasks_with_quantiles
 
 
 @dataclass
@@ -62,33 +60,6 @@ def assign_tasks(args: AppConfig):
     start_time = time.time()
 
     query_config = load_query_config(args.query_manager_config)
-
-    # Elasticsearch vs Sketch lib rust.
-    client = Elasticsearch(
-        hosts=[{"host": "localhost", "port": 9200, "scheme": "http"}],
-        api_key='TWg0S01wc0JhR1AxOFVUcUY5N2w6bGR0TjIySHRZTHVwdmZLTmtqcGtGQQ=='
-    )
-    index_name = 'cluster-metrics'
-    query = {
-        'bool': {
-            'must': [
-                {'term': {'cluster.keyword': 'cluster-c'}},
-                {'term': {'task.keyword': 'worker'}},
-                # {'range': {'@timestamp': {'gte': 'now-30s', 'lt': 'now'}}}
-            ]
-        }
-    }
-
-    quantiles = [10 * i for i in range(1, 10)]
-    aggs = {
-        "average_cpu": {"avg": {"field": "cpu_cores"}},
-        "cpu_quantiles": {
-            "percentiles": {
-                "field": "cpu_cores", 
-                "percents": quantiles
-            }
-        }
-    }
     with QueryManager(query_config=query_config) as query_manager:
         # Mapping between task id and running task.
         running_tasks: dict[str, RunningTask] = {}
@@ -103,20 +74,7 @@ def assign_tasks(args: AppConfig):
             # query_manager.update_task_metrics(running_tasks=running_tasks)
 
             # Query Elasticsearch instead.
-            start_t = time.time()
-            data = client.search(index=index_name, aggs=aggs)
-            end_time = time.time()
-            print(f"Query took {end_time - start_t} seconds (Elastic)")
-            # print(f'Aggregations: {data["aggregations"]}')
-
-            sketch_query_url = "http://localhost:10101/metrics/cpu_cores"
-            payload = {
-                'quantiles': [f'p{q}' for q in quantiles]
-            }
-            start_t = time.time()
-            sketch_response = requests.post(sketch_query_url, json=payload)
-            print(f'Sketch query took {time.time() - start_t} seconds (Sketch)')
-            # print(f'Aggregations: {sketch_response.json()}')
+            update_tasks_with_quantiles(running_tasks=running_tasks)
 
             # Filter out finished tasks. For now, don't account for solver time and variable finish times.
             running_tasks = {task_id: rt for task_id, rt in running_tasks.items() if curr_offset - rt.start_time_s >= rt.task.duration_s}
