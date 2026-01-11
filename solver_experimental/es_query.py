@@ -35,7 +35,11 @@ def update_tasks_with_quantiles(
 
     for task_id, running_task in running_tasks.items():
         node_id = running_task.node_id
-        metric_quantiles = get_metric_quantiles(node_id=node_id, task_id=task_id)
+        try:
+            metric_quantiles = get_metric_quantiles(node_id=node_id, task_id=task_id)
+        except Exception as e:
+            logger.error(f'Error fetching quantiles for Task {task_id} on Node {node_id}: {e}')
+            continue
 
         cpu_quantiles = metric_quantiles.get('cpu', {})
         memory_quantiles = metric_quantiles.get('memory', {})

@@ -67,7 +67,7 @@ def assign_tasks(args: AppConfig):
 
         while task_queue:
             time.sleep(args.interval)
-            curr_offset = (time.time() - start_time) * 100
+            curr_offset = (time.time() - start_time)
             logger.debug(f"Current time offset: {curr_offset:.2f} s")
 
             # TODO: Execute PromQL queries and do something with results (e.g. update task spec estimates).
@@ -128,7 +128,8 @@ def main(args: argparse.Namespace):
     with jsonlines.open('assignments_log.jsonl', mode='w') as writer:
         for assignments in assign_tasks(config):
             running_tasks = unstructure(assignments.values(), list[RunningTask])
-            writer.write(running_tasks)
+            if running_tasks:
+                writer.write(running_tasks)
 
 
 if __name__ == "__main__":
