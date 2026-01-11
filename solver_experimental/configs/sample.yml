@@ -1,6 +1,9 @@
 task_update_rules:
   - query_group_id: 1
-    update_method: median_cpu_by_task
+    update_method: 'aggregate_by_task'
+    options:
+      metric_type: 'cpu'
+      aggregation_type: 'median'
 query_groups:
 - id: 1
   options:

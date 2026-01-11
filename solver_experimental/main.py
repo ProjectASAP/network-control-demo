@@ -5,22 +5,21 @@ import time
 import requests
 import argparse
 import datetime
-import numpy as np
-import logging
 from itertools import combinations
 from collections import deque
-
-# import urllib3
 from loguru import logger
 import pulp
 from typing import Dict
-import threading
-import subprocess
-import concurrent.futures
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+<<<<<<< HEAD
 from elasticsearch import Elasticsearch
+=======
+from dataclasses import dataclass
+from cattrs import structure, unstructure
+import jsonlines
+>>>>>>> emit_assignments
 
 from scheduler.entities import RunningTask, Task, NetworkTopology
 from scheduler.load_info import load_nodes, load_edges, load_tasks, build_task_graph
@@ -29,7 +28,17 @@ from query_engine_utils.config import QueryManagerConfig, QueryGroupConfig, load
 from query_engine_utils.server_querying import QueryManager
 
 
-def main(args: argparse.Namespace):
+@dataclass
+class AppConfig:
+    node_path: str
+    edge_path: str
+    task_path: str
+    query_manager_config: str
+    interval: float = 10.0
+    log_level: str = "INFO"
+
+
+def assign_tasks(args: AppConfig):
     logger.info("Loading network information and initializing solver...")
 
     logger.debug(f"Node path: {args.node_path}")
@@ -80,7 +89,7 @@ def main(args: argparse.Namespace):
             }
         }
     }
-    with QueryManager(server_url=args.server_url, query_config=query_config) as query_manager:
+    with QueryManager(query_config=query_config) as query_manager:
         # Mapping between task id and running task.
         running_tasks: dict[str, RunningTask] = {}
         unassigned_tasks: dict[str, Task] = {}
@@ -126,6 +135,9 @@ def main(args: argparse.Namespace):
             logger.debug(f"Unassigned tasks from previous rounds: {list(unassigned_tasks.keys())}")
             
             tasks_to_schedule = arrived_tasks | unassigned_tasks
+            if not tasks_to_schedule:
+                logger.info(f"Waiting for tasks to arrive...")
+                continue
 
             logger.info(f"Scheduling {len(tasks_to_schedule)} tasks...")
             assignments, leftover_tasks, objective_value, status_code = solver.solve(
@@ -150,6 +162,16 @@ def main(args: argparse.Namespace):
             else:
                 logger.info("Could not assign tasks.")
 
+            yield assignments
+
+
+def main(args: argparse.Namespace):
+    config = structure(vars(args), AppConfig)
+    with jsonlines.open('assignments_log.jsonl', mode='w') as writer:
+        for assignments in assign_tasks(config):
+            running_tasks = unstructure(assignments.values(), list[RunningTask])
+            writer.write(running_tasks)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Network demo controller.")
@@ -157,7 +179,6 @@ if __name__ == "__main__":
     parser.add_argument("--edge-path", type=str, required=True)
     parser.add_argument("--task-path", type=str, required=True)
     parser.add_argument("--interval", type=float, default=10.0)
-    parser.add_argument("--server-url", type=str, default="http://localhost:8088/api/v1/query")
     parser.add_argument("--query-manager-config", type=str, required=True)
     parser.add_argument("--log-level", type=str, default="INFO")
 

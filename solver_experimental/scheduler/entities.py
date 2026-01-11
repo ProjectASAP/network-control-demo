@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 import networkx as nx
 import datetime as dt
@@ -92,6 +93,11 @@ class Task:
     initial_cpu: float
     initial_memory: float
     peer_bandwidths: dict[str, float] = field(default_factory=dict)
+
+    class MetricType(Enum):
+        CPU = 'cpu'
+        MEMORY = 'memory'
+        PEER_BANDWIDTHS = 'peer_bandwidths'
 
 
 @dataclass
