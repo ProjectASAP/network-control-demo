@@ -42,6 +42,8 @@ struct AggregationRequest {
     #[serde(default)]
     percentiles: Option<PercentileAggregation>,
     #[serde(default)]
+    frequency: Option<FrequencyAggregation>,
+    #[serde(default)]
     top_entities: Option<TopEntitiesAggregation>,
     #[serde(default)]
     cumulative: Option<CumulativeAggregation>,
@@ -53,6 +55,8 @@ struct AggregationRequest {
 struct PercentileAggregation {
     field: String,
     percents: Vec<f64>,
+    #[serde(default)]
+    key: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -66,8 +70,16 @@ struct CumulativeAggregation {
     key: String,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct FrequencyAggregation {
+    field: String,
+    key: String,
+    value: f64,
+}
+
 enum AggregationKind {
     Percentiles(PercentileAggregation),
+    Frequency(FrequencyAggregation),
     TopEntities(TopEntitiesAggregation),
     Cumulative(CumulativeAggregation),
 }
@@ -78,6 +90,10 @@ impl AggregationRequest {
         let mut count = 0;
         if let Some(pct) = self.percentiles.clone() {
             kind = Some(AggregationKind::Percentiles(pct));
+            count += 1;
+        }
+        if let Some(freq) = self.frequency.clone() {
+            kind = Some(AggregationKind::Frequency(freq));
             count += 1;
         }
         if let Some(top) = self.top_entities.clone() {
@@ -111,11 +127,11 @@ pub async fn run_http_server(state: AppState) -> Result<(), Box<dyn Error + Send
 
 async fn root_handler() -> Json<RootResponse<'static>> {
     Json(RootResponse {
-        message: "POST /cluster-metrics/_search with aggs for percentiles, top_entities, or cumulative (cumulative requires a key). Other aggs (e.g. avg) are forwarded to Elasticsearch.",
+        message: "POST /cluster-metrics/_search with aggs for percentiles, frequency, top_entities, or cumulative (cumulative requires a key). Other aggs (e.g. avg) are forwarded to Elasticsearch.",
         examples: [
             "POST /cluster-metrics/_search {\"aggs\":{\"cpu_quantiles\":{\"percentiles\":{\"field\":\"cpu_cores\",\"percents\":[10,50]}}}}",
+            "POST /cluster-metrics/_search {\"aggs\":{\"cpu_frequency\":{\"frequency\":{\"field\":\"cpu_cores\",\"key\":\"cluster-c;cache\",\"value\":4}}}}",
             "POST /cluster-metrics/_search {\"aggs\":{\"top_cpu\":{\"top_entities\":{\"field\":\"cpu_cores\"}}}}",
-            "POST /cluster-metrics/_search {\"aggs\":{\"cpu_cumulative\":{\"cumulative\":{\"field\":\"cpu_cores\",\"key\":\"cluster-c;cache\"}}}}",
         ],
     })
 }
@@ -156,29 +172,29 @@ async fn search_handler(
         for (name, agg) in aggs {
             let result = match agg.kind() {
                 Some(kind) => match kind {
-                    AggregationKind::Percentiles(pct) => {
-                        handle_percentiles(&state, &pct).map(|values| {
-                            json!({ "values": values })
-                        })
-                    }
+                    AggregationKind::Percentiles(pct) => match handle_percentiles(&state, &pct) {
+                        Ok(Some(values)) => Some(json!({ "values": values })),
+                        Ok(None) => None,
+                        Err(message) => {
+                            return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
+                        }
+                    },
+                    AggregationKind::Frequency(freq) => match handle_frequency(&state, &freq) {
+                        Ok(value) => Some(json!({ "key": freq.key, "value": value })),
+                        Err(message) => {
+                            return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
+                        }
+                    },
                     AggregationKind::TopEntities(top) => match handle_top_entities(&state, &top) {
                         Ok(entity) => Some(json!({ "key": entity.key, "value": entity.value })),
                         Err(message) => {
-                            return (
-                                axum::http::StatusCode::BAD_REQUEST,
-                                message,
-                            )
-                                .into_response();
+                            return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
                         }
                     },
                     AggregationKind::Cumulative(cum) => match handle_cumulative(&state, &cum) {
                         Ok(value) => Some(json!({ "key": cum.key, "value": value })),
                         Err(message) => {
-                            return (
-                                axum::http::StatusCode::BAD_REQUEST,
-                                message,
-                            )
-                                .into_response();
+                            return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
                         }
                     },
                 },
@@ -218,27 +234,61 @@ async fn search_handler(
 fn handle_percentiles(
     state: &AppState,
     pct: &PercentileAggregation,
-) -> Option<BTreeMap<String, f64>> {
+) -> Result<Option<BTreeMap<String, f64>>, String> {
     if pct.percents.is_empty() {
-        return None;
+        return Ok(None);
     }
     if !state
         .agg_config
         .percentile_fields
         .contains(&pct.field.trim().to_ascii_lowercase())
     {
-        return None;
+        return Ok(None);
     }
-    let field = MetricField::from_spec(&pct.field)?;
+    let field = MetricField::from_spec(&pct.field)
+        .ok_or_else(|| format!("unsupported percentile field: {}", pct.field))?;
 
     let mut values = BTreeMap::new();
     for percent in &pct.percents {
-        if let Some(value) = state.store.query_percentile(field, *percent) {
+        let value = if let Some(key) = pct.key.as_ref() {
+            let key = key.trim();
+            if key.is_empty() {
+                return Err("percentiles key is required when provided".to_string());
+            }
+            state.store.query_percentile_by_key(field, key, *percent)
+        } else {
+            state.store.query_percentile(field, *percent)
+        };
+
+        if let Some(value) = value {
             values.insert(percent.to_string(), value);
         }
     }
 
-    Some(values)
+    Ok(Some(values))
+}
+
+fn handle_frequency(state: &AppState, freq: &FrequencyAggregation) -> Result<f64, String> {
+    if !state
+        .agg_config
+        .percentile_fields
+        .contains(&freq.field.trim().to_ascii_lowercase())
+    {
+        return Err(format!("unsupported frequency field: {}", freq.field));
+    }
+    let field = MetricField::from_spec(&freq.field)
+        .ok_or_else(|| format!("unsupported frequency field: {}", freq.field))?;
+    let key = freq.key.trim();
+    if key.is_empty() {
+        return Err("frequency key is required".to_string());
+    }
+    let value = round_to_i32(freq.value)
+        .ok_or_else(|| "frequency value must be a positive number".to_string())?;
+
+    state
+        .store
+        .query_frequency_by_key(field, key, value)
+        .ok_or_else(|| "frequency query failed".to_string())
 }
 
 fn handle_top_entities(
@@ -317,9 +367,7 @@ fn merge_aggregations(response: &mut Value, handled: BTreeMap<String, Value>) {
         }
     };
 
-    let aggs = obj
-        .entry("aggregations")
-        .or_insert_with(|| json!({}));
+    let aggs = obj.entry("aggregations").or_insert_with(|| json!({}));
     if let Some(aggs_obj) = aggs.as_object_mut() {
         for (name, value) in handled {
             aggs_obj.insert(name, value);
@@ -327,4 +375,16 @@ fn merge_aggregations(response: &mut Value, handled: BTreeMap<String, Value>) {
     } else {
         *aggs = json!(handled);
     }
+}
+
+fn round_to_i32(value: f64) -> Option<i32> {
+    if !value.is_finite() {
+        return None;
+    }
+    let rounded = value.round();
+    if rounded < i32::MIN as f64 || rounded > i32::MAX as f64 {
+        return None;
+    }
+    let as_i32 = rounded as i32;
+    if as_i32 <= 0 { None } else { Some(as_i32) }
 }

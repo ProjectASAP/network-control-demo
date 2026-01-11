@@ -1,5 +1,11 @@
+use std::sync::Mutex;
+
 use serde::Serialize;
-use sketchlib_rust::{CountMin, FastPath, FixedMatrix, KLL, SketchInput, sketches::kll::CDF};
+use sketchlib_rust::{
+    CountMin, FastPath, FixedMatrix, Hydra, KLL, SketchInput, Vector2D,
+    common::input::{HydraCounter, HydraQuery},
+    sketches::kll::CDF,
+};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum MetricField {
@@ -77,6 +83,79 @@ impl MetricCdfs {
     }
 }
 
+struct MetricHydra {
+    kll_cpu: Hydra,
+    kll_memory: Hydra,
+    kll_network: Hydra,
+    cm_cpu: Hydra,
+    cm_memory: Hydra,
+    cm_network: Hydra,
+}
+
+impl MetricHydra {
+    fn new() -> Self {
+        let kll_template = HydraCounter::KLL(KLL::default());
+        let cm_template = HydraCounter::CM(CountMin::<Vector2D<i32>, FastPath>::default());
+
+        Self {
+            kll_cpu: Hydra::with_dimensions(3, 64, kll_template.clone()),
+            kll_memory: Hydra::with_dimensions(3, 64, kll_template.clone()),
+            kll_network: Hydra::with_dimensions(3, 64, kll_template),
+            cm_cpu: Hydra::with_dimensions(3, 64, cm_template.clone()),
+            cm_memory: Hydra::with_dimensions(3, 64, cm_template.clone()),
+            cm_network: Hydra::with_dimensions(3, 64, cm_template),
+        }
+    }
+
+    fn update(&mut self, key: &str, cpu_value: f64, memory_value: f64, network_value: f64) {
+        let cpu_input = SketchInput::F64(cpu_value);
+        let memory_input = SketchInput::F64(memory_value);
+        let network_input = SketchInput::F64(network_value);
+
+        self.kll_cpu.update(key, &cpu_input, None);
+        self.kll_memory.update(key, &memory_input, None);
+        self.kll_network.update(key, &network_input, None);
+
+        if let Some(value) = round_to_i32(cpu_value) {
+            let input = SketchInput::I32(value);
+            self.cm_cpu.update(key, &input, None);
+        }
+        if let Some(value) = round_to_i32(memory_value) {
+            let input = SketchInput::I32(value);
+            self.cm_memory.update(key, &input, None);
+        }
+        if let Some(value) = round_to_i32(network_value) {
+            let input = SketchInput::I32(value);
+            self.cm_network.update(key, &input, None);
+        }
+    }
+
+    fn query_quantile(&self, field: MetricField, key: &str, quantile: f64) -> Option<f64> {
+        let parts = split_key(key)?;
+        let query = HydraQuery::Quantile(quantile);
+        Some(match field {
+            MetricField::CpuCores => self.kll_cpu.query_key(parts, &query),
+            MetricField::MemoryGb => self.kll_memory.query_key(parts, &query),
+            MetricField::NetworkMbps => self.kll_network.query_key(parts, &query),
+        })
+    }
+
+    fn query_frequency(&self, field: MetricField, key: &str, value: i32) -> Option<f64> {
+        let parts = split_key(key)?;
+        let input = SketchInput::I32(value);
+        Some(match field {
+            MetricField::CpuCores => self.cm_cpu.query_frequency(parts, &input),
+            MetricField::MemoryGb => self.cm_memory.query_frequency(parts, &input),
+            MetricField::NetworkMbps => self.cm_network.query_frequency(parts, &input),
+        })
+    }
+}
+
+fn split_key(key: &str) -> Option<Vec<&str>> {
+    let parts: Vec<&str> = key.split(';').filter(|part| !part.is_empty()).collect();
+    if parts.is_empty() { None } else { Some(parts) }
+}
+
 #[derive(Clone)]
 struct CountMinPair {
     top_entities: CountMin<FixedMatrix, FastPath>,
@@ -104,9 +183,7 @@ impl CountMinPair {
         let current = self.top_entities.estimate(key_input);
         if value > current {
             let delta = value - current;
-            for _ in 0..delta as usize {
-                self.top_entities.insert(key_input);
-            }
+            self.top_entities.insert_many(key_input, delta);
             if self.top_key.as_deref() != Some(key) {
                 self.top_key = Some(key.to_string());
             }
@@ -118,9 +195,7 @@ impl CountMinPair {
         if value <= 0 {
             return;
         }
-        for _ in 0..value as usize {
-            self.cumulative.insert(key_input);
-        }
+        self.cumulative.insert_many(key_input, value);
     }
 
     fn top_entity(&self) -> Option<EntityEstimate> {
@@ -180,11 +255,31 @@ pub struct EntityEstimate {
 pub struct MetricStore {
     cdfs: MetricCdfs,
     countmins: MetricCountMins,
+    hydra: Mutex<MetricHydra>,
 }
 
 impl MetricStore {
     pub fn query_percentile(&self, field: MetricField, percent: f64) -> Option<f64> {
         self.cdfs.query_percentile(field, percent)
+    }
+
+    pub fn query_percentile_by_key(
+        &self,
+        field: MetricField,
+        key: &str,
+        percent: f64,
+    ) -> Option<f64> {
+        if !(0.0..=100.0).contains(&percent) {
+            return None;
+        }
+        let quantile = percent / 100.0;
+        let hydra = self.hydra.lock().ok()?;
+        hydra.query_quantile(field, key, quantile)
+    }
+
+    pub fn query_frequency_by_key(&self, field: MetricField, key: &str, value: i32) -> Option<f64> {
+        let hydra = self.hydra.lock().ok()?;
+        hydra.query_frequency(field, key, value)
     }
 
     pub fn top_entity(&self, field: MetricField) -> Option<EntityEstimate> {
@@ -200,6 +295,7 @@ impl MetricStore {
 pub struct MetricStoreBuilder {
     sketches: MetricSketches,
     countmins: MetricCountMins,
+    hydra: MetricHydra,
     key_buffer: String,
 }
 
@@ -208,6 +304,7 @@ impl MetricStoreBuilder {
         Self {
             sketches: MetricSketches::default(),
             countmins: MetricCountMins::default(),
+            hydra: MetricHydra::new(),
             key_buffer: String::with_capacity(128),
         }
     }
@@ -228,6 +325,9 @@ impl MetricStoreBuilder {
         self.key_buffer.push(';');
         self.key_buffer.push_str(task);
 
+        self.hydra
+            .update(&self.key_buffer, cpu_value, memory_value, network_value);
+
         let key_input = SketchInput::Str(&self.key_buffer);
         if let Some(value) = round_to_i32(cpu_value) {
             self.countmins
@@ -237,17 +337,21 @@ impl MetricStoreBuilder {
             self.countmins
                 .update(MetricField::MemoryGb, &self.key_buffer, &key_input, value);
         }
-        // need to update sketchlib
-        // if let Some(value) = round_to_i32(network_value) {
-        //     self.countmins
-        //         .update(MetricField::NetworkMbps, &self.key_buffer, &key_input, value);
-        // }
+        if let Some(value) = round_to_i32(network_value) {
+            self.countmins.update(
+                MetricField::NetworkMbps,
+                &self.key_buffer,
+                &key_input,
+                value,
+            );
+        }
     }
 
     pub fn finish(self) -> MetricStore {
         MetricStore {
             cdfs: MetricCdfs::from_sketches(self.sketches),
             countmins: self.countmins,
+            hydra: Mutex::new(self.hydra),
         }
     }
 }
@@ -261,9 +365,5 @@ fn round_to_i32(value: f64) -> Option<i32> {
         return None;
     }
     let as_i32 = rounded as i32;
-    if as_i32 <= 0 {
-        None
-    } else {
-        Some(as_i32)
-    }
+    if as_i32 <= 0 { None } else { Some(as_i32) }
 }

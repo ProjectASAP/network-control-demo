@@ -2,8 +2,8 @@ use std::{env, error::Error, path::PathBuf, time::Instant};
 
 use csv::StringRecord;
 
-use crate::metrics::MetricStoreBuilder;
 use crate::metrics::MetricStore;
+use crate::metrics::MetricStoreBuilder;
 
 pub fn load_metric_store() -> Result<MetricStore, Box<dyn Error + Send + Sync>> {
     let start = Instant::now();
@@ -33,7 +33,7 @@ pub fn load_metric_store() -> Result<MetricStore, Box<dyn Error + Send + Sync>> 
                 continue;
             }
         };
-        
+
         let cluster = record.get(cluster_idx).unwrap_or("").trim();
         let task = record.get(task_idx).unwrap_or("").trim();
         if cluster.is_empty() || task.is_empty() {
@@ -62,7 +62,7 @@ pub fn load_metric_store() -> Result<MetricStore, Box<dyn Error + Send + Sync>> 
         builder.insert(cluster, task, cpu_value, mem_value, net_value);
         processed += 1;
 
-        if processed % 1_000 == 0 {
+        if processed % 1_000_000 == 0 {
             eprintln!("ingested {processed} rows...");
         }
     }

@@ -7,8 +7,8 @@ use std::{env, sync::Arc};
 
 use config::AggregationConfig;
 use ingest::load_metric_store;
-use server::{AppState, run_http_server};
 use reqwest::Client;
+use server::{AppState, run_http_server};
 
 #[tokio::main]
 async fn main() {
