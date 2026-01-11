@@ -4,3 +4,21 @@ supported_aggs:
       - cpu_cores
       - memory_gb
       - network_mbps
+  # For "Who is the top consumer?" queries
+  top_entities:
+    dimensions:
+      - task
+      - cluster
+    metrics:
+      - cpu_cores
+      - memory_gb
+      - network_mbps
+  # For "Total value for each categories" queries
+  cumulative:
+    dimensions:
+      - task
+      - cluster
+    metrics:
+      - cpu_cores
+      - memory_gb
+      - network_mbps
