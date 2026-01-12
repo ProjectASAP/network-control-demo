@@ -1,4 +1,5 @@
 use std::sync::Mutex;
+use std::time::Instant;
 
 use serde::Serialize;
 use sketchlib_rust::{
@@ -253,6 +254,15 @@ impl MetricStore {
     }
 }
 
+/// Timing data for a single insert operation (in nanoseconds)
+#[derive(Default)]
+pub struct InsertTiming {
+    pub build_key_ns: u64,
+    pub kll_ns: u64,
+    pub hydra_ns: u64,
+    pub countmin_ns: u64,
+}
+
 pub struct MetricPreAggregation {
     klls: MetricKll,
     countmins: MetricCountMins,
@@ -306,6 +316,61 @@ impl MetricPreAggregation {
                 value,
             );
         }
+    }
+
+    /// Insert with timing - returns timing data for each step
+    pub fn insert_timed(
+        &mut self,
+        cluster: &str,
+        task: &str,
+        cpu_value: f64,
+        memory_value: f64,
+        network_value: f64,
+    ) -> InsertTiming {
+        let mut timing = InsertTiming::default();
+
+        // KLL insertion
+        let t0 = Instant::now();
+        self.klls
+            .insert_samples(cpu_value, memory_value, network_value);
+        timing.kll_ns = t0.elapsed().as_nanos() as u64;
+
+        // Build key
+        let t1 = Instant::now();
+        self.key_buffer.clear();
+        self.key_buffer.push_str(cluster);
+        self.key_buffer.push(';');
+        self.key_buffer.push_str(task);
+        timing.build_key_ns = t1.elapsed().as_nanos() as u64;
+
+        // Hydra insertion
+        let t2 = Instant::now();
+        self.hydra
+            .update(&self.key_buffer, cpu_value, memory_value, network_value);
+        timing.hydra_ns = t2.elapsed().as_nanos() as u64;
+
+        // CountMin insertion
+        let t3 = Instant::now();
+        let key_input = SketchInput::Str(&self.key_buffer);
+        if let Some(value) = round_to_i32(cpu_value) {
+            self.countmins
+                .update(MetricField::CpuCores, &self.key_buffer, &key_input, value);
+        }
+        if let Some(value) = round_to_i32(memory_value) {
+            self.countmins
+                .update(MetricField::MemoryGb, &self.key_buffer, &key_input, value);
+        }
+        if let Some(value) = round_to_i32(network_value) {
+            self.countmins.update(
+                MetricField::NetworkMbps,
+                &self.key_buffer,
+                &key_input,
+                value,
+            );
+        }
+        timing.countmin_ns = t3.elapsed().as_nanos() as u64;
+
+        timing
     }
 
     pub fn finish(self) -> MetricStore {

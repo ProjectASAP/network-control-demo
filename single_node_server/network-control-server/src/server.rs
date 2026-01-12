@@ -309,13 +309,18 @@ async fn search_handler(
     if let Some(t) = &mut timing { t.step("merge"); }
 
     // Build response (with timing if enabled)
-    if let Some(t) = &timing {
+    if let Some(t) = &mut timing {
+        // Add timing to response before serialization
         if let Some(obj) = response_value.as_object_mut() {
             obj.insert("_timing".to_string(), t.to_json());
         }
-        t.log();
-        let timing_header = t.to_header();
+
+        // Serialize to HTTP response (timed)
         let mut response = Json(response_value).into_response();
+        t.step("serialize");
+        t.log();
+
+        let timing_header = t.to_header();
         response.headers_mut().insert(
             "X-Server-Timing",
             timing_header.parse().unwrap(),
@@ -388,15 +393,25 @@ async fn metrics_handler(
     if let Some(t) = &mut timing { t.step("query_percentiles"); }
 
     // Build response (with timing if enabled)
-    if let Some(t) = &timing {
-        t.log();
-        let response_value = json!({
+    if let Some(t) = &mut timing {
+        // Build response JSON (timed)
+        let mut response_value = json!({
             "field": field_spec,
             "quantiles": results,
-            "_timing": t.to_json()
         });
-        let timing_header = t.to_header();
+        t.step("build_response");
+
+        // Add timing to the response before serialization
+        if let Some(obj) = response_value.as_object_mut() {
+            obj.insert("_timing".to_string(), t.to_json());
+        }
+
+        // Serialize to HTTP response (timed)
         let mut response = Json(response_value).into_response();
+        t.step("serialize");
+        t.log();
+
+        let timing_header = t.to_header();
         response.headers_mut().insert(
             "X-Server-Timing",
             timing_header.parse().unwrap(),

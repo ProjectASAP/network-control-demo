@@ -34,7 +34,7 @@ async fn main() {
     );
 
     eprintln!("loading metrics from CSV...");
-    let store = match tokio::task::spawn_blocking(load_metric_store).await {
+    let store = match tokio::task::spawn_blocking(move || load_metric_store(timing_enabled)).await {
         Ok(Ok(store)) => store,
         Ok(Err(err)) => {
             eprintln!("failed to load metric store: {err}");
