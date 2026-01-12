@@ -2,10 +2,11 @@ use std::{collections::BTreeMap, error::Error, sync::Arc};
 
 use axum::{
     Json, Router,
-    body::Bytes,
-    extract::State,
-    http::HeaderMap,
-    response::IntoResponse,
+    body::{Body, Bytes, to_bytes},
+    extract::{Path, State},
+    http::{HeaderMap, Request},
+    middleware::{Next, from_fn},
+    response::{IntoResponse, Response},
     routing::{get, post},
 };
 use reqwest::Client;
@@ -77,9 +78,19 @@ struct FrequencyAggregation {
     value: f64,
 }
 
+#[derive(Debug, Deserialize)]
+struct MetricsQuery {
+    quantiles: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct MetricsResponse {
+    field: String,
+    quantiles: BTreeMap<String, f64>,
+}
+
 enum AggregationKind {
     Percentiles(PercentileAggregation),
-    Frequency(FrequencyAggregation),
     TopEntities(TopEntitiesAggregation),
     Cumulative(CumulativeAggregation),
 }
@@ -92,10 +103,7 @@ impl AggregationRequest {
             kind = Some(AggregationKind::Percentiles(pct));
             count += 1;
         }
-        if let Some(freq) = self.frequency.clone() {
-            kind = Some(AggregationKind::Frequency(freq));
-            count += 1;
-        }
+
         if let Some(top) = self.top_entities.clone() {
             kind = Some(AggregationKind::TopEntities(top));
             count += 1;
@@ -118,7 +126,9 @@ pub async fn run_http_server(state: AppState) -> Result<(), Box<dyn Error + Send
         .route("/", get(root_handler))
         .route("/healthz", get(|| async { "ok" }))
         .route("/cluster-metrics/_search", post(search_handler))
-        .with_state(state);
+        .route("/metrics/:field", post(metrics_handler))
+        .with_state(state)
+        .layer(from_fn(log_request_middleware));
 
     let listener = TcpListener::bind("0.0.0.0:10101").await?;
     axum::serve(listener, app).await?;
@@ -179,12 +189,7 @@ async fn search_handler(
                             return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
                         }
                     },
-                    AggregationKind::Frequency(freq) => match handle_frequency(&state, &freq) {
-                        Ok(value) => Some(json!({ "key": freq.key, "value": value })),
-                        Err(message) => {
-                            return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
-                        }
-                    },
+
                     AggregationKind::TopEntities(top) => match handle_top_entities(&state, &top) {
                         Ok(entity) => Some(json!({ "key": entity.key, "value": entity.value })),
                         Err(message) => {
@@ -231,6 +236,62 @@ async fn search_handler(
     Json(response_value).into_response()
 }
 
+async fn metrics_handler(
+    State(state): State<AppState>,
+    Path(field_spec): Path<String>,
+    Json(query): Json<MetricsQuery>,
+) -> impl IntoResponse {
+    let field = match MetricField::from_spec(&field_spec) {
+        Some(field) => field,
+        None => {
+            return (
+                axum::http::StatusCode::BAD_REQUEST,
+                format!("unsupported metric field: {field_spec}"),
+            )
+                .into_response();
+        }
+    };
+
+    if query.quantiles.is_empty() {
+        return (
+            axum::http::StatusCode::BAD_REQUEST,
+            "quantiles must be a non-empty list".to_string(),
+        )
+            .into_response();
+    }
+
+    let mut results = BTreeMap::new();
+    for spec in query.quantiles {
+        let percent = match parse_quantile_spec(&spec) {
+            Some(percent) if (0.0..=100.0).contains(&percent) => percent,
+            Some(_) => {
+                return (
+                    axum::http::StatusCode::BAD_REQUEST,
+                    format!("quantile out of range (0-100): {spec}"),
+                )
+                    .into_response();
+            }
+            None => {
+                return (
+                    axum::http::StatusCode::BAD_REQUEST,
+                    format!("invalid quantile format: {spec}"),
+                )
+                    .into_response();
+            }
+        };
+
+        if let Some(value) = state.store.query_percentile(field, percent) {
+            results.insert(format!("p{percent}"), value);
+        }
+    }
+
+    Json(MetricsResponse {
+        field: field_spec,
+        quantiles: results,
+    })
+    .into_response()
+}
+
 fn handle_percentiles(
     state: &AppState,
     pct: &PercentileAggregation,
@@ -266,29 +327,6 @@ fn handle_percentiles(
     }
 
     Ok(Some(values))
-}
-
-fn handle_frequency(state: &AppState, freq: &FrequencyAggregation) -> Result<f64, String> {
-    if !state
-        .agg_config
-        .percentile_fields
-        .contains(&freq.field.trim().to_ascii_lowercase())
-    {
-        return Err(format!("unsupported frequency field: {}", freq.field));
-    }
-    let field = MetricField::from_spec(&freq.field)
-        .ok_or_else(|| format!("unsupported frequency field: {}", freq.field))?;
-    let key = freq.key.trim();
-    if key.is_empty() {
-        return Err("frequency key is required".to_string());
-    }
-    let value = round_to_i32(freq.value)
-        .ok_or_else(|| "frequency value must be a positive number".to_string())?;
-
-    state
-        .store
-        .query_frequency_by_key(field, key, value)
-        .ok_or_else(|| "frequency query failed".to_string())
 }
 
 fn handle_top_entities(
@@ -377,14 +415,98 @@ fn merge_aggregations(response: &mut Value, handled: BTreeMap<String, Value>) {
     }
 }
 
-fn round_to_i32(value: f64) -> Option<i32> {
-    if !value.is_finite() {
+fn parse_quantile_spec(spec: &str) -> Option<f64> {
+    let trimmed = spec.trim();
+    let candidate = trimmed
+        .strip_prefix('p')
+        .or_else(|| trimmed.strip_prefix('P'))
+        .unwrap_or(trimmed)
+        .trim();
+    if candidate.is_empty() {
         return None;
     }
-    let rounded = value.round();
-    if rounded < i32::MIN as f64 || rounded > i32::MAX as f64 {
-        return None;
+    candidate.parse::<f64>().ok()
+}
+
+async fn log_request_middleware(req: Request<Body>, next: Next) -> Response {
+    let (parts, body) = req.into_parts();
+    let method = parts.method.clone();
+    let uri = parts.uri.clone();
+    let headers = parts.headers.clone();
+
+    let body_bytes = match to_bytes(body, usize::MAX).await {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            eprintln!("failed to read request body: {err}");
+            Bytes::new()
+        }
+    };
+
+    log_request_details(&method, &uri, &headers, &body_bytes);
+
+    let req = Request::from_parts(parts, Body::from(body_bytes));
+    let response = next.run(req).await;
+    eprintln!("response status: {}", response.status());
+    response
+}
+
+fn log_request_details(
+    method: &axum::http::Method,
+    uri: &axum::http::Uri,
+    headers: &HeaderMap,
+    body: &Bytes,
+) {
+    const MAX_LOG_BODY_BYTES: usize = 1024 * 1024;
+
+    eprintln!("incoming request: {method} {uri}");
+
+    let mut header_pairs: Vec<(String, String)> = headers
+        .iter()
+        .map(|(name, value)| {
+            let value_str = value
+                .to_str()
+                .map(|val| val.to_string())
+                .unwrap_or_else(|_| format!("<non-utf8:{} bytes>", value.as_bytes().len()));
+            (name.to_string(), value_str)
+        })
+        .collect();
+    header_pairs.sort_by(|a, b| a.0.cmp(&b.0));
+
+    eprintln!("headers:");
+    if header_pairs.is_empty() {
+        eprintln!("  <none>");
+    } else {
+        for (name, value) in header_pairs {
+            eprintln!("  {name}: {value}");
+        }
     }
-    let as_i32 = rounded as i32;
-    if as_i32 <= 0 { None } else { Some(as_i32) }
+
+    if body.is_empty() {
+        eprintln!("body (0 bytes): <empty>");
+        eprintln!("end request");
+        return;
+    }
+
+    let total_len = body.len();
+    if total_len > MAX_LOG_BODY_BYTES {
+        eprintln!(
+            "body ({} bytes, showing first {}):",
+            total_len, MAX_LOG_BODY_BYTES
+        );
+        let preview = &body[..MAX_LOG_BODY_BYTES];
+        eprintln!("{}", String::from_utf8_lossy(preview));
+        eprintln!("body truncated");
+        eprintln!("end request");
+        return;
+    }
+
+    eprintln!("body ({} bytes):", total_len);
+    match serde_json::from_slice::<Value>(body) {
+        Ok(value) => match serde_json::to_string_pretty(&value) {
+            Ok(pretty) => eprintln!("{pretty}"),
+            Err(_) => eprintln!("{value}"),
+        },
+        Err(_) => eprintln!("{}", String::from_utf8_lossy(body)),
+    }
+    eprintln!("end request");
 }

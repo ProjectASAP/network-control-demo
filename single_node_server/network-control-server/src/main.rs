@@ -3,7 +3,7 @@ mod ingest;
 mod metrics;
 mod server;
 
-use std::{env, sync::Arc};
+use std::{env, sync::Arc, time::Instant};
 
 use config::AggregationConfig;
 use ingest::load_metric_store;
@@ -12,6 +12,8 @@ use server::{AppState, run_http_server};
 
 #[tokio::main]
 async fn main() {
+    let startup_start = Instant::now();
+    let config_start = Instant::now();
     let agg_config = match AggregationConfig::load() {
         Ok(cfg) => cfg,
         Err(err) => {
@@ -19,6 +21,10 @@ async fn main() {
             return;
         }
     };
+    eprintln!(
+        "aggregation config loaded in {:.2?}",
+        config_start.elapsed()
+    );
 
     eprintln!("loading metrics from CSV...");
     let store = match tokio::task::spawn_blocking(load_metric_store).await {
@@ -41,6 +47,7 @@ async fn main() {
             .unwrap_or_else(|_| "http://localhost:9200/cluster-metrics/_search".to_string()),
     };
 
+    eprintln!("startup complete in {:.2?}", startup_start.elapsed());
     eprintln!("metrics ready, starting server on 0.0.0.0:10101");
     if let Err(err) = run_http_server(state).await {
         eprintln!("server error: {err}");

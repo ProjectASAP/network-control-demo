@@ -2,11 +2,13 @@ use std::{env, error::Error, path::PathBuf, time::Instant};
 
 use csv::StringRecord;
 
+use crate::metrics::MetricPreAggregation;
 use crate::metrics::MetricStore;
-use crate::metrics::MetricStoreBuilder;
 
 pub fn load_metric_store() -> Result<MetricStore, Box<dyn Error + Send + Sync>> {
     let start = Instant::now();
+    let mut checkpoint_start = Instant::now();
+    let mut checkpoint_processed: u64 = 0;
     let csv_path = build_dataset_path();
     let mut reader = csv::Reader::from_path(&csv_path)?;
     let headers = reader.headers()?.clone();
@@ -22,7 +24,7 @@ pub fn load_metric_store() -> Result<MetricStore, Box<dyn Error + Send + Sync>> 
     let net_idx = find_column(&headers, &["network_mbps", "network-mbps"])
         .ok_or_else(|| format!("missing 'network_mbps' column in {}", csv_path.display()))?;
 
-    let mut builder = MetricStoreBuilder::new();
+    let mut builder = MetricPreAggregation::new();
     let mut processed: u64 = 0;
 
     for (row_idx, record) in reader.records().enumerate() {
@@ -63,7 +65,18 @@ pub fn load_metric_store() -> Result<MetricStore, Box<dyn Error + Send + Sync>> 
         processed += 1;
 
         if processed % 1_000_000 == 0 {
-            eprintln!("ingested {processed} rows...");
+            let elapsed = checkpoint_start.elapsed();
+            let delta = processed - checkpoint_processed;
+            let rows_per_sec = if elapsed.as_secs_f64() > 0.0 {
+                (delta as f64) / elapsed.as_secs_f64()
+            } else {
+                0.0
+            };
+            eprintln!(
+                "ingested {processed} rows ({rows_per_sec:.2} rows/sec since last checkpoint)"
+            );
+            checkpoint_start = Instant::now();
+            checkpoint_processed = processed;
         }
     }
 
