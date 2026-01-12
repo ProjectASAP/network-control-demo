@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, error::Error, sync::Arc};
+use std::{collections::BTreeMap, error::Error, sync::Arc, time::Instant};
 
 use axum::{
     Json, Router,
@@ -17,12 +17,74 @@ use tokio::net::TcpListener;
 use crate::config::AggregationConfig;
 use crate::metrics::{EntityEstimate, MetricField, MetricStore};
 
+/// Tracks timing for each step of query processing
+pub struct QueryTiming {
+    start: Instant,
+    last_step: Instant,
+    steps: Vec<(String, f64)>, // (step_name, duration_ms)
+}
+
+impl QueryTiming {
+    pub fn new() -> Self {
+        let now = Instant::now();
+        Self {
+            start: now,
+            last_step: now,
+            steps: Vec::new(),
+        }
+    }
+
+    /// Record a step with elapsed time since last step (in ms)
+    pub fn step(&mut self, name: &str) {
+        let now = Instant::now();
+        let duration_ms = now.duration_since(self.last_step).as_secs_f64() * 1000.0;
+        self.steps.push((name.to_string(), duration_ms));
+        self.last_step = now;
+    }
+
+    /// Get total elapsed time in ms
+    pub fn total_ms(&self) -> f64 {
+        self.start.elapsed().as_secs_f64() * 1000.0
+    }
+
+    /// Log timing to stderr
+    pub fn log(&self) {
+        let steps_str: Vec<String> = self.steps
+            .iter()
+            .map(|(name, ms)| format!("{}={:.3}ms", name, ms))
+            .collect();
+        eprintln!(
+            "[TIMING] {} total={:.3}ms",
+            steps_str.join(" "),
+            self.total_ms()
+        );
+    }
+
+    /// Convert to JSON value for response
+    pub fn to_json(&self) -> Value {
+        let mut steps_obj = serde_json::Map::new();
+        for (name, ms) in &self.steps {
+            steps_obj.insert(format!("{}_ms", name), json!(ms));
+        }
+        json!({
+            "total_ms": self.total_ms(),
+            "steps": steps_obj
+        })
+    }
+
+    /// Format as header value
+    pub fn to_header(&self) -> String {
+        format!("{:.3}", self.total_ms())
+    }
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub store: Arc<MetricStore>,
     pub agg_config: Arc<AggregationConfig>,
     pub http_client: Client,
     pub upstream_url: String,
+    pub timing_enabled: bool,
 }
 
 #[derive(Serialize)]
@@ -81,12 +143,6 @@ struct FrequencyAggregation {
 #[derive(Debug, Deserialize)]
 struct MetricsQuery {
     quantiles: Vec<String>,
-}
-
-#[derive(Serialize)]
-struct MetricsResponse {
-    field: String,
-    quantiles: BTreeMap<String, f64>,
 }
 
 enum AggregationKind {
@@ -151,6 +207,13 @@ async fn search_handler(
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
+    let mut timing = if state.timing_enabled {
+        Some(QueryTiming::new())
+    } else {
+        None
+    };
+
+    // Step 1: Parse JSON
     let request_value: Value = match serde_json::from_slice(&body) {
         Ok(value) => value,
         Err(err) => {
@@ -161,7 +224,9 @@ async fn search_handler(
                 .into_response();
         }
     };
+    if let Some(t) = &mut timing { t.step("parse_json"); }
 
+    // Step 2: Deserialize into SearchRequest
     let request: SearchRequest = match serde_json::from_value(request_value.clone()) {
         Ok(value) => value,
         Err(err) => {
@@ -172,7 +237,9 @@ async fn search_handler(
                 .into_response();
         }
     };
+    if let Some(t) = &mut timing { t.step("deserialize"); }
 
+    // Step 3: Process aggregations
     let mut handled = BTreeMap::new();
     let mut handled_names = Vec::new();
     let mut unhandled = BTreeMap::new();
@@ -214,14 +281,18 @@ async fn search_handler(
             }
         }
     }
+    if let Some(t) = &mut timing { t.step("aggregations"); }
 
+    // Step 4: Prepare upstream body
     let mut upstream_body = request_value;
     if let Some(aggs_obj) = upstream_body.get_mut("aggs").and_then(Value::as_object_mut) {
         for name in &handled_names {
             aggs_obj.remove(name);
         }
     }
+    if let Some(t) = &mut timing { t.step("prepare_upstream"); }
 
+    // Step 5: Forward to upstream if needed
     let needs_upstream = has_other || !unhandled.is_empty();
     let mut response_value = if needs_upstream {
         match forward_to_upstream(&state, &headers, &upstream_body).await {
@@ -231,9 +302,28 @@ async fn search_handler(
     } else {
         json!({ "aggregations": {} })
     };
+    if let Some(t) = &mut timing { t.step("upstream"); }
 
+    // Step 6: Merge results
     merge_aggregations(&mut response_value, handled);
-    Json(response_value).into_response()
+    if let Some(t) = &mut timing { t.step("merge"); }
+
+    // Build response (with timing if enabled)
+    if let Some(t) = &timing {
+        if let Some(obj) = response_value.as_object_mut() {
+            obj.insert("_timing".to_string(), t.to_json());
+        }
+        t.log();
+        let timing_header = t.to_header();
+        let mut response = Json(response_value).into_response();
+        response.headers_mut().insert(
+            "X-Server-Timing",
+            timing_header.parse().unwrap(),
+        );
+        response
+    } else {
+        Json(response_value).into_response()
+    }
 }
 
 async fn metrics_handler(
@@ -241,6 +331,13 @@ async fn metrics_handler(
     Path(field_spec): Path<String>,
     Json(query): Json<MetricsQuery>,
 ) -> impl IntoResponse {
+    let mut timing = if state.timing_enabled {
+        Some(QueryTiming::new())
+    } else {
+        None
+    };
+
+    // Step 1: Parse field
     let field = match MetricField::from_spec(&field_spec) {
         Some(field) => field,
         None => {
@@ -251,7 +348,9 @@ async fn metrics_handler(
                 .into_response();
         }
     };
+    if let Some(t) = &mut timing { t.step("parse_field"); }
 
+    // Step 2: Validate query
     if query.quantiles.is_empty() {
         return (
             axum::http::StatusCode::BAD_REQUEST,
@@ -259,7 +358,9 @@ async fn metrics_handler(
         )
             .into_response();
     }
+    if let Some(t) = &mut timing { t.step("validate"); }
 
+    // Step 3: Query percentiles
     let mut results = BTreeMap::new();
     for spec in query.quantiles {
         let percent = match parse_quantile_spec(&spec) {
@@ -284,12 +385,29 @@ async fn metrics_handler(
             results.insert(format!("p{percent}"), value);
         }
     }
+    if let Some(t) = &mut timing { t.step("query_percentiles"); }
 
-    Json(MetricsResponse {
-        field: field_spec,
-        quantiles: results,
-    })
-    .into_response()
+    // Build response (with timing if enabled)
+    if let Some(t) = &timing {
+        t.log();
+        let response_value = json!({
+            "field": field_spec,
+            "quantiles": results,
+            "_timing": t.to_json()
+        });
+        let timing_header = t.to_header();
+        let mut response = Json(response_value).into_response();
+        response.headers_mut().insert(
+            "X-Server-Timing",
+            timing_header.parse().unwrap(),
+        );
+        response
+    } else {
+        Json(json!({
+            "field": field_spec,
+            "quantiles": results
+        })).into_response()
+    }
 }
 
 fn handle_percentiles(

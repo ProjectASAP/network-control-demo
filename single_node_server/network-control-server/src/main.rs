@@ -12,6 +12,13 @@ use server::{AppState, run_http_server};
 
 #[tokio::main]
 async fn main() {
+    // Parse CLI flags
+    let args: Vec<String> = env::args().collect();
+    let timing_enabled = args.iter().any(|arg| arg == "--timing");
+    if timing_enabled {
+        eprintln!("timing enabled via --timing flag");
+    }
+
     let startup_start = Instant::now();
     let config_start = Instant::now();
     let agg_config = match AggregationConfig::load() {
@@ -45,6 +52,7 @@ async fn main() {
         http_client: Client::new(),
         upstream_url: env::var("UPSTREAM_URL")
             .unwrap_or_else(|_| "http://localhost:9200/cluster-metrics/_search".to_string()),
+        timing_enabled,
     };
 
     eprintln!("startup complete in {:.2?}", startup_start.elapsed());
