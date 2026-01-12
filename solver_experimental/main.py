@@ -98,7 +98,7 @@ def main(args: argparse.Namespace):
             data = client.search(index=index_name, aggs=aggs)
             end_time = time.time()
             print(f"Query took {end_time - start_t} seconds (Elastic)")
-            # print(f'Aggregations: {data["aggregations"]}')
+            print(f'Aggregations: {data["aggregations"]}')
 
             sketch_query_url = "http://localhost:10101/metrics/cpu_cores"
             payload = {
@@ -107,7 +107,7 @@ def main(args: argparse.Namespace):
             start_t = time.time()
             sketch_response = requests.post(sketch_query_url, json=payload)
             print(f'Sketch query took {time.time() - start_t} seconds (Sketch)')
-            # print(f'Aggregations: {sketch_response.json()}')
+            print(f'Aggregations: {sketch_response.json()}')
 
             # Filter out finished tasks. For now, don't account for solver time and variable finish times.
             running_tasks = {task_id: rt for task_id, rt in running_tasks.items() if curr_offset - rt.start_time_s >= rt.task.duration_s}
