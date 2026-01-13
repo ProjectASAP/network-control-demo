@@ -149,6 +149,7 @@ enum AggregationKind {
     Percentiles(PercentileAggregation),
     TopEntities(TopEntitiesAggregation),
     Cumulative(CumulativeAggregation),
+    Frequency(FrequencyAggregation),
 }
 
 impl AggregationRequest {
@@ -166,6 +167,10 @@ impl AggregationRequest {
         }
         if let Some(cum) = self.cumulative.clone() {
             kind = Some(AggregationKind::Cumulative(cum));
+            count += 1;
+        }
+        if let Some(freq) = self.frequency.clone() {
+            kind = Some(AggregationKind::Frequency(freq));
             count += 1;
         }
 
@@ -265,6 +270,16 @@ async fn search_handler(
                     },
                     AggregationKind::Cumulative(cum) => match handle_cumulative(&state, &cum) {
                         Ok(value) => Some(json!({ "key": cum.key, "value": value })),
+                        Err(message) => {
+                            return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
+                        }
+                    },
+                    AggregationKind::Frequency(freq) => match handle_frequency(&state, &freq) {
+                        Ok(count) => Some(json!({
+                            "key": freq.key,
+                            "value": freq.value,
+                            "count": count,
+                        })),
                         Err(message) => {
                             return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
                         }
@@ -495,6 +510,20 @@ fn handle_cumulative(state: &AppState, cum: &CumulativeAggregation) -> Result<i3
         return Err("cumulative key is required".to_string());
     }
     Ok(state.store.cumulative_value(field, cum.key.trim()))
+}
+
+fn handle_frequency(state: &AppState, freq: &FrequencyAggregation) -> Result<i32, String> {
+    let field = MetricField::from_spec(&freq.field)
+        .ok_or_else(|| format!("unsupported frequency field: {}", freq.field))?;
+    let key = freq.key.trim();
+    if key.is_empty() {
+        return Err("frequency key is required".to_string());
+    }
+
+    state
+        .store
+        .frequency_estimate(field, key, freq.value)
+        .ok_or_else(|| format!("invalid frequency value: {}", freq.value))
 }
 
 async fn forward_to_upstream(

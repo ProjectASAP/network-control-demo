@@ -11,6 +11,7 @@ struct IngestTiming {
     build_key_ns: u64,
     insert_kll_ns: u64,
     insert_hydra_ns: u64,
+    insert_freq_hydra_ns: u64,
     insert_countmin_ns: u64,
 }
 
@@ -22,6 +23,7 @@ impl IngestTiming {
             build_key_ns: 0,
             insert_kll_ns: 0,
             insert_hydra_ns: 0,
+            insert_freq_hydra_ns: 0,
             insert_countmin_ns: 0,
         }
     }
@@ -31,6 +33,7 @@ impl IngestTiming {
         self.build_key_ns = 0;
         self.insert_kll_ns = 0;
         self.insert_hydra_ns = 0;
+        self.insert_freq_hydra_ns = 0;
         self.insert_countmin_ns = 0;
     }
 
@@ -39,18 +42,19 @@ impl IngestTiming {
             return;
         }
         let total_ns = self.parse_row_ns + self.build_key_ns + self.insert_kll_ns
-            + self.insert_hydra_ns + self.insert_countmin_ns;
+            + self.insert_hydra_ns + self.insert_freq_hydra_ns + self.insert_countmin_ns;
         let to_ms = |ns: u64| ns as f64 / 1_000_000.0;
         let to_us_per_row = |ns: u64| (ns as f64 / rows as f64) / 1000.0;
 
         eprintln!(
-            "[INGEST TIMING] rows={} total={:.2}ms | parse_row={:.2}ms ({:.3}us/row) build_key={:.2}ms ({:.3}us/row) kll={:.2}ms ({:.3}us/row) hydra={:.2}ms ({:.3}us/row) countmin={:.2}ms ({:.3}us/row)",
+            "[INGEST TIMING] rows={} total={:.2}ms | parse_row={:.2}ms ({:.3}us/row) build_key={:.2}ms ({:.3}us/row) kll={:.2}ms ({:.3}us/row) hydra={:.2}ms ({:.3}us/row) freq_hydra={:.2}ms ({:.3}us/row) countmin={:.2}ms ({:.3}us/row)",
             rows,
             to_ms(total_ns),
             to_ms(self.parse_row_ns), to_us_per_row(self.parse_row_ns),
             to_ms(self.build_key_ns), to_us_per_row(self.build_key_ns),
             to_ms(self.insert_kll_ns), to_us_per_row(self.insert_kll_ns),
             to_ms(self.insert_hydra_ns), to_us_per_row(self.insert_hydra_ns),
+            to_ms(self.insert_freq_hydra_ns), to_us_per_row(self.insert_freq_hydra_ns),
             to_ms(self.insert_countmin_ns), to_us_per_row(self.insert_countmin_ns),
         );
     }
@@ -122,6 +126,7 @@ pub fn load_metric_store(timing_enabled: bool) -> Result<MetricStore, Box<dyn Er
             timing.build_key_ns += insert_timing.build_key_ns;
             timing.insert_kll_ns += insert_timing.kll_ns;
             timing.insert_hydra_ns += insert_timing.hydra_ns;
+            timing.insert_freq_hydra_ns += insert_timing.freq_hydra_ns;
             timing.insert_countmin_ns += insert_timing.countmin_ns;
         } else {
             builder.insert(cluster, task, cpu_value, mem_value, net_value);
