@@ -29,6 +29,8 @@ recognized types and no extra fields.
   are handled locally.
 - `percents` values must be within 0..=100.
 - Optional `key` is supported and must be non-empty if provided.
+- `key` may be `cluster`, `task`, or `cluster;task` (the ingester stores all
+  combinations).
 
 Example:
 ```json
@@ -48,6 +50,9 @@ Example:
 
 - Only fields listed under `supported_aggs.top_entities.metrics` in `agg-config.yaml`
   are handled locally.
+- Keys are tracked for `cluster`, `task`, and `cluster;task`. The returned `key`
+  can be any of those.
+- Values are rounded to the nearest positive integer before tracking.
 
 Example:
 ```json
@@ -65,6 +70,8 @@ Example:
 - Only fields listed under `supported_aggs.cumulative.metrics` in `agg-config.yaml`
   are handled locally.
 - `key` must be non-empty.
+- `key` may be `cluster`, `task`, or `cluster;task`.
+- Values are rounded to the nearest positive integer before summing.
 
 Example:
 ```json
@@ -77,9 +84,32 @@ Example:
 }
 ```
 
+#### frequency
+
+- `field` must be a supported metric field.
+- `key` must be non-empty.
+- `value` is rounded to the nearest positive integer for counting.
+- `key` may be `cluster`, `task`, or `cluster;task` (tracked via Hydra CMS).
+
+Example:
+```json
+{
+  "aggs": {
+    "cpu_frequency": {
+      "frequency": { "field": "cpu_cores", "key": "cluster-c;cache", "value": 4 }
+    }
+  }
+}
+```
+
+Response aggregation value:
+```json
+{ "key": "cluster-c;cache", "value": 4, "count": 123 }
+```
+
 ### Forwarded aggregations
 
-Any other aggregation types (including `frequency`) or any aggregation with
+Any other aggregation types or any aggregation with
 extra fields are forwarded to the upstream URL. The response is merged with
 any locally handled aggregations.
 
