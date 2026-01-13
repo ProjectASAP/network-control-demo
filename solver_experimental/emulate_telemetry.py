@@ -143,9 +143,10 @@ def create_metrics_records(metrics: dict[str, TaskMetrics]) -> list[dict]:
     records = []
     for task_id, task_metrics in metrics.items():
         record = {
-            "task_id": task_id,
-            "cpu_usage": task_metrics.cpu_usage.tolist(),
-            "memory_usage": task_metrics.memory_usage.tolist()
+            "task": task_id,
+            "cpu_cores": task_metrics.cpu_usage.tolist(),
+            "memory_gb": task_metrics.memory_usage.tolist(),
+            "network_mbps": [0] * len(task_metrics.cpu_usage) # Ignore network for now.
         }
         records.append(record)
     return records
