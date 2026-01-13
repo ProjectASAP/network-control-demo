@@ -71,6 +71,12 @@ def main(args: argparse.Namespace):
     }
 
     quantiles = [10 * i for i in range(1, 10)]
+    metrics_base_url = "http://localhost:10101"
+    metrics_fields = ["cpu_cores", "memory_gb", "network_mbps"]
+    cluster = "cluster-c"
+    task_name = "cache"
+    key = f"{cluster};{task_name}"
+    example_value = 4
     aggs = {
         "average_cpu": {"avg": {"field": "cpu_cores"}},
         "cpu_quantiles": {
@@ -100,14 +106,108 @@ def main(args: argparse.Namespace):
             print(f"Query took {end_time - start_t} seconds (Elastic)")
             print(f'Aggregations: {data["aggregations"]}')
 
-            sketch_query_url = "http://localhost:10101/metrics/cpu_cores"
-            payload = {
-                'quantiles': [f'p{q}' for q in quantiles]
+            for field in metrics_fields:
+                metrics_query_url = f"{metrics_base_url}/metrics/{field}"
+                payload = {
+                    "quantiles": [f"p{q}" for q in quantiles]
+                }
+                start_t = time.time()
+                metrics_response = requests.post(metrics_query_url, json=payload)
+                print(f"Sketch query took {time.time() - start_t} seconds (Sketch)")
+                print(f"Aggregations: {metrics_response.json()}")
+
+            search_url = f"{metrics_base_url}/cluster-metrics/_search"
+
+            percentile_payload = {
+                "aggs": {
+                    "cpu_quantiles": {
+                        "percentiles": {
+                            "field": "cpu_cores",
+                            "percents": [10, 50, 90]
+                        }
+                    }
+                }
             }
             start_t = time.time()
-            sketch_response = requests.post(sketch_query_url, json=payload)
-            print(f'Sketch query took {time.time() - start_t} seconds (Sketch)')
-            print(f'Aggregations: {sketch_response.json()}')
+            percentile_response = requests.post(search_url, json=percentile_payload)
+            print(f"Sketch query took {time.time() - start_t} seconds (Sketch)")
+            print(f"Aggregations: {percentile_response.json()}")
+
+            labeled_percentile_payload = {
+                "aggs": {
+                    "cpu_quantiles_by_key": {
+                        "percentiles": {
+                            "field": "cpu_cores",
+                            "percents": [10, 50, 90],
+                            "key": key
+                        }
+                    }
+                }
+            }
+            start_t = time.time()
+            labeled_percentile_response = requests.post(search_url, json=labeled_percentile_payload)
+            print(f"Sketch query took {time.time() - start_t} seconds (Sketch)")
+            print(f"Aggregations: {labeled_percentile_response.json()}")
+
+            frequency_payload = {
+                "aggs": {
+                    "cpu_frequency": {
+                        "frequency": {
+                            "field": "cpu_cores",
+                            "key": key,
+                            "value": example_value
+                        }
+                    },
+                    "cpu_frequency_cluster": {
+                        "frequency": {
+                            "field": "cpu_cores",
+                            "key": cluster,
+                            "value": example_value
+                        }
+                    },
+                    "cpu_frequency_task": {
+                        "frequency": {
+                            "field": "cpu_cores",
+                            "key": task_name,
+                            "value": example_value
+                        }
+                    }
+                }
+            }
+            start_t = time.time()
+            frequency_response = requests.post(search_url, json=frequency_payload)
+            print(f"Sketch query took {time.time() - start_t} seconds (Sketch)")
+            print(f"Aggregations: {frequency_response.json()}")
+
+            top_entities_payload = {
+                "aggs": {
+                    "top_cpu": {"top_entities": {"field": "cpu_cores"}},
+                    "top_mem": {"top_entities": {"field": "memory_gb"}},
+                    "top_net": {"top_entities": {"field": "network_mbps"}}
+                }
+            }
+            start_t = time.time()
+            top_entities_response = requests.post(search_url, json=top_entities_payload)
+            print(f"Sketch query took {time.time() - start_t} seconds (Sketch)")
+            print(f"Aggregations: {top_entities_response.json()}")
+
+            cumulative_payload = {
+                "aggs": {
+                    "cpu_cumulative": {
+                        "cumulative": {"field": "cpu_cores", "key": key}
+                    },
+                    "cpu_cumulative_cluster": {
+                        "cumulative": {"field": "cpu_cores", "key": cluster}
+                    },
+                    "cpu_cumulative_task": {
+                        "cumulative": {"field": "cpu_cores", "key": task_name}
+                    }
+                }
+            }
+            start_t = time.time()
+            cumulative_response = requests.post(search_url, json=cumulative_payload)
+            print(f"Sketch query took {time.time() - start_t} seconds (Sketch)")
+            print(f"Aggregations: {cumulative_response.json()}")
 
             # Filter out finished tasks. For now, don't account for solver time and variable finish times.
             running_tasks = {task_id: rt for task_id, rt in running_tasks.items() if curr_offset - rt.start_time_s >= rt.task.duration_s}
