@@ -1,11 +1,12 @@
-use std::{collections::BTreeMap, error::Error, sync::Arc};
+use std::{collections::BTreeMap, error::Error, sync::Arc, time::Instant};
 
 use axum::{
     Json, Router,
-    body::Bytes,
-    extract::State,
-    http::HeaderMap,
-    response::IntoResponse,
+    body::{Body, Bytes, to_bytes},
+    extract::{Path, State},
+    http::{HeaderMap, Request},
+    middleware::{Next, from_fn},
+    response::{IntoResponse, Response},
     routing::{get, post},
 };
 use reqwest::Client;
@@ -16,12 +17,74 @@ use tokio::net::TcpListener;
 use crate::config::AggregationConfig;
 use crate::metrics::{EntityEstimate, MetricField, MetricStore};
 
+/// Tracks timing for each step of query processing
+pub struct QueryTiming {
+    start: Instant,
+    last_step: Instant,
+    steps: Vec<(String, f64)>, // (step_name, duration_ms)
+}
+
+impl QueryTiming {
+    pub fn new() -> Self {
+        let now = Instant::now();
+        Self {
+            start: now,
+            last_step: now,
+            steps: Vec::new(),
+        }
+    }
+
+    /// Record a step with elapsed time since last step (in ms)
+    pub fn step(&mut self, name: &str) {
+        let now = Instant::now();
+        let duration_ms = now.duration_since(self.last_step).as_secs_f64() * 1000.0;
+        self.steps.push((name.to_string(), duration_ms));
+        self.last_step = now;
+    }
+
+    /// Get total elapsed time in ms
+    pub fn total_ms(&self) -> f64 {
+        self.start.elapsed().as_secs_f64() * 1000.0
+    }
+
+    /// Log timing to stderr
+    pub fn log(&self) {
+        let steps_str: Vec<String> = self.steps
+            .iter()
+            .map(|(name, ms)| format!("{}={:.3}ms", name, ms))
+            .collect();
+        eprintln!(
+            "[TIMING] {} total={:.3}ms",
+            steps_str.join(" "),
+            self.total_ms()
+        );
+    }
+
+    /// Convert to JSON value for response
+    pub fn to_json(&self) -> Value {
+        let mut steps_obj = serde_json::Map::new();
+        for (name, ms) in &self.steps {
+            steps_obj.insert(format!("{}_ms", name), json!(ms));
+        }
+        json!({
+            "total_ms": self.total_ms(),
+            "steps": steps_obj
+        })
+    }
+
+    /// Format as header value
+    pub fn to_header(&self) -> String {
+        format!("{:.3}", self.total_ms())
+    }
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub store: Arc<MetricStore>,
     pub agg_config: Arc<AggregationConfig>,
     pub http_client: Client,
     pub upstream_url: String,
+    pub timing_enabled: bool,
 }
 
 #[derive(Serialize)]
@@ -42,6 +105,8 @@ struct AggregationRequest {
     #[serde(default)]
     percentiles: Option<PercentileAggregation>,
     #[serde(default)]
+    frequency: Option<FrequencyAggregation>,
+    #[serde(default)]
     top_entities: Option<TopEntitiesAggregation>,
     #[serde(default)]
     cumulative: Option<CumulativeAggregation>,
@@ -53,6 +118,8 @@ struct AggregationRequest {
 struct PercentileAggregation {
     field: String,
     percents: Vec<f64>,
+    #[serde(default)]
+    key: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -66,10 +133,23 @@ struct CumulativeAggregation {
     key: String,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct FrequencyAggregation {
+    field: String,
+    key: String,
+    value: f64,
+}
+
+#[derive(Debug, Deserialize)]
+struct MetricsQuery {
+    quantiles: Vec<String>,
+}
+
 enum AggregationKind {
     Percentiles(PercentileAggregation),
     TopEntities(TopEntitiesAggregation),
     Cumulative(CumulativeAggregation),
+    Frequency(FrequencyAggregation),
 }
 
 impl AggregationRequest {
@@ -80,12 +160,17 @@ impl AggregationRequest {
             kind = Some(AggregationKind::Percentiles(pct));
             count += 1;
         }
+
         if let Some(top) = self.top_entities.clone() {
             kind = Some(AggregationKind::TopEntities(top));
             count += 1;
         }
         if let Some(cum) = self.cumulative.clone() {
             kind = Some(AggregationKind::Cumulative(cum));
+            count += 1;
+        }
+        if let Some(freq) = self.frequency.clone() {
+            kind = Some(AggregationKind::Frequency(freq));
             count += 1;
         }
 
@@ -102,7 +187,9 @@ pub async fn run_http_server(state: AppState) -> Result<(), Box<dyn Error + Send
         .route("/", get(root_handler))
         .route("/healthz", get(|| async { "ok" }))
         .route("/cluster-metrics/_search", post(search_handler))
-        .with_state(state);
+        .route("/metrics/:field", post(metrics_handler))
+        .with_state(state)
+        .layer(from_fn(log_request_middleware));
 
     let listener = TcpListener::bind("0.0.0.0:10101").await?;
     axum::serve(listener, app).await?;
@@ -111,11 +198,11 @@ pub async fn run_http_server(state: AppState) -> Result<(), Box<dyn Error + Send
 
 async fn root_handler() -> Json<RootResponse<'static>> {
     Json(RootResponse {
-        message: "POST /cluster-metrics/_search with aggs for percentiles, top_entities, or cumulative (cumulative requires a key). Other aggs (e.g. avg) are forwarded to Elasticsearch.",
+        message: "POST /cluster-metrics/_search with aggs for percentiles, frequency, top_entities, or cumulative (cumulative requires a key). Other aggs (e.g. avg) are forwarded to Elasticsearch.",
         examples: [
             "POST /cluster-metrics/_search {\"aggs\":{\"cpu_quantiles\":{\"percentiles\":{\"field\":\"cpu_cores\",\"percents\":[10,50]}}}}",
+            "POST /cluster-metrics/_search {\"aggs\":{\"cpu_frequency\":{\"frequency\":{\"field\":\"cpu_cores\",\"key\":\"cluster-c;cache\",\"value\":4}}}}",
             "POST /cluster-metrics/_search {\"aggs\":{\"top_cpu\":{\"top_entities\":{\"field\":\"cpu_cores\"}}}}",
-            "POST /cluster-metrics/_search {\"aggs\":{\"cpu_cumulative\":{\"cumulative\":{\"field\":\"cpu_cores\",\"key\":\"cluster-c;cache\"}}}}",
         ],
     })
 }
@@ -125,6 +212,13 @@ async fn search_handler(
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
+    let mut timing = if state.timing_enabled {
+        Some(QueryTiming::new())
+    } else {
+        None
+    };
+
+    // Step 1: Parse JSON
     let request_value: Value = match serde_json::from_slice(&body) {
         Ok(value) => value,
         Err(err) => {
@@ -135,7 +229,9 @@ async fn search_handler(
                 .into_response();
         }
     };
+    if let Some(t) = &mut timing { t.step("parse_json"); }
 
+    // Step 2: Deserialize into SearchRequest
     let request: SearchRequest = match serde_json::from_value(request_value.clone()) {
         Ok(value) => value,
         Err(err) => {
@@ -146,7 +242,9 @@ async fn search_handler(
                 .into_response();
         }
     };
+    if let Some(t) = &mut timing { t.step("deserialize"); }
 
+    // Step 3: Process aggregations
     let mut handled = BTreeMap::new();
     let mut handled_names = Vec::new();
     let mut unhandled = BTreeMap::new();
@@ -156,29 +254,34 @@ async fn search_handler(
         for (name, agg) in aggs {
             let result = match agg.kind() {
                 Some(kind) => match kind {
-                    AggregationKind::Percentiles(pct) => {
-                        handle_percentiles(&state, &pct).map(|values| {
-                            json!({ "values": values })
-                        })
-                    }
+                    AggregationKind::Percentiles(pct) => match handle_percentiles(&state, &pct) {
+                        Ok(Some(values)) => Some(json!({ "values": values })),
+                        Ok(None) => None,
+                        Err(message) => {
+                            return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
+                        }
+                    },
+
                     AggregationKind::TopEntities(top) => match handle_top_entities(&state, &top) {
                         Ok(entity) => Some(json!({ "key": entity.key, "value": entity.value })),
                         Err(message) => {
-                            return (
-                                axum::http::StatusCode::BAD_REQUEST,
-                                message,
-                            )
-                                .into_response();
+                            return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
                         }
                     },
                     AggregationKind::Cumulative(cum) => match handle_cumulative(&state, &cum) {
                         Ok(value) => Some(json!({ "key": cum.key, "value": value })),
                         Err(message) => {
-                            return (
-                                axum::http::StatusCode::BAD_REQUEST,
-                                message,
-                            )
-                                .into_response();
+                            return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
+                        }
+                    },
+                    AggregationKind::Frequency(freq) => match handle_frequency(&state, &freq) {
+                        Ok(count) => Some(json!({
+                            "key": freq.key,
+                            "value": freq.value,
+                            "count": count,
+                        })),
+                        Err(message) => {
+                            return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
                         }
                     },
                 },
@@ -193,14 +296,18 @@ async fn search_handler(
             }
         }
     }
+    if let Some(t) = &mut timing { t.step("aggregations"); }
 
+    // Step 4: Prepare upstream body
     let mut upstream_body = request_value;
     if let Some(aggs_obj) = upstream_body.get_mut("aggs").and_then(Value::as_object_mut) {
         for name in &handled_names {
             aggs_obj.remove(name);
         }
     }
+    if let Some(t) = &mut timing { t.step("prepare_upstream"); }
 
+    // Step 5: Forward to upstream if needed
     let needs_upstream = has_other || !unhandled.is_empty();
     let mut response_value = if needs_upstream {
         match forward_to_upstream(&state, &headers, &upstream_body).await {
@@ -210,35 +317,164 @@ async fn search_handler(
     } else {
         json!({ "aggregations": {} })
     };
+    if let Some(t) = &mut timing { t.step("upstream"); }
 
+    // Step 6: Merge results
     merge_aggregations(&mut response_value, handled);
-    Json(response_value).into_response()
+    if let Some(t) = &mut timing { t.step("merge"); }
+
+    // Build response (with timing if enabled)
+    if let Some(t) = &mut timing {
+        // Add timing to response before serialization
+        if let Some(obj) = response_value.as_object_mut() {
+            obj.insert("_timing".to_string(), t.to_json());
+        }
+
+        // Serialize to HTTP response (timed)
+        let mut response = Json(response_value).into_response();
+        t.step("serialize");
+        t.log();
+
+        let timing_header = t.to_header();
+        response.headers_mut().insert(
+            "X-Server-Timing",
+            timing_header.parse().unwrap(),
+        );
+        response
+    } else {
+        Json(response_value).into_response()
+    }
+}
+
+async fn metrics_handler(
+    State(state): State<AppState>,
+    Path(field_spec): Path<String>,
+    Json(query): Json<MetricsQuery>,
+) -> impl IntoResponse {
+    let mut timing = if state.timing_enabled {
+        Some(QueryTiming::new())
+    } else {
+        None
+    };
+
+    // Step 1: Parse field
+    let field = match MetricField::from_spec(&field_spec) {
+        Some(field) => field,
+        None => {
+            return (
+                axum::http::StatusCode::BAD_REQUEST,
+                format!("unsupported metric field: {field_spec}"),
+            )
+                .into_response();
+        }
+    };
+    if let Some(t) = &mut timing { t.step("parse_field"); }
+
+    // Step 2: Validate query
+    if query.quantiles.is_empty() {
+        return (
+            axum::http::StatusCode::BAD_REQUEST,
+            "quantiles must be a non-empty list".to_string(),
+        )
+            .into_response();
+    }
+    if let Some(t) = &mut timing { t.step("validate"); }
+
+    // Step 3: Query percentiles
+    let mut results = BTreeMap::new();
+    for spec in query.quantiles {
+        let percent = match parse_quantile_spec(&spec) {
+            Some(percent) if (0.0..=100.0).contains(&percent) => percent,
+            Some(_) => {
+                return (
+                    axum::http::StatusCode::BAD_REQUEST,
+                    format!("quantile out of range (0-100): {spec}"),
+                )
+                    .into_response();
+            }
+            None => {
+                return (
+                    axum::http::StatusCode::BAD_REQUEST,
+                    format!("invalid quantile format: {spec}"),
+                )
+                    .into_response();
+            }
+        };
+
+        if let Some(value) = state.store.query_percentile(field, percent) {
+            results.insert(format!("p{percent}"), value);
+        }
+    }
+    if let Some(t) = &mut timing { t.step("query_percentiles"); }
+
+    // Build response (with timing if enabled)
+    if let Some(t) = &mut timing {
+        // Build response JSON (timed)
+        let mut response_value = json!({
+            "field": field_spec,
+            "quantiles": results,
+        });
+        t.step("build_response");
+
+        // Add timing to the response before serialization
+        if let Some(obj) = response_value.as_object_mut() {
+            obj.insert("_timing".to_string(), t.to_json());
+        }
+
+        // Serialize to HTTP response (timed)
+        let mut response = Json(response_value).into_response();
+        t.step("serialize");
+        t.log();
+
+        let timing_header = t.to_header();
+        response.headers_mut().insert(
+            "X-Server-Timing",
+            timing_header.parse().unwrap(),
+        );
+        response
+    } else {
+        Json(json!({
+            "field": field_spec,
+            "quantiles": results
+        })).into_response()
+    }
 }
 
 fn handle_percentiles(
     state: &AppState,
     pct: &PercentileAggregation,
-) -> Option<BTreeMap<String, f64>> {
+) -> Result<Option<BTreeMap<String, f64>>, String> {
     if pct.percents.is_empty() {
-        return None;
+        return Ok(None);
     }
     if !state
         .agg_config
         .percentile_fields
         .contains(&pct.field.trim().to_ascii_lowercase())
     {
-        return None;
+        return Ok(None);
     }
-    let field = MetricField::from_spec(&pct.field)?;
+    let field = MetricField::from_spec(&pct.field)
+        .ok_or_else(|| format!("unsupported percentile field: {}", pct.field))?;
 
     let mut values = BTreeMap::new();
     for percent in &pct.percents {
-        if let Some(value) = state.store.query_percentile(field, *percent) {
+        let value = if let Some(key) = pct.key.as_ref() {
+            let key = key.trim();
+            if key.is_empty() {
+                return Err("percentiles key is required when provided".to_string());
+            }
+            state.store.query_percentile_by_key(field, key, *percent)
+        } else {
+            state.store.query_percentile(field, *percent)
+        };
+
+        if let Some(value) = value {
             values.insert(percent.to_string(), value);
         }
     }
 
-    Some(values)
+    Ok(Some(values))
 }
 
 fn handle_top_entities(
@@ -274,6 +510,20 @@ fn handle_cumulative(state: &AppState, cum: &CumulativeAggregation) -> Result<i3
         return Err("cumulative key is required".to_string());
     }
     Ok(state.store.cumulative_value(field, cum.key.trim()))
+}
+
+fn handle_frequency(state: &AppState, freq: &FrequencyAggregation) -> Result<i32, String> {
+    let field = MetricField::from_spec(&freq.field)
+        .ok_or_else(|| format!("unsupported frequency field: {}", freq.field))?;
+    let key = freq.key.trim();
+    if key.is_empty() {
+        return Err("frequency key is required".to_string());
+    }
+
+    state
+        .store
+        .frequency_estimate(field, key, freq.value)
+        .ok_or_else(|| format!("invalid frequency value: {}", freq.value))
 }
 
 async fn forward_to_upstream(
@@ -317,9 +567,7 @@ fn merge_aggregations(response: &mut Value, handled: BTreeMap<String, Value>) {
         }
     };
 
-    let aggs = obj
-        .entry("aggregations")
-        .or_insert_with(|| json!({}));
+    let aggs = obj.entry("aggregations").or_insert_with(|| json!({}));
     if let Some(aggs_obj) = aggs.as_object_mut() {
         for (name, value) in handled {
             aggs_obj.insert(name, value);
@@ -327,4 +575,100 @@ fn merge_aggregations(response: &mut Value, handled: BTreeMap<String, Value>) {
     } else {
         *aggs = json!(handled);
     }
+}
+
+fn parse_quantile_spec(spec: &str) -> Option<f64> {
+    let trimmed = spec.trim();
+    let candidate = trimmed
+        .strip_prefix('p')
+        .or_else(|| trimmed.strip_prefix('P'))
+        .unwrap_or(trimmed)
+        .trim();
+    if candidate.is_empty() {
+        return None;
+    }
+    candidate.parse::<f64>().ok()
+}
+
+async fn log_request_middleware(req: Request<Body>, next: Next) -> Response {
+    let (parts, body) = req.into_parts();
+    let method = parts.method.clone();
+    let uri = parts.uri.clone();
+    let headers = parts.headers.clone();
+
+    let body_bytes = match to_bytes(body, usize::MAX).await {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            eprintln!("failed to read request body: {err}");
+            Bytes::new()
+        }
+    };
+
+    log_request_details(&method, &uri, &headers, &body_bytes);
+
+    let req = Request::from_parts(parts, Body::from(body_bytes));
+    let response = next.run(req).await;
+    eprintln!("response status: {}", response.status());
+    response
+}
+
+fn log_request_details(
+    method: &axum::http::Method,
+    uri: &axum::http::Uri,
+    headers: &HeaderMap,
+    body: &Bytes,
+) {
+    const MAX_LOG_BODY_BYTES: usize = 1024 * 1024;
+
+    eprintln!("incoming request: {method} {uri}");
+
+    let mut header_pairs: Vec<(String, String)> = headers
+        .iter()
+        .map(|(name, value)| {
+            let value_str = value
+                .to_str()
+                .map(|val| val.to_string())
+                .unwrap_or_else(|_| format!("<non-utf8:{} bytes>", value.as_bytes().len()));
+            (name.to_string(), value_str)
+        })
+        .collect();
+    header_pairs.sort_by(|a, b| a.0.cmp(&b.0));
+
+    eprintln!("headers:");
+    if header_pairs.is_empty() {
+        eprintln!("  <none>");
+    } else {
+        for (name, value) in header_pairs {
+            eprintln!("  {name}: {value}");
+        }
+    }
+
+    if body.is_empty() {
+        eprintln!("body (0 bytes): <empty>");
+        eprintln!("end request");
+        return;
+    }
+
+    let total_len = body.len();
+    if total_len > MAX_LOG_BODY_BYTES {
+        eprintln!(
+            "body ({} bytes, showing first {}):",
+            total_len, MAX_LOG_BODY_BYTES
+        );
+        let preview = &body[..MAX_LOG_BODY_BYTES];
+        eprintln!("{}", String::from_utf8_lossy(preview));
+        eprintln!("body truncated");
+        eprintln!("end request");
+        return;
+    }
+
+    eprintln!("body ({} bytes):", total_len);
+    match serde_json::from_slice::<Value>(body) {
+        Ok(value) => match serde_json::to_string_pretty(&value) {
+            Ok(pretty) => eprintln!("{pretty}"),
+            Err(_) => eprintln!("{value}"),
+        },
+        Err(_) => eprintln!("{}", String::from_utf8_lossy(body)),
+    }
+    eprintln!("end request");
 }

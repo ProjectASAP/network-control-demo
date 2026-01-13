@@ -1,5 +1,12 @@
+use std::sync::Mutex;
+use std::time::Instant;
+
 use serde::Serialize;
-use sketchlib_rust::{CountMin, FastPath, FixedMatrix, KLL, SketchInput, sketches::kll::CDF};
+use sketchlib_rust::{
+    CountMin, FastPath, Hydra, KLL, SketchInput, Vector2D, XLCountMin,
+    common::input::{HydraCounter, HydraQuery},
+    sketches::kll::CDF,
+};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum MetricField {
@@ -25,26 +32,22 @@ impl MetricField {
 }
 
 #[derive(Default)]
-struct MetricSketches {
+struct MetricKll {
     cpu_cores: KLL,
     memory_gb: KLL,
     network_mbps: KLL,
 }
 
-impl MetricSketches {
+impl MetricKll {
     fn insert_samples(&mut self, cpu_value: f64, memory_value: f64, network_value: f64) {
-        let cpu = SketchInput::F64(cpu_value);
-        let memory = SketchInput::F64(memory_value);
-        let network = SketchInput::F64(network_value);
-
         self.cpu_cores
-            .update(&cpu)
+            .update(&SketchInput::F64(cpu_value))
             .expect("cpu_cores values should be numeric");
         self.memory_gb
-            .update(&memory)
+            .update(&SketchInput::F64(memory_value))
             .expect("memory_gb values should be numeric");
         self.network_mbps
-            .update(&network)
+            .update(&SketchInput::F64(network_value))
             .expect("network_mbps values should be numeric");
     }
 }
@@ -56,7 +59,7 @@ struct MetricCdfs {
 }
 
 impl MetricCdfs {
-    fn from_sketches(sketches: MetricSketches) -> Self {
+    fn from_sketches(sketches: MetricKll) -> Self {
         Self {
             cpu_cores: sketches.cpu_cores.cdf(),
             memory_gb: sketches.memory_gb.cdf(),
@@ -77,19 +80,62 @@ impl MetricCdfs {
     }
 }
 
+struct MetricHydra {
+    cpu_quantile: Hydra,
+    mem_quantile: Hydra,
+    net_quantile: Hydra,
+}
+
+impl MetricHydra {
+    fn new() -> Self {
+        let kll_template = HydraCounter::KLL(KLL::default());
+
+        Self {
+            cpu_quantile: Hydra::with_dimensions(3, 64, kll_template.clone()),
+            mem_quantile: Hydra::with_dimensions(3, 64, kll_template.clone()),
+            net_quantile: Hydra::with_dimensions(3, 64, kll_template),
+        }
+    }
+
+    fn update(&mut self, key: &str, cpu_value: f64, memory_value: f64, network_value: f64) {
+        let cpu_input = SketchInput::F64(cpu_value);
+        let memory_input = SketchInput::F64(memory_value);
+        let network_input = SketchInput::F64(network_value);
+
+        self.cpu_quantile.update(key, &cpu_input, None);
+        self.mem_quantile.update(key, &memory_input, None);
+        self.net_quantile.update(key, &network_input, None);
+    }
+
+    fn query_quantile(&self, field: MetricField, key: &str, quantile: f64) -> Option<f64> {
+        let parts = split_key(key)?;
+        let query = HydraQuery::Quantile(quantile);
+        Some(match field {
+            MetricField::CpuCores => self.cpu_quantile.query_key(parts, &query),
+            MetricField::MemoryGb => self.mem_quantile.query_key(parts, &query),
+            MetricField::NetworkMbps => self.net_quantile.query_key(parts, &query),
+        })
+    }
+}
+
+fn split_key(key: &str) -> Option<Vec<&str>> {
+    let parts: Vec<&str> = key.split(';').filter(|part| !part.is_empty()).collect();
+    if parts.is_empty() { None } else { Some(parts) }
+}
+
 #[derive(Clone)]
 struct CountMinPair {
-    top_entities: CountMin<FixedMatrix, FastPath>,
-    cumulative: CountMin<FixedMatrix, FastPath>,
+    top_entities: XLCountMin<FastPath>,
+    cumulative: XLCountMin<FastPath>,
     top_key: Option<String>,
-    top_value: i32,
+    top_value: i128,
 }
 
 impl Default for CountMinPair {
     fn default() -> Self {
         Self {
-            top_entities: CountMin::default(),
-            cumulative: CountMin::default(),
+            top_entities: XLCountMin::default(),
+            cumulative: XLCountMin::default(),
             top_key: None,
             top_value: 0,
         }
@@ -97,16 +143,14 @@ impl Default for CountMinPair {
 }
 
 impl CountMinPair {
-    fn update_top_entities(&mut self, key: &str, key_input: &SketchInput, value: i32) {
+    fn update_top_entities(&mut self, key: &str, key_input: &SketchInput, value: i128) {
         if value <= 0 {
             return;
         }
         let current = self.top_entities.estimate(key_input);
         if value > current {
             let delta = value - current;
-            for _ in 0..delta as usize {
-                self.top_entities.insert(key_input);
-            }
+            self.top_entities.insert_many(key_input, delta);
             if self.top_key.as_deref() != Some(key) {
                 self.top_key = Some(key.to_string());
             }
@@ -114,23 +158,21 @@ impl CountMinPair {
         }
     }
 
-    fn update_cumulative(&mut self, key_input: &SketchInput, value: i32) {
+    fn update_cumulative(&mut self, key_input: &SketchInput, value: i128) {
         if value <= 0 {
             return;
         }
-        for _ in 0..value as usize {
-            self.cumulative.insert(key_input);
-        }
+        self.cumulative.insert_many(key_input, value);
     }
 
     fn top_entity(&self) -> Option<EntityEstimate> {
         self.top_key.as_ref().map(|key| EntityEstimate {
             key: key.clone(),
-            value: self.top_value,
+            value: clamp_i128_to_i32(self.top_value),
         })
     }
 
-    fn estimate_cumulative(&self, key_input: &SketchInput) -> i32 {
+    fn estimate_cumulative(&self, key_input: &SketchInput) -> i128 {
         self.cumulative.estimate(key_input)
     }
 }
@@ -143,7 +185,7 @@ struct MetricCountMins {
 }
 
 impl MetricCountMins {
-    fn update(&mut self, field: MetricField, key: &str, key_input: &SketchInput, value: i32) {
+    fn update(&mut self, field: MetricField, key: &str, key_input: &SketchInput, value: i128) {
         let pair = match field {
             MetricField::CpuCores => &mut self.cpu_cores,
             MetricField::MemoryGb => &mut self.memory_gb,
@@ -162,12 +204,51 @@ impl MetricCountMins {
         }
     }
 
-    fn cumulative_estimate(&self, field: MetricField, key_input: &SketchInput) -> i32 {
+    fn cumulative_estimate(&self, field: MetricField, key_input: &SketchInput) -> i128 {
         match field {
             MetricField::CpuCores => self.cpu_cores.estimate_cumulative(key_input),
             MetricField::MemoryGb => self.memory_gb.estimate_cumulative(key_input),
             MetricField::NetworkMbps => self.network_mbps.estimate_cumulative(key_input),
         }
+    }
+}
+
+struct MetricFrequencyHydra {
+    cpu_frequency: Hydra,
+    mem_frequency: Hydra,
+    net_frequency: Hydra,
+}
+
+impl MetricFrequencyHydra {
+    fn new() -> Self {
+        let cm_template = HydraCounter::CM(
+            CountMin::<Vector2D<i32>, FastPath>::default(),
+        );
+
+        Self {
+            cpu_frequency: Hydra::with_dimensions(3, 64, cm_template.clone()),
+            mem_frequency: Hydra::with_dimensions(3, 64, cm_template.clone()),
+            net_frequency: Hydra::with_dimensions(3, 64, cm_template),
+        }
+    }
+
+    fn update(&mut self, field: MetricField, key: &str, value: i32) {
+        let input = SketchInput::I64(value as i64);
+        match field {
+            MetricField::CpuCores => self.cpu_frequency.update(key, &input, None),
+            MetricField::MemoryGb => self.mem_frequency.update(key, &input, None),
+            MetricField::NetworkMbps => self.net_frequency.update(key, &input, None),
+        }
+    }
+
+    fn query_frequency(&self, field: MetricField, key: &str, value: i32) -> Option<f64> {
+        let parts = split_key(key)?;
+        let input = SketchInput::I64(value as i64);
+        Some(match field {
+            MetricField::CpuCores => self.cpu_frequency.query_frequency(parts, &input),
+            MetricField::MemoryGb => self.mem_frequency.query_frequency(parts, &input),
+            MetricField::NetworkMbps => self.net_frequency.query_frequency(parts, &input),
+        })
     }
 }
 
@@ -179,7 +260,9 @@ pub struct EntityEstimate {
 
 pub struct MetricStore {
     cdfs: MetricCdfs,
-    countmins: MetricCountMins,
+    frequencies: MetricCountMins,
+    frequency_by_label: Mutex<MetricFrequencyHydra>,
+    quantile_by_label: Mutex<MetricHydra>,
 }
 
 impl MetricStore {
@@ -187,29 +270,84 @@ impl MetricStore {
         self.cdfs.query_percentile(field, percent)
     }
 
+    pub fn query_percentile_by_key(
+        &self,
+        field: MetricField,
+        key: &str,
+        percent: f64,
+    ) -> Option<f64> {
+        if !(0.0..=100.0).contains(&percent) {
+            return None;
+        }
+        let quantile = percent / 100.0;
+        let hydra = self.quantile_by_label.lock().ok()?;
+        hydra.query_quantile(field, key, quantile)
+    }
+
     pub fn top_entity(&self, field: MetricField) -> Option<EntityEstimate> {
-        self.countmins.top_entity(field)
+        self.frequencies.top_entity(field)
     }
 
     pub fn cumulative_value(&self, field: MetricField, key: &str) -> i32 {
         let key_input = SketchInput::Str(key);
-        self.countmins.cumulative_estimate(field, &key_input)
+        clamp_i128_to_i32(self.frequencies.cumulative_estimate(field, &key_input))
+    }
+
+    pub fn frequency_estimate(&self, field: MetricField, key: &str, value: f64) -> Option<i32> {
+        let rounded = round_to_i32(value)?;
+        let hydra = self.frequency_by_label.lock().ok()?;
+        let estimate = hydra.query_frequency(field, key, rounded)?;
+        Some(clamp_frequency_estimate(estimate))
     }
 }
 
-pub struct MetricStoreBuilder {
-    sketches: MetricSketches,
+/// Timing data for a single insert operation (in nanoseconds)
+#[derive(Default)]
+pub struct InsertTiming {
+    pub build_key_ns: u64,
+    pub kll_ns: u64,
+    pub hydra_ns: u64,
+    pub freq_hydra_ns: u64,
+    pub countmin_ns: u64,
+}
+
+pub struct MetricPreAggregation {
+    klls: MetricKll,
     countmins: MetricCountMins,
+    frequency_hydra: MetricFrequencyHydra,
+    hydra: MetricHydra,
     key_buffer: String,
 }
 
-impl MetricStoreBuilder {
+impl MetricPreAggregation {
     pub fn new() -> Self {
         Self {
-            sketches: MetricSketches::default(),
+            klls: MetricKll::default(),
             countmins: MetricCountMins::default(),
+            frequency_hydra: MetricFrequencyHydra::new(),
+            hydra: MetricHydra::new(),
             key_buffer: String::with_capacity(128),
         }
+    }
+
+    fn update_countmins_for_value(
+        &mut self,
+        field: MetricField,
+        cluster: &str,
+        task: &str,
+        value: i128,
+    ) {
+        let full_input = SketchInput::Str(&self.key_buffer);
+        self.countmins
+            .update(field, &self.key_buffer, &full_input, value);
+
+        let cluster_input = SketchInput::Str(cluster);
+        self.countmins
+            .update(field, cluster, &cluster_input, value);
+
+        let task_input = SketchInput::Str(task);
+        self.countmins
+            .update(field, task, &task_input, value);
     }
 
     pub fn insert(
@@ -220,7 +358,7 @@ impl MetricStoreBuilder {
         memory_value: f64,
         network_value: f64,
     ) {
-        self.sketches
+        self.klls
             .insert_samples(cpu_value, memory_value, network_value);
 
         self.key_buffer.clear();
@@ -228,30 +366,129 @@ impl MetricStoreBuilder {
         self.key_buffer.push(';');
         self.key_buffer.push_str(task);
 
-        let key_input = SketchInput::Str(&self.key_buffer);
+        self.hydra
+            .update(&self.key_buffer, cpu_value, memory_value, network_value);
+
         if let Some(value) = round_to_i32(cpu_value) {
-            self.countmins
-                .update(MetricField::CpuCores, &self.key_buffer, &key_input, value);
+            let value_i128 = value as i128;
+            self.update_countmins_for_value(MetricField::CpuCores, cluster, task, value_i128);
+            self.frequency_hydra
+                .update(MetricField::CpuCores, &self.key_buffer, value);
         }
         if let Some(value) = round_to_i32(memory_value) {
-            self.countmins
-                .update(MetricField::MemoryGb, &self.key_buffer, &key_input, value);
+            let value_i128 = value as i128;
+            self.update_countmins_for_value(MetricField::MemoryGb, cluster, task, value_i128);
+            self.frequency_hydra
+                .update(MetricField::MemoryGb, &self.key_buffer, value);
         }
-        // need to update sketchlib
-        // if let Some(value) = round_to_i32(network_value) {
-        //     self.countmins
-        //         .update(MetricField::NetworkMbps, &self.key_buffer, &key_input, value);
-        // }
+        if let Some(value) = round_to_i32(network_value) {
+            let value_i128 = value as i128;
+            self.update_countmins_for_value(MetricField::NetworkMbps, cluster, task, value_i128);
+            self.frequency_hydra
+                .update(MetricField::NetworkMbps, &self.key_buffer, value);
+        }
+    }
+
+    /// Insert with timing - returns timing data for each step
+    pub fn insert_timed(
+        &mut self,
+        cluster: &str,
+        task: &str,
+        cpu_value: f64,
+        memory_value: f64,
+        network_value: f64,
+    ) -> InsertTiming {
+        let mut timing = InsertTiming::default();
+
+        // KLL insertion
+        let t0 = Instant::now();
+        self.klls
+            .insert_samples(cpu_value, memory_value, network_value);
+        timing.kll_ns = t0.elapsed().as_nanos() as u64;
+
+        // Build key
+        let t1 = Instant::now();
+        self.key_buffer.clear();
+        self.key_buffer.push_str(cluster);
+        self.key_buffer.push(';');
+        self.key_buffer.push_str(task);
+        timing.build_key_ns = t1.elapsed().as_nanos() as u64;
+
+        // Hydra insertion
+        let t2 = Instant::now();
+        self.hydra
+            .update(&self.key_buffer, cpu_value, memory_value, network_value);
+        timing.hydra_ns = t2.elapsed().as_nanos() as u64;
+
+        let cpu_rounded = round_to_i32(cpu_value);
+        let mem_rounded = round_to_i32(memory_value);
+        let net_rounded = round_to_i32(network_value);
+
+        // Frequency Hydra insertion
+        let t3 = Instant::now();
+        if let Some(value) = cpu_rounded {
+            self.frequency_hydra
+                .update(MetricField::CpuCores, &self.key_buffer, value);
+        }
+        if let Some(value) = mem_rounded {
+            self.frequency_hydra
+                .update(MetricField::MemoryGb, &self.key_buffer, value);
+        }
+        if let Some(value) = net_rounded {
+            self.frequency_hydra
+                .update(MetricField::NetworkMbps, &self.key_buffer, value);
+        }
+        timing.freq_hydra_ns = t3.elapsed().as_nanos() as u64;
+
+        // CountMin insertion
+        let t4 = Instant::now();
+        if let Some(value) = cpu_rounded {
+            self.update_countmins_for_value(MetricField::CpuCores, cluster, task, value as i128);
+        }
+        if let Some(value) = mem_rounded {
+            self.update_countmins_for_value(MetricField::MemoryGb, cluster, task, value as i128);
+        }
+        if let Some(value) = net_rounded {
+            self.update_countmins_for_value(MetricField::NetworkMbps, cluster, task, value as i128);
+        }
+        timing.countmin_ns = t4.elapsed().as_nanos() as u64;
+
+        timing
     }
 
     pub fn finish(self) -> MetricStore {
         MetricStore {
-            cdfs: MetricCdfs::from_sketches(self.sketches),
-            countmins: self.countmins,
+            cdfs: MetricCdfs::from_sketches(self.klls),
+            frequencies: self.countmins,
+            frequency_by_label: Mutex::new(self.frequency_hydra),
+            quantile_by_label: Mutex::new(self.hydra),
         }
     }
 }
 
+#[inline(always)]
+fn clamp_frequency_estimate(value: f64) -> i32 {
+    if !value.is_finite() || value <= 0.0 {
+        return 0;
+    }
+    if value >= i32::MAX as f64 {
+        return i32::MAX;
+    }
+    value.round() as i32
+}
+
+#[inline(always)]
+fn clamp_i128_to_i32(value: i128) -> i32 {
+    if value > i32::MAX as i128 {
+        i32::MAX
+    } else if value < i32::MIN as i128 {
+        i32::MIN
+    } else {
+        value as i32
+    }
+}
+
+#[inline(always)]
 fn round_to_i32(value: f64) -> Option<i32> {
     if !value.is_finite() {
         return None;
@@ -261,9 +498,5 @@ fn round_to_i32(value: f64) -> Option<i32> {
         return None;
     }
     let as_i32 = rounded as i32;
-    if as_i32 <= 0 {
-        None
-    } else {
-        Some(as_i32)
-    }
+    if as_i32 <= 0 { None } else { Some(as_i32) }
 }
