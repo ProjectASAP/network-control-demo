@@ -1,0 +1,23 @@
+[project]
+name = "solver-experimental"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "cattrs>=25.3.0",
+    "elasticsearch>=9.2.1",
+    "jsonlines>=4.0.0",
+    "loguru>=0.7.3",
+    "networkx>=3.6.1",
+    "pandas>=2.3.3",
+    "pulp>=3.3.0",
+    "pyyaml>=6.0.3",
+    "requests>=2.32.5",
+]
+
+[dependency-groups]
+dev = [
+    "jupyter>=1.1.1",
+    "matplotlib>=3.10.8",
+]
