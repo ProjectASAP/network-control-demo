@@ -4,8 +4,19 @@ task_update_rules:
     options:
       metric_type: 'cpu'
       aggregation_type: 'median'
+server_configs:
+  elasticsearch:
+    url: 'http://localhost:9200'
+    api_key: 'your_api_key_here'
+    options:
+      timeout: 30
+  prometheus:
+    url: 'http://localhost:8088/api/v1/query'
+    options:
+      timeout: 30
 query_groups:
 - id: 1
+  backend: prometheus
   options:
     query_time_offset: 1
   queries:

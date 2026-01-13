@@ -203,7 +203,8 @@ class TaskScheduler:
             for t, task in tasks.items():
                 for n in self.nodes:
                     if plp.value(d[t][n]) == 1:
-                        assigned_task = RunningTask(node_id=n, start_time_s=time.time(), task=task)
+                        task_start_time = running_tasks[t].start_time_s if t in running_tasks else time.time()
+                        assigned_task = RunningTask(node_id=n, start_time_s=task_start_time, task=task)
                         assignments[t] = assigned_task
                         break
                 else:
