@@ -219,6 +219,6 @@ if __name__ == "__main__":
     emulator = create_emulator()
 
     logger.remove()
-    logger.add(sys.stderr, level=LOG_LEVEL)
+    logger.add(sys.stderr, level=LOG_LEVEL.upper())
 
     uvicorn.run(app, host=HOST, port=PORT, log_level=LOG_LEVEL)

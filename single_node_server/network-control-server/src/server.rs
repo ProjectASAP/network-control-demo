@@ -152,6 +152,12 @@ enum AggregationKind {
     Frequency(FrequencyAggregation),
 }
 
+enum QueryKeyStatus {
+    None,
+    Key(String),
+    Unsupported,
+}
+
 impl AggregationRequest {
     fn kind(&self) -> Option<AggregationKind> {
         let mut kind = None;
@@ -184,7 +190,7 @@ impl AggregationRequest {
 
 pub async fn run_http_server(state: AppState) -> Result<(), Box<dyn Error + Send + Sync>> {
     let app = Router::new()
-        .route("/", get(root_handler))
+        .route("/", get(root_handler).post(ingest_handler))
         .route("/healthz", get(|| async { "ok" }))
         .route("/cluster-metrics/_search", post(search_handler))
         .route("/metrics/:field", post(metrics_handler))
@@ -205,6 +211,65 @@ async fn root_handler() -> Json<RootResponse<'static>> {
             "POST /cluster-metrics/_search {\"aggs\":{\"top_cpu\":{\"top_entities\":{\"field\":\"cpu_cores\"}}}}",
         ],
     })
+}
+
+#[derive(Debug, Deserialize)]
+struct IngestRecord {
+    task: Vec<String>,
+    cluster: Vec<String>,
+    cpu_cores: Vec<f64>,
+    memory_gb: Vec<f64>,
+    network_mbps: Vec<f64>,
+}
+
+async fn ingest_handler(
+    State(state): State<AppState>,
+    Json(record): Json<IngestRecord>,
+) -> impl IntoResponse {
+    let len = record.cpu_cores.len();
+    if len == 0 {
+        return (
+            axum::http::StatusCode::BAD_REQUEST,
+            "metrics record must contain at least one sample".to_string(),
+        )
+            .into_response();
+    }
+    if record.task.len() != len
+        || record.cluster.len() != len
+        || record.memory_gb.len() != len
+        || record.network_mbps.len() != len
+    {
+        return (
+            axum::http::StatusCode::BAD_REQUEST,
+            "metrics record fields must have equal lengths".to_string(),
+        )
+            .into_response();
+    }
+
+    let mut inserted = 0usize;
+    for idx in 0..len {
+        let cluster = record.cluster[idx].trim();
+        let task = record.task[idx].trim();
+        if cluster.is_empty() || task.is_empty() {
+            continue;
+        }
+        if let Err(message) = state.store.insert(
+            cluster,
+            task,
+            record.cpu_cores[idx],
+            record.memory_gb[idx],
+            record.network_mbps[idx],
+        ) {
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                message,
+            )
+                .into_response();
+        }
+        inserted += 1;
+    }
+
+    Json(json!({ "inserted": inserted })).into_response()
 }
 
 async fn search_handler(
@@ -248,44 +313,74 @@ async fn search_handler(
     let mut handled = BTreeMap::new();
     let mut handled_names = Vec::new();
     let mut unhandled = BTreeMap::new();
-    let has_other = !request._other.is_empty();
+    let query_status = extract_query_key(request._other.get("query"));
+    let query_supported = !matches!(query_status, QueryKeyStatus::Unsupported);
+    let query_key = match &query_status {
+        QueryKeyStatus::Key(key) => Some(key.clone()),
+        _ => None,
+    };
+    let has_other = request
+        ._other
+        .keys()
+        .any(|key| key.as_str() != "query")
+        || matches!(query_status, QueryKeyStatus::Unsupported);
 
     if let Some(aggs) = request.aggs {
         for (name, agg) in aggs {
-            let result = match agg.kind() {
-                Some(kind) => match kind {
-                    AggregationKind::Percentiles(pct) => match handle_percentiles(&state, &pct) {
-                        Ok(Some(values)) => Some(json!({ "values": values })),
-                        Ok(None) => None,
-                        Err(message) => {
-                            return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
-                        }
-                    },
+            let result = if !query_supported {
+                None
+            } else {
+                match agg.kind() {
+                    Some(kind) => match kind {
+                        AggregationKind::Percentiles(pct) => match handle_percentiles(
+                            &state,
+                            &pct,
+                            query_key.as_deref(),
+                        ) {
+                            Ok(Some(values)) => Some(json!({ "values": values })),
+                            Ok(None) => None,
+                            Err(message) => {
+                                return (axum::http::StatusCode::BAD_REQUEST, message)
+                                    .into_response();
+                            }
+                        },
 
-                    AggregationKind::TopEntities(top) => match handle_top_entities(&state, &top) {
-                        Ok(entity) => Some(json!({ "key": entity.key, "value": entity.value })),
-                        Err(message) => {
-                            return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
+                        AggregationKind::TopEntities(top) => {
+                            if query_key.is_some() {
+                                None
+                            } else {
+                                match handle_top_entities(&state, &top) {
+                                    Ok(entity) => {
+                                        Some(json!({ "key": entity.key, "value": entity.value }))
+                                    }
+                                    Err(message) => {
+                                        return (axum::http::StatusCode::BAD_REQUEST, message)
+                                            .into_response();
+                                    }
+                                }
+                            }
                         }
+                        AggregationKind::Cumulative(cum) => match handle_cumulative(&state, &cum) {
+                            Ok(value) => Some(json!({ "key": cum.key, "value": value })),
+                            Err(message) => {
+                                return (axum::http::StatusCode::BAD_REQUEST, message)
+                                    .into_response();
+                            }
+                        },
+                        AggregationKind::Frequency(freq) => match handle_frequency(&state, &freq) {
+                            Ok(count) => Some(json!({
+                                "key": freq.key,
+                                "value": freq.value,
+                                "count": count,
+                            })),
+                            Err(message) => {
+                                return (axum::http::StatusCode::BAD_REQUEST, message)
+                                    .into_response();
+                            }
+                        },
                     },
-                    AggregationKind::Cumulative(cum) => match handle_cumulative(&state, &cum) {
-                        Ok(value) => Some(json!({ "key": cum.key, "value": value })),
-                        Err(message) => {
-                            return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
-                        }
-                    },
-                    AggregationKind::Frequency(freq) => match handle_frequency(&state, &freq) {
-                        Ok(count) => Some(json!({
-                            "key": freq.key,
-                            "value": freq.value,
-                            "count": count,
-                        })),
-                        Err(message) => {
-                            return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
-                        }
-                    },
-                },
-                None => None,
+                    None => None,
+                }
             };
 
             if let Some(value) = result {
@@ -443,6 +538,7 @@ async fn metrics_handler(
 fn handle_percentiles(
     state: &AppState,
     pct: &PercentileAggregation,
+    query_key: Option<&str>,
 ) -> Result<Option<BTreeMap<String, f64>>, String> {
     if pct.percents.is_empty() {
         return Ok(None);
@@ -458,12 +554,17 @@ fn handle_percentiles(
         .ok_or_else(|| format!("unsupported percentile field: {}", pct.field))?;
 
     let mut values = BTreeMap::new();
+    let explicit_key = pct
+        .key
+        .as_ref()
+        .map(|key| key.trim())
+        .filter(|key| !key.is_empty());
+    if pct.key.is_some() && explicit_key.is_none() {
+        return Err("percentiles key is required when provided".to_string());
+    }
+    let key = explicit_key.or(query_key);
     for percent in &pct.percents {
-        let value = if let Some(key) = pct.key.as_ref() {
-            let key = key.trim();
-            if key.is_empty() {
-                return Err("percentiles key is required when provided".to_string());
-            }
+        let value = if let Some(key) = key {
             state.store.query_percentile_by_key(field, key, *percent)
         } else {
             state.store.query_percentile(field, *percent)
@@ -524,6 +625,110 @@ fn handle_frequency(state: &AppState, freq: &FrequencyAggregation) -> Result<i32
         .store
         .frequency_estimate(field, key, freq.value)
         .ok_or_else(|| format!("invalid frequency value: {}", freq.value))
+}
+
+fn extract_query_key(query_value: Option<&Value>) -> QueryKeyStatus {
+    let Some(query_value) = query_value else {
+        return QueryKeyStatus::None;
+    };
+    if query_value.is_null() {
+        return QueryKeyStatus::None;
+    }
+
+    let query_obj = match query_value.as_object() {
+        Some(obj) => obj,
+        None => return QueryKeyStatus::Unsupported,
+    };
+
+    let mut cluster = None;
+    let mut task = None;
+
+    if let Some(term_value) = query_obj.get("term") {
+        if parse_term_object(term_value, &mut cluster, &mut task).is_err() {
+            return QueryKeyStatus::Unsupported;
+        }
+    } else if let Some(bool_value) = query_obj.get("bool") {
+        let bool_obj = match bool_value.as_object() {
+            Some(obj) => obj,
+            None => return QueryKeyStatus::Unsupported,
+        };
+        if bool_obj.len() != 1 || !bool_obj.contains_key("must") {
+            return QueryKeyStatus::Unsupported;
+        }
+        let must_value = match bool_obj.get("must") {
+            Some(value) => value,
+            None => return QueryKeyStatus::Unsupported,
+        };
+        let must_items = match must_value.as_array() {
+            Some(items) => items,
+            None => return QueryKeyStatus::Unsupported,
+        };
+        for item in must_items {
+            let term_value = match item.get("term") {
+                Some(value) => value,
+                None => return QueryKeyStatus::Unsupported,
+            };
+            if parse_term_object(term_value, &mut cluster, &mut task).is_err() {
+                return QueryKeyStatus::Unsupported;
+            }
+        }
+    } else {
+        return QueryKeyStatus::Unsupported;
+    }
+
+    match (cluster, task) {
+        (None, None) => QueryKeyStatus::None,
+        (Some(cluster), Some(task)) => QueryKeyStatus::Key(format!("{cluster};{task}")),
+        (Some(cluster), None) => QueryKeyStatus::Key(cluster),
+        (None, Some(task)) => QueryKeyStatus::Key(task),
+    }
+}
+
+fn parse_term_object(
+    term_value: &Value,
+    cluster: &mut Option<String>,
+    task: &mut Option<String>,
+) -> Result<(), ()> {
+    let term_obj = term_value.as_object().ok_or(())?;
+    for (field, value) in term_obj {
+        let normalized = field.trim().to_ascii_lowercase();
+        let term_value = extract_term_value(value).ok_or(())?;
+        let term_value = term_value.trim();
+        if term_value.is_empty() {
+            return Err(());
+        }
+        match normalized.as_str() {
+            "cluster" | "cluster.keyword" => {
+                *cluster = Some(term_value.to_string());
+            }
+            "task" | "task.keyword" => {
+                *task = Some(term_value.to_string());
+            }
+            _ => return Err(()),
+        }
+    }
+    Ok(())
+}
+
+fn extract_term_value(value: &Value) -> Option<String> {
+    if let Some(value) = value.as_str() {
+        return Some(value.to_string());
+    }
+    if let Some(value) = value.as_i64() {
+        return Some(value.to_string());
+    }
+    if let Some(value) = value.as_u64() {
+        return Some(value.to_string());
+    }
+    if let Some(value) = value.as_f64() {
+        return Some(value.to_string());
+    }
+    if let Some(obj) = value.as_object() {
+        if let Some(inner) = obj.get("value") {
+            return extract_term_value(inner);
+        }
+    }
+    None
 }
 
 async fn forward_to_upstream(

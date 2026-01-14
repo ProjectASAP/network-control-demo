@@ -4,6 +4,7 @@ from itertools import combinations
 from loguru import logger
 import requests
 import os
+from urllib.parse import urlparse
 
 from scheduler.entities import RunningTask
 
@@ -14,6 +15,10 @@ TASK_LABEL = os.getenv('ES_TASK_LABEL', 'task.keyword')
 ES_URL = os.getenv('ES_URL', 'http://localhost:10101')
 ES_INDEX_NAME = os.getenv('ES_INDEX_NAME', 'cluster-metrics')
 ES_API_KEY = os.getenv('ES_API_KEY', 'TWg0S01wc0JhR1AxOFVUcUY5N2w6bGR0TjIySHRZTHVwdmZLTmtqcGtGQQ==')
+ES_BACKEND_URL = os.getenv('ES_BACKEND_URL', 'http://localhost:9200')
+ES_BACKEND_API_KEY = os.getenv('ES_BACKEND_API_KEY', ES_API_KEY)
+ES_BACKEND_TIMEOUT = float(os.getenv('ES_BACKEND_TIMEOUT', '2.0'))
+_ES_BACKEND_CLIENT: Elasticsearch | None = None
 
 
 def update_tasks_with_quantiles(
@@ -102,6 +107,8 @@ def get_metric_quantiles(node_id: str, task_id: str, session=None, quantiles=Non
         "aggs": aggs
     }
 
+    send_backend_es_query(query=query, aggs=aggs, index_name=index_name)
+
     endpoint = f'{url}/{index_name}/_search'
     response = session.post(endpoint, json=payload, headers={
         "Authorization": f"ApiKey {api_key}",
@@ -116,6 +123,44 @@ def get_metric_quantiles(node_id: str, task_id: str, session=None, quantiles=Non
         'cpu': cpu_quantiles,
         'memory': memory_quantiles
     }
+
+
+def send_backend_es_query(query: dict, aggs: dict, index_name: str) -> None:
+    client = get_backend_es_client()
+    if client is None:
+        return
+    try:
+        client.search(index=index_name, query=query, aggs=aggs, size=0)
+    except Exception as exc:
+        logger.warning(f'ES backend query failed: {exc}')
+
+
+def get_backend_es_client() -> Elasticsearch | None:
+    global _ES_BACKEND_CLIENT
+    if _ES_BACKEND_CLIENT is not None:
+        return _ES_BACKEND_CLIENT
+
+    backend_url = ES_BACKEND_URL.strip()
+    if not backend_url:
+        return None
+
+    parsed = urlparse(backend_url)
+    scheme = parsed.scheme or "http"
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 9200
+    api_key = ES_BACKEND_API_KEY.strip() if ES_BACKEND_API_KEY else None
+
+    try:
+        _ES_BACKEND_CLIENT = Elasticsearch(
+            hosts=[{"host": host, "port": port, "scheme": scheme}],
+            api_key=api_key,
+            request_timeout=ES_BACKEND_TIMEOUT,
+        )
+    except Exception as exc:
+        logger.warning(f'Failed to create ES backend client: {exc}')
+        return None
+
+    return _ES_BACKEND_CLIENT
 
 
 def query_elasticsearch():

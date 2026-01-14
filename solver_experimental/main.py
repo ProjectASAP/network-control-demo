@@ -62,17 +62,12 @@ def assign_tasks(args: AppConfig):
         # Mapping between task id and running task.
         running_tasks: dict[str, RunningTask] = {}
         unassigned_tasks: dict[str, Task] = {}
+        synthetic_node_id = os.getenv("SYNTHETIC_NODE_ID", "synthetic-node")
 
         while task_queue:
             time.sleep(args.interval)
             curr_offset = (time.time() - start_time)
             logger.debug(f"Current time offset: {curr_offset:.2f} s")
-
-            # TODO: Execute PromQL queries and do something with results (e.g. update task spec estimates).
-            # query_manager.update_task_metrics(running_tasks=running_tasks)
-
-            # Query Elasticsearch instead.
-            update_tasks_with_quantiles(running_tasks=running_tasks)
 
             # Filter out finished tasks. For now, don't account for solver time and variable finish times.
             running_tasks = {task_id: rt for task_id, rt in running_tasks.items() if curr_offset - rt.start_time_s >= rt.task.duration_s}
@@ -89,7 +84,23 @@ def assign_tasks(args: AppConfig):
                     break
             logger.debug(f"Arrived tasks: {list(arrived_tasks.keys())}")
             logger.debug(f"Unassigned tasks from previous rounds: {list(unassigned_tasks.keys())}")
-            
+
+            query_tasks = dict(running_tasks)
+            for task_id, task in (arrived_tasks | unassigned_tasks).items():
+                if task_id in query_tasks:
+                    continue
+                query_tasks[task_id] = RunningTask(
+                    node_id=synthetic_node_id,
+                    start_time_s=curr_offset,
+                    task=task,
+                )
+
+            # TODO: Execute PromQL queries and do something with results (e.g. update task spec estimates).
+            # query_manager.update_task_metrics(running_tasks=query_tasks)
+
+            # Query Elasticsearch instead.
+            update_tasks_with_quantiles(running_tasks=query_tasks)
+
             tasks_to_schedule = arrived_tasks | unassigned_tasks
             if not tasks_to_schedule:
                 logger.info(f"Waiting for tasks to arrive...")

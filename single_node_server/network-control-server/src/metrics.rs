@@ -259,15 +259,25 @@ pub struct EntityEstimate {
 }
 
 pub struct MetricStore {
-    cdfs: MetricCdfs,
-    frequencies: MetricCountMins,
+    klls: Mutex<MetricKll>,
+    countmins: Mutex<MetricCountMins>,
     frequency_by_label: Mutex<MetricFrequencyHydra>,
     quantile_by_label: Mutex<MetricHydra>,
 }
 
 impl MetricStore {
     pub fn query_percentile(&self, field: MetricField, percent: f64) -> Option<f64> {
-        self.cdfs.query_percentile(field, percent)
+        if !(0.0..=100.0).contains(&percent) {
+            return None;
+        }
+        let quantile = percent / 100.0;
+        let klls = self.klls.lock().ok()?;
+        let cdf = match field {
+            MetricField::CpuCores => klls.cpu_cores.cdf(),
+            MetricField::MemoryGb => klls.memory_gb.cdf(),
+            MetricField::NetworkMbps => klls.network_mbps.cdf(),
+        };
+        Some(cdf.query(quantile))
     }
 
     pub fn query_percentile_by_key(
@@ -285,12 +295,17 @@ impl MetricStore {
     }
 
     pub fn top_entity(&self, field: MetricField) -> Option<EntityEstimate> {
-        self.frequencies.top_entity(field)
+        let countmins = self.countmins.lock().ok()?;
+        countmins.top_entity(field)
     }
 
     pub fn cumulative_value(&self, field: MetricField, key: &str) -> i32 {
         let key_input = SketchInput::Str(key);
-        clamp_i128_to_i32(self.frequencies.cumulative_estimate(field, &key_input))
+        let countmins = match self.countmins.lock() {
+            Ok(guard) => guard,
+            Err(_) => return 0,
+        };
+        clamp_i128_to_i32(countmins.cumulative_estimate(field, &key_input))
     }
 
     pub fn frequency_estimate(&self, field: MetricField, key: &str, value: f64) -> Option<i32> {
@@ -298,6 +313,86 @@ impl MetricStore {
         let hydra = self.frequency_by_label.lock().ok()?;
         let estimate = hydra.query_frequency(field, key, rounded)?;
         Some(clamp_frequency_estimate(estimate))
+    }
+
+    pub fn insert(
+        &self,
+        cluster: &str,
+        task: &str,
+        cpu_value: f64,
+        memory_value: f64,
+        network_value: f64,
+    ) -> Result<(), String> {
+        let cluster = cluster.trim();
+        let task = task.trim();
+        if cluster.is_empty() || task.is_empty() {
+            return Ok(());
+        }
+
+        let mut key = String::with_capacity(cluster.len() + task.len() + 1);
+        key.push_str(cluster);
+        key.push(';');
+        key.push_str(task);
+
+        {
+            let mut klls = self.klls.lock().map_err(|_| "failed to lock klls")?;
+            klls.insert_samples(cpu_value, memory_value, network_value);
+        }
+        {
+            let mut hydra = self
+                .quantile_by_label
+                .lock()
+                .map_err(|_| "failed to lock quantile sketches")?;
+            hydra.update(&key, cpu_value, memory_value, network_value);
+        }
+
+        let mut countmins = self
+            .countmins
+            .lock()
+            .map_err(|_| "failed to lock countmin sketches")?;
+        let mut freq_hydra = self
+            .frequency_by_label
+            .lock()
+            .map_err(|_| "failed to lock frequency sketches")?;
+
+        if let Some(value) = round_to_i32(cpu_value) {
+            let value_i128 = value as i128;
+            update_countmins_for_value(
+                &mut countmins,
+                MetricField::CpuCores,
+                cluster,
+                task,
+                &key,
+                value_i128,
+            );
+            freq_hydra.update(MetricField::CpuCores, &key, value);
+        }
+        if let Some(value) = round_to_i32(memory_value) {
+            let value_i128 = value as i128;
+            update_countmins_for_value(
+                &mut countmins,
+                MetricField::MemoryGb,
+                cluster,
+                task,
+                &key,
+                value_i128,
+            );
+            freq_hydra.update(MetricField::MemoryGb, &key, value);
+        }
+        if let Some(value) = round_to_i32(network_value) {
+            let value_i128 = value as i128;
+            update_countmins_for_value(
+                &mut countmins,
+                MetricField::NetworkMbps,
+                cluster,
+                task,
+                &key,
+                value_i128,
+            );
+            freq_hydra.update(MetricField::NetworkMbps, &key, value);
+        }
+
+        Ok(())
     }
 }
 
@@ -458,12 +553,30 @@ impl MetricPreAggregation {
 
     pub fn finish(self) -> MetricStore {
         MetricStore {
-            cdfs: MetricCdfs::from_sketches(self.klls),
-            frequencies: self.countmins,
+            klls: Mutex::new(self.klls),
+            countmins: Mutex::new(self.countmins),
             frequency_by_label: Mutex::new(self.frequency_hydra),
             quantile_by_label: Mutex::new(self.hydra),
         }
     }
+}
+
+fn update_countmins_for_value(
+    countmins: &mut MetricCountMins,
+    field: MetricField,
+    cluster: &str,
+    task: &str,
+    full_key: &str,
+    value: i128,
+) {
+    let full_input = SketchInput::Str(full_key);
+    countmins.update(field, full_key, &full_input, value);
+
+    let cluster_input = SketchInput::Str(cluster);
+    countmins.update(field, cluster, &cluster_input, value);
+
+    let task_input = SketchInput::Str(task);
+    countmins.update(field, task, &task_input, value);
 }
 
 #[inline(always)]
