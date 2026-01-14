@@ -65,7 +65,7 @@ def assign_tasks(args: AppConfig):
 
         while task_queue:
             time.sleep(args.interval)
-            curr_offset = (time.time() - start_time) * 100
+            curr_offset = (time.time() - start_time)
             logger.debug(f"Current time offset: {curr_offset:.2f} s")
 
             # TODO: Execute PromQL queries and do something with results (e.g. update task spec estimates).

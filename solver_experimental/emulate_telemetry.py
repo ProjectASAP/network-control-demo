@@ -1,3 +1,4 @@
+import sys
 import time
 import jsonlines
 import numpy as np
@@ -16,6 +17,7 @@ from scheduler.entities import RunningTask, Task, Node, Edge, NetworkTopology
 from scheduler.load_info import load_nodes, load_edges
 
 
+# Paramters for sending metrics to server.
 SERVER_URL = 'http://localhost:10101'
 INTERVAL = 60  # seconds
 TIMEOUT = 5  # seconds
@@ -215,5 +217,8 @@ if __name__ == "__main__":
     LOG_LEVEL = 'debug'
 
     emulator = create_emulator()
+
+    logger.remove()
+    logger.add(sys.stderr, level=LOG_LEVEL)
 
     uvicorn.run(app, host=HOST, port=PORT, log_level=LOG_LEVEL)
