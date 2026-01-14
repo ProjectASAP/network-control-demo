@@ -271,13 +271,13 @@ impl MetricStore {
             return None;
         }
         let quantile = percent / 100.0;
-        let klls = self.klls.lock().ok()?;
-        let cdf = match field {
-            MetricField::CpuCores => klls.cpu_cores.cdf(),
-            MetricField::MemoryGb => klls.memory_gb.cdf(),
-            MetricField::NetworkMbps => klls.network_mbps.cdf(),
+        let mut klls = self.klls.lock().ok()?;
+        let value = match field {
+            MetricField::CpuCores => klls.cpu_cores.quantile(quantile),
+            MetricField::MemoryGb => klls.memory_gb.quantile(quantile),
+            MetricField::NetworkMbps => klls.network_mbps.quantile(quantile),
         };
-        Some(cdf.query(quantile))
+        Some(value)
     }
 
     pub fn query_percentile_by_key(

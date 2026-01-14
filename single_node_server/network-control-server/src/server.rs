@@ -1,4 +1,9 @@
-use std::{collections::BTreeMap, error::Error, sync::Arc, time::Instant};
+use std::{
+    collections::BTreeMap,
+    error::Error,
+    sync::Arc,
+    time::Instant,
+};
 
 use axum::{
     Json, Router,
@@ -16,6 +21,8 @@ use tokio::net::TcpListener;
 
 use crate::config::AggregationConfig;
 use crate::metrics::{EntityEstimate, MetricField, MetricStore};
+
+pub type TimingSender = std::sync::mpsc::Sender<String>;
 
 /// Tracks timing for each step of query processing
 pub struct QueryTiming {
@@ -85,6 +92,8 @@ pub struct AppState {
     pub http_client: Client,
     pub upstream_url: String,
     pub timing_enabled: bool,
+    pub timing_sender: Option<TimingSender>,
+    pub no_ingest: bool,
 }
 
 #[derive(Serialize)]
@@ -226,6 +235,9 @@ async fn ingest_handler(
     State(state): State<AppState>,
     Json(record): Json<IngestRecord>,
 ) -> impl IntoResponse {
+    if state.no_ingest {
+        return Json(json!({ "inserted": 0 })).into_response();
+    }
     let len = record.cpu_cores.len();
     if len == 0 {
         return (
@@ -393,9 +405,9 @@ async fn search_handler(
     }
     if let Some(t) = &mut timing { t.step("aggregations"); }
 
-    // Step 4: Prepare upstream body
-    let mut upstream_body = request_value;
-    if let Some(aggs_obj) = upstream_body.get_mut("aggs").and_then(Value::as_object_mut) {
+    // Step 4: Prepare upstream body (forwarding disabled for now)
+    let mut _upstream_body = request_value;
+    if let Some(aggs_obj) = _upstream_body.get_mut("aggs").and_then(Value::as_object_mut) {
         for name in &handled_names {
             aggs_obj.remove(name);
         }
@@ -405,10 +417,8 @@ async fn search_handler(
     // Step 5: Forward to upstream if needed
     let needs_upstream = has_other || !unhandled.is_empty();
     let mut response_value = if needs_upstream {
-        match forward_to_upstream(&state, &headers, &upstream_body).await {
-            Ok(value) => value,
-            Err(resp) => return resp,
-        }
+        // NOTE: Upstream forwarding disabled for now.
+        json!({ "aggregations": {} })
     } else {
         json!({ "aggregations": {} })
     };
@@ -435,6 +445,14 @@ async fn search_handler(
             "X-Server-Timing",
             timing_header.parse().unwrap(),
         );
+        write_timing_log(
+            &state,
+            &headers,
+            "POST",
+            "/cluster-metrics/_search",
+            response.status(),
+            t,
+        );
         response
     } else {
         Json(response_value).into_response()
@@ -443,6 +461,7 @@ async fn search_handler(
 
 async fn metrics_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(field_spec): Path<String>,
     Json(query): Json<MetricsQuery>,
 ) -> impl IntoResponse {
@@ -525,6 +544,14 @@ async fn metrics_handler(
         response.headers_mut().insert(
             "X-Server-Timing",
             timing_header.parse().unwrap(),
+        );
+        write_timing_log(
+            &state,
+            &headers,
+            "POST",
+            "/metrics/:field",
+            response.status(),
+            t,
         );
         response
     } else {
@@ -731,6 +758,57 @@ fn extract_term_value(value: &Value) -> Option<String> {
     None
 }
 
+fn write_timing_log(
+    state: &AppState,
+    headers: &HeaderMap,
+    _method: &str,
+    _path: &str,
+    status: axum::http::StatusCode,
+    timing: &QueryTiming,
+) {
+    let Some(sender) = state.timing_sender.as_ref() else {
+        return;
+    };
+    let request_id = headers
+        .get("x-request-id")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("unknown");
+    let request_type = headers
+        .get("x-request-type")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("unknown");
+    let mut steps: BTreeMap<&str, f64> = BTreeMap::new();
+    for (name, ms) in &timing.steps {
+        steps.insert(name.as_str(), *ms);
+    }
+    let total_ms: f64 = steps.values().copied().sum();
+    let step_names = [
+        "parse_json",
+        "deserialize",
+        "aggregations",
+        "prepare_upstream",
+        "upstream",
+        "merge",
+        "serialize",
+        "parse_field",
+        "validate",
+        "query_percentiles",
+        "build_response",
+    ];
+    let format_value = |value: Option<&f64>| -> String {
+        value.map(|ms| format!("{ms:.3}")).unwrap_or_default()
+    };
+    let mut row = Vec::with_capacity(6 + step_names.len());
+    row.push(request_id.to_string());
+    row.push(request_type.to_string());
+    row.push(status.to_string());
+    row.push(format!("{total_ms:.3}"));
+    for name in step_names {
+        row.push(format_value(steps.get(name)));
+    }
+    let _ = sender.send(row.join(","));
+}
+
 async fn forward_to_upstream(
     state: &AppState,
     headers: &HeaderMap,
@@ -809,19 +887,28 @@ async fn log_request_middleware(req: Request<Body>, next: Next) -> Response {
         }
     };
 
-    log_request_details(&method, &uri, &headers, &body_bytes);
+    let log_body = body_bytes.clone();
+    let log_method = method.clone();
+    let log_uri = uri.clone();
+    let log_headers = headers.clone();
+    tokio::task::spawn_blocking(move || {
+        log_request_details(log_method, log_uri, log_headers, log_body);
+    });
 
     let req = Request::from_parts(parts, Body::from(body_bytes));
     let response = next.run(req).await;
-    eprintln!("response status: {}", response.status());
+    let status = response.status();
+    tokio::task::spawn_blocking(move || {
+        eprintln!("response status: {}", status);
+    });
     response
 }
 
 fn log_request_details(
-    method: &axum::http::Method,
-    uri: &axum::http::Uri,
-    headers: &HeaderMap,
-    body: &Bytes,
+    method: axum::http::Method,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    body: Bytes,
 ) {
     const MAX_LOG_BODY_BYTES: usize = 1024 * 1024;
 
@@ -868,12 +955,12 @@ fn log_request_details(
     }
 
     eprintln!("body ({} bytes):", total_len);
-    match serde_json::from_slice::<Value>(body) {
+    match serde_json::from_slice::<Value>(&body) {
         Ok(value) => match serde_json::to_string_pretty(&value) {
             Ok(pretty) => eprintln!("{pretty}"),
             Err(_) => eprintln!("{value}"),
         },
-        Err(_) => eprintln!("{}", String::from_utf8_lossy(body)),
+        Err(_) => eprintln!("{}", String::from_utf8_lossy(&body)),
     }
     eprintln!("end request");
 }
