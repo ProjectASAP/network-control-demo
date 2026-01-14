@@ -2,7 +2,6 @@ import os
 import sys
 import yaml
 import time
-import requests
 import argparse
 import datetime
 from itertools import combinations
@@ -10,8 +9,7 @@ from collections import deque
 from loguru import logger
 import pulp
 from typing import Dict
-import requests
-from requests.adapters import HTTPAdapter
+import httpx
 from urllib3.util.retry import Retry
 from dataclasses import dataclass
 from cattrs import structure, unstructure
@@ -67,7 +65,7 @@ def assign_tasks(args: AppConfig):
 
         while task_queue:
             time.sleep(args.interval)
-            curr_offset = (time.time() - start_time)
+            curr_offset = (time.time() - start_time) * 100
             logger.debug(f"Current time offset: {curr_offset:.2f} s")
 
             # TODO: Execute PromQL queries and do something with results (e.g. update task spec estimates).
@@ -125,11 +123,11 @@ def assign_tasks(args: AppConfig):
 
 def main(args: argparse.Namespace):
     config = structure(vars(args), AppConfig)
-    with jsonlines.open('assignments_log.jsonl', mode='w') as writer:
+    with httpx.Client(timeout=5) as client:
         for assignments in assign_tasks(config):
             running_tasks = unstructure(assignments.values(), list[RunningTask])
             if running_tasks:
-                writer.write(running_tasks)
+                client.post("http://localhost:8000/ingest", json=running_tasks)
 
 
 if __name__ == "__main__":
