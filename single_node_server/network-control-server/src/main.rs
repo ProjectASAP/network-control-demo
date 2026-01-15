@@ -16,7 +16,7 @@ use std::{
 use config::AggregationConfig;
 use ingest::load_metric_store;
 use reqwest::Client;
-use server::{AppState, TimingSender, run_http_server};
+use server::{AppState, QueryCache, TimingSender, run_http_server, start_request_logger};
 
 #[tokio::main]
 async fn main() {
@@ -67,6 +67,13 @@ async fn main() {
         timing_enabled,
         timing_sender: if timing_enabled { init_timing_sender() } else { None },
         no_ingest,
+        cache: Arc::new(QueryCache::new(
+            env::var("QUERY_CACHE_TTL_MS")
+                .ok()
+                .and_then(|value| value.parse::<u64>().ok())
+                .unwrap_or(500),
+        )),
+        log_tx: Some(start_request_logger(1000)),
     };
 
     eprintln!("startup complete in {:.2?}", startup_start.elapsed());

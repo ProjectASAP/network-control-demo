@@ -21,7 +21,7 @@ from scheduler.solver import TaskScheduler
 from query_engine_utils.config import QueryManagerConfig, QueryGroupConfig, load_query_config
 from query_engine_utils.server_querying import QueryManager
 
-from es_query import update_tasks_with_quantiles
+from es_query import update_tasks_with_metrics
 
 
 @dataclass
@@ -99,7 +99,9 @@ def assign_tasks(args: AppConfig):
             # query_manager.update_task_metrics(running_tasks=query_tasks)
 
             # Query Elasticsearch instead.
-            update_tasks_with_quantiles(running_tasks=query_tasks)
+            task_metrics = update_tasks_with_metrics(running_tasks=query_tasks)
+            if task_metrics:
+                logger.debug(f"Collected metrics for {len(task_metrics)} tasks")
 
             tasks_to_schedule = arrived_tasks | unassigned_tasks
             if not tasks_to_schedule:

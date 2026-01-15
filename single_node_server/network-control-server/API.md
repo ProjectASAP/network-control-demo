@@ -53,6 +53,7 @@ Example:
 - Keys are tracked for `cluster`, `task`, and `cluster;task`. The returned `key`
   can be any of those.
 - Values are rounded to the nearest positive integer before tracking.
+- `fields` may be provided to fetch multiple metrics in one aggregation.
 
 Example:
 ```json
@@ -60,6 +61,17 @@ Example:
   "aggs": {
     "top_cpu": {
       "top_entities": { "field": "cpu_cores" }
+    }
+  }
+}
+```
+
+Multi-field example:
+```json
+{
+  "aggs": {
+    "top_all": {
+      "top_entities": { "fields": ["cpu_cores", "memory_gb"] }
     }
   }
 }
@@ -144,5 +156,52 @@ Simple percentile query for a single field.
     "p10": 1.23,
     "p20": 2.34
   }
+}
+```
+
+## POST /cluster-metrics/_batch
+
+Batch query endpoint for querying multiple keys at once.
+
+### Request Body
+
+```json
+{
+  "keys": ["cluster-a;task-1", "cluster-b;task-2"],
+  "fields": ["cpu_cores", "memory_gb"],
+  "aggs": ["percentiles", "cumulative"],
+  "percents": [50, 90],
+  "frequency_value": 4.0
+}
+```
+
+### Response
+
+```json
+{
+  "results": [
+    {
+      "key": "cluster-a;task-1",
+      "percentiles": {
+        "cpu_cores": {"p50": 2.5, "p90": 4.0},
+        "memory_gb": {"p50": 1.2, "p90": 2.0}
+      },
+      "cumulative": {
+        "cpu_cores": 1000,
+        "memory_gb": 500
+      }
+    },
+    {
+      "key": "cluster-b;task-2",
+      "percentiles": {
+        "cpu_cores": {"p50": 1.0, "p90": 2.0},
+        "memory_gb": {"p50": 0.5, "p90": 1.0}
+      },
+      "cumulative": {
+        "cpu_cores": 200,
+        "memory_gb": 100
+      }
+    }
+  ]
 }
 ```

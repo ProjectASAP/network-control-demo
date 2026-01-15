@@ -1,8 +1,8 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     error::Error,
-    sync::Arc,
-    time::Instant,
+    sync::{Arc, RwLock},
+    time::{Duration, Instant},
 };
 
 use axum::{
@@ -10,7 +10,7 @@ use axum::{
     body::{Body, Bytes, to_bytes},
     extract::{Path, State},
     http::{HeaderMap, Request},
-    middleware::{Next, from_fn},
+    middleware::{Next, from_fn_with_state},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -18,11 +18,13 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
 
 use crate::config::AggregationConfig;
 use crate::metrics::{EntityEstimate, MetricField, MetricStore};
 
 pub type TimingSender = std::sync::mpsc::Sender<String>;
+pub type LogSender = mpsc::Sender<LogEntry>;
 
 /// Tracks timing for each step of query processing
 pub struct QueryTiming {
@@ -85,6 +87,88 @@ impl QueryTiming {
     }
 }
 
+struct CacheEntry<T> {
+    value: T,
+    expires_at: Instant,
+}
+
+type PercentileCacheKey = (MetricField, Option<String>, Vec<i32>);
+
+pub struct QueryCache {
+    percentiles: RwLock<HashMap<PercentileCacheKey, CacheEntry<Vec<f64>>>>,
+    ttl: Duration,
+}
+
+impl QueryCache {
+    pub fn new(ttl_ms: u64) -> Self {
+        Self {
+            percentiles: RwLock::new(HashMap::new()),
+            ttl: Duration::from_millis(ttl_ms),
+        }
+    }
+
+    fn cache_key(
+        field: MetricField,
+        key: Option<&str>,
+        percents: &[f64],
+    ) -> PercentileCacheKey {
+        (
+            field,
+            key.map(String::from),
+            percents.iter().map(|p| *p as i32).collect(),
+        )
+    }
+
+    pub fn get_percentiles(
+        &self,
+        field: MetricField,
+        key: Option<&str>,
+        percents: &[f64],
+    ) -> Option<Vec<f64>> {
+        if self.ttl.is_zero() {
+            return None;
+        }
+        let cache_key = Self::cache_key(field, key, percents);
+        let cache = self.percentiles.read().ok()?;
+        let entry = cache.get(&cache_key)?;
+        if entry.expires_at > Instant::now() {
+            Some(entry.value.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn set_percentiles(
+        &self,
+        field: MetricField,
+        key: Option<&str>,
+        percents: &[f64],
+        value: Vec<f64>,
+    ) {
+        if self.ttl.is_zero() {
+            return;
+        }
+        let cache_key = Self::cache_key(field, key, percents);
+        if let Ok(mut cache) = self.percentiles.write() {
+            cache.insert(
+                cache_key,
+                CacheEntry {
+                    value,
+                    expires_at: Instant::now() + self.ttl,
+                },
+            );
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct LogEntry {
+    method: axum::http::Method,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    body: Bytes,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub store: Arc<MetricStore>,
@@ -94,6 +178,8 @@ pub struct AppState {
     pub timing_enabled: bool,
     pub timing_sender: Option<TimingSender>,
     pub no_ingest: bool,
+    pub cache: Arc<QueryCache>,
+    pub log_tx: Option<LogSender>,
 }
 
 #[derive(Serialize)]
@@ -133,7 +219,10 @@ struct PercentileAggregation {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct TopEntitiesAggregation {
-    field: String,
+    #[serde(default)]
+    field: Option<String>,
+    #[serde(default)]
+    fields: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -154,6 +243,28 @@ struct MetricsQuery {
     quantiles: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct BatchQueryRequest {
+    keys: Vec<String>,
+    fields: Option<Vec<String>>,
+    aggs: Vec<String>,
+    percents: Option<Vec<f64>>,
+    frequency_value: Option<f64>,
+}
+
+#[derive(Debug, Serialize)]
+struct BatchQueryResult {
+    key: String,
+    percentiles: Option<HashMap<String, HashMap<String, f64>>>,
+    cumulative: Option<HashMap<String, i32>>,
+    frequency: Option<HashMap<String, i32>>,
+}
+
+#[derive(Debug, Serialize)]
+struct BatchQueryResponse {
+    results: Vec<BatchQueryResult>,
+}
+
 enum AggregationKind {
     Percentiles(PercentileAggregation),
     TopEntities(TopEntitiesAggregation),
@@ -165,6 +276,11 @@ enum QueryKeyStatus {
     None,
     Key(String),
     Unsupported,
+}
+
+enum TopEntitiesResult {
+    Single(EntityEstimate),
+    Multi(HashMap<String, EntityEstimate>),
 }
 
 impl AggregationRequest {
@@ -198,13 +314,15 @@ impl AggregationRequest {
 }
 
 pub async fn run_http_server(state: AppState) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let log_state = state.clone();
     let app = Router::new()
         .route("/", get(root_handler).post(ingest_handler))
         .route("/healthz", get(|| async { "ok" }))
         .route("/cluster-metrics/_search", post(search_handler))
+        .route("/cluster-metrics/_batch", post(batch_query_handler))
         .route("/metrics/:field", post(metrics_handler))
         .with_state(state)
-        .layer(from_fn(log_request_middleware));
+        .layer(from_fn_with_state(log_state, log_request_middleware));
 
     let listener = TcpListener::bind("0.0.0.0:10101").await?;
     axum::serve(listener, app).await?;
@@ -362,9 +480,11 @@ async fn search_handler(
                                 None
                             } else {
                                 match handle_top_entities(&state, &top) {
-                                    Ok(entity) => {
-                                        Some(json!({ "key": entity.key, "value": entity.value }))
-                                    }
+                                    Ok(TopEntitiesResult::Single(entity)) => Some(json!({
+                                        "key": entity.key,
+                                        "value": entity.value
+                                    })),
+                                    Ok(TopEntitiesResult::Multi(entities)) => Some(json!(entities)),
                                     Err(message) => {
                                         return (axum::http::StatusCode::BAD_REQUEST, message)
                                             .into_response();
@@ -457,6 +577,138 @@ async fn search_handler(
     } else {
         Json(response_value).into_response()
     }
+}
+
+async fn batch_query_handler(
+    State(state): State<AppState>,
+    Json(request): Json<BatchQueryRequest>,
+) -> impl IntoResponse {
+    if request.keys.is_empty() {
+        return (
+            axum::http::StatusCode::BAD_REQUEST,
+            "keys must be a non-empty list".to_string(),
+        )
+            .into_response();
+    }
+
+    let fields = request.fields.unwrap_or_else(|| {
+        vec![
+            "cpu_cores".to_string(),
+            "memory_gb".to_string(),
+            "network_mbps".to_string(),
+        ]
+    });
+    let percents = request.percents.unwrap_or_else(|| vec![50.0]);
+
+    let mut results = Vec::with_capacity(request.keys.len());
+
+    for key in &request.keys {
+        let trimmed_key = key.trim();
+        let key_for_query = if trimmed_key.is_empty() {
+            None
+        } else {
+            Some(trimmed_key)
+        };
+        let mut result = BatchQueryResult {
+            key: key.clone(),
+            percentiles: None,
+            cumulative: None,
+            frequency: None,
+        };
+
+        for agg_type in &request.aggs {
+            match agg_type.trim().to_ascii_lowercase().as_str() {
+                "percentiles" => {
+                    if percents.is_empty() {
+                        continue;
+                    }
+                    let mut field_percentiles = HashMap::new();
+                    for field_name in &fields {
+                        let pct = PercentileAggregation {
+                            field: field_name.clone(),
+                            percents: percents.clone(),
+                            key: None,
+                        };
+                        match handle_percentiles(&state, &pct, key_for_query) {
+                            Ok(Some(values)) => {
+                                let mut pct_map = HashMap::new();
+                                for (percent, value) in values {
+                                    pct_map.insert(percent, value);
+                                }
+                                if !pct_map.is_empty() {
+                                    field_percentiles.insert(field_name.clone(), pct_map);
+                                }
+                            }
+                            Ok(None) => {}
+                            Err(message) => {
+                                return (axum::http::StatusCode::BAD_REQUEST, message)
+                                    .into_response();
+                            }
+                        }
+                    }
+                    if !field_percentiles.is_empty() {
+                        result.percentiles = Some(field_percentiles);
+                    }
+                }
+                "cumulative" => {
+                    let Some(key_value) = key_for_query else {
+                        continue;
+                    };
+                    let mut field_cumulative = HashMap::new();
+                    for field_name in &fields {
+                        let trimmed = field_name.trim();
+                        if trimmed.is_empty() {
+                            continue;
+                        }
+                        if !state
+                            .agg_config
+                            .cumulative_metrics
+                            .contains(&trimmed.to_ascii_lowercase())
+                        {
+                            continue;
+                        }
+                        let Some(field) = MetricField::from_spec(trimmed) else {
+                            continue;
+                        };
+                        let value = state.store.cumulative_value(field, key_value);
+                        field_cumulative.insert(field_name.clone(), value);
+                    }
+                    if !field_cumulative.is_empty() {
+                        result.cumulative = Some(field_cumulative);
+                    }
+                }
+                "frequency" => {
+                    let Some(freq_value) = request.frequency_value else {
+                        continue;
+                    };
+                    let Some(key_value) = key_for_query else {
+                        continue;
+                    };
+                    let mut field_frequency = HashMap::new();
+                    for field_name in &fields {
+                        let trimmed = field_name.trim();
+                        if trimmed.is_empty() {
+                            continue;
+                        }
+                        let Some(field) = MetricField::from_spec(trimmed) else {
+                            continue;
+                        };
+                        if let Some(count) = state.store.frequency_estimate(field, key_value, freq_value) {
+                            field_frequency.insert(field_name.clone(), count);
+                        }
+                    }
+                    if !field_frequency.is_empty() {
+                        result.frequency = Some(field_frequency);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        results.push(result);
+    }
+
+    Json(BatchQueryResponse { results }).into_response()
 }
 
 async fn metrics_handler(
@@ -562,6 +814,14 @@ async fn metrics_handler(
     }
 }
 
+fn build_percentile_response(percents: &[f64], values: &[f64]) -> BTreeMap<String, f64> {
+    let mut response = BTreeMap::new();
+    for (percent, value) in percents.iter().zip(values.iter()) {
+        response.insert(percent.to_string(), *value);
+    }
+    response
+}
+
 fn handle_percentiles(
     state: &AppState,
     pct: &PercentileAggregation,
@@ -590,6 +850,12 @@ fn handle_percentiles(
         return Err("percentiles key is required when provided".to_string());
     }
     let key = explicit_key.or(query_key);
+    if let Some(cached) = state.cache.get_percentiles(field, key, &pct.percents) {
+        return Ok(Some(build_percentile_response(&pct.percents, &cached)));
+    }
+
+    let mut cache_values = Vec::with_capacity(pct.percents.len());
+    let mut all_present = true;
     for percent in &pct.percents {
         let value = if let Some(key) = key {
             state.store.query_percentile_by_key(field, key, *percent)
@@ -599,29 +865,81 @@ fn handle_percentiles(
 
         if let Some(value) = value {
             values.insert(percent.to_string(), value);
+            cache_values.push(value);
+        } else {
+            all_present = false;
         }
+    }
+
+    if all_present && !cache_values.is_empty() {
+        state.cache.set_percentiles(field, key, &pct.percents, cache_values);
     }
 
     Ok(Some(values))
 }
 
+fn handle_multi_top_entities(
+    state: &AppState,
+    fields: &[String],
+) -> Result<HashMap<String, EntityEstimate>, String> {
+    let mut results = HashMap::new();
+
+    for field_name in fields {
+        let trimmed = field_name.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if !state
+            .agg_config
+            .top_entities_metrics
+            .contains(&trimmed.to_ascii_lowercase())
+        {
+            return Err(format!("unsupported top_entities field: {}", field_name));
+        }
+        let field = MetricField::from_spec(trimmed)
+            .ok_or_else(|| format!("unsupported top_entities field: {}", field_name))?;
+
+        if let Some(entity) = state.store.top_entity(field) {
+            results.insert(field_name.clone(), entity);
+        }
+    }
+
+    if results.is_empty() {
+        return Err("no top entity available".to_string());
+    }
+
+    Ok(results)
+}
+
 fn handle_top_entities(
     state: &AppState,
     top: &TopEntitiesAggregation,
-) -> Result<EntityEstimate, String> {
+) -> Result<TopEntitiesResult, String> {
+    if let Some(fields) = top.fields.as_ref().filter(|fields| !fields.is_empty()) {
+        let results = handle_multi_top_entities(state, fields)?;
+        return Ok(TopEntitiesResult::Multi(results));
+    }
+
+    let field_name = top
+        .field
+        .as_ref()
+        .map(|field| field.trim())
+        .filter(|field| !field.is_empty())
+        .ok_or_else(|| "top_entities field is required".to_string())?;
     if !state
         .agg_config
         .top_entities_metrics
-        .contains(&top.field.trim().to_ascii_lowercase())
+        .contains(&field_name.to_ascii_lowercase())
     {
-        return Err(format!("unsupported top_entities field: {}", top.field));
+        return Err(format!("unsupported top_entities field: {}", field_name));
     }
-    let field = MetricField::from_spec(&top.field)
-        .ok_or_else(|| format!("unsupported top_entities field: {}", top.field))?;
-    state
+    let field = MetricField::from_spec(field_name)
+        .ok_or_else(|| format!("unsupported top_entities field: {}", field_name))?;
+    let entity = state
         .store
         .top_entity(field)
-        .ok_or_else(|| "no top entity available".to_string())
+        .ok_or_else(|| "no top entity available".to_string())?;
+    Ok(TopEntitiesResult::Single(entity))
 }
 
 fn handle_cumulative(state: &AppState, cum: &CumulativeAggregation) -> Result<i32, String> {
@@ -873,7 +1191,11 @@ fn parse_quantile_spec(spec: &str) -> Option<f64> {
     candidate.parse::<f64>().ok()
 }
 
-async fn log_request_middleware(req: Request<Body>, next: Next) -> Response {
+async fn log_request_middleware(
+    State(state): State<AppState>,
+    req: Request<Body>,
+    next: Next,
+) -> Response {
     let (parts, body) = req.into_parts();
     let method = parts.method.clone();
     let uri = parts.uri.clone();
@@ -891,16 +1213,20 @@ async fn log_request_middleware(req: Request<Body>, next: Next) -> Response {
     let log_method = method.clone();
     let log_uri = uri.clone();
     let log_headers = headers.clone();
-    tokio::task::spawn_blocking(move || {
-        log_request_details(log_method, log_uri, log_headers, log_body);
-    });
+    if let Some(log_tx) = &state.log_tx {
+        let log_entry = LogEntry {
+            method: log_method,
+            uri: log_uri,
+            headers: log_headers,
+            body: log_body,
+        };
+        let _ = log_tx.try_send(log_entry);
+    }
 
     let req = Request::from_parts(parts, Body::from(body_bytes));
     let response = next.run(req).await;
     let status = response.status();
-    tokio::task::spawn_blocking(move || {
-        eprintln!("response status: {}", status);
-    });
+    eprintln!("response status: {}", status);
     response
 }
 
@@ -963,4 +1289,14 @@ fn log_request_details(
         Err(_) => eprintln!("{}", String::from_utf8_lossy(&body)),
     }
     eprintln!("end request");
+}
+
+pub fn start_request_logger(buffer: usize) -> LogSender {
+    let (log_tx, mut log_rx) = mpsc::channel::<LogEntry>(buffer);
+    tokio::spawn(async move {
+        while let Some(entry) = log_rx.recv().await {
+            log_request_details(entry.method, entry.uri, entry.headers, entry.body);
+        }
+    });
+    log_tx
 }

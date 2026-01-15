@@ -4,6 +4,7 @@ import csv
 import uuid
 import threading
 from itertools import combinations
+from dataclasses import dataclass
 from loguru import logger
 import requests
 import os
@@ -27,27 +28,69 @@ RTT_LOG_PATH = os.getenv('QUERY_RTT_CSV', 'query_rtt.csv')
 _RTT_LOG_LOCK = threading.Lock()
 
 
-def update_tasks_with_quantiles(
-        running_tasks: dict[str, RunningTask],
-        session=None,
-        quantiles=None
-    ):
+@dataclass
+class TopEntityResult:
+    """Result from top_entities query - entity with highest value for a field."""
+    field: str
+    entity_key: str
+    value: float
+
+
+@dataclass
+class CumulativeResult:
+    """Result from cumulative query - total resource usage for a task."""
+    cpu_cores: float
+    memory_gb: float
+    network_mbps: float
+
+
+@dataclass
+class FrequencyResult:
+    """Result from frequency query - how often a value appears."""
+    field: str
+    value: float
+    count: int
+
+
+@dataclass
+class TaskMetricsSnapshot:
+    """Aggregated metrics for a single task from all query types."""
+    task_id: str
+    node_id: str
+    cpu_p50: float | None = None
+    memory_p50: float | None = None
+    cumulative: CumulativeResult | None = None
+    frequency_results: list[FrequencyResult] | None = None
+
+
+def update_tasks_with_metrics(
+    running_tasks: dict[str, RunningTask],
+    session: requests.Session = None,
+    quantiles: list[int] = None
+) -> dict[str, TaskMetricsSnapshot]:
     """
-    Update running tasks with CPU and memory quantiles fetched from ES.
-    Args:
-        running_tasks: Dictionary of task ids (str) and their corresponding RunningTask objects.
-        session: Optional requests session for making HTTP requests.
-        quantiles: Optional list of quantiles to fetch.
+    Update running tasks with metrics from all query types and return snapshots.
     """
     if session is None:
         session = requests.Session()
-    quantiles = [50]
+    if quantiles is None:
+        quantiles = [50]
 
+    snapshots: dict[str, TaskMetricsSnapshot] = {}
+
+    top_entities: list[TopEntityResult] = []
     if running_tasks:
-        send_top_entities_query(session=session)
+        try:
+            top_entities = get_top_entities(session=session)
+            for top in top_entities:
+                logger.debug(f"Top entity for {top.field}: {top.entity_key} = {top.value}")
+        except Exception as e:
+            logger.warning(f"Failed to get top entities: {e}")
 
     for task_id, running_task in running_tasks.items():
         node_id = running_task.node_id
+        snapshot = TaskMetricsSnapshot(task_id=task_id, node_id=node_id)
+
         try:
             metric_quantiles = get_metric_quantiles(
                 node_id=node_id,
@@ -55,34 +98,114 @@ def update_tasks_with_quantiles(
                 session=session,
                 quantiles=quantiles,
             )
+            cpu_quantiles = metric_quantiles.get('cpu', {})
+            memory_quantiles = metric_quantiles.get('memory', {})
+
+            snapshot.cpu_p50 = pick_percentile(cpu_quantiles, 50.0, None)
+            snapshot.memory_p50 = pick_percentile(memory_quantiles, 50.0, None)
         except Exception as e:
             logger.error(f'Error fetching quantiles for Task {task_id} on Node {node_id}: {e}')
-            continue
 
-        send_cumulative_query(node_id=node_id, task_id=task_id, session=session)
-        send_frequency_query(
-            node_id=node_id,
-            task_id=task_id,
-            value=running_task.task.initial_cpu,
-            session=session,
+        try:
+            snapshot.cumulative = get_cumulative_usage(
+                node_id=node_id,
+                task_id=task_id,
+                session=session,
+            )
+            logger.debug(
+                "Cumulative for %s: CPU=%s, Memory=%s, Network=%s",
+                task_id,
+                snapshot.cumulative.cpu_cores,
+                snapshot.cumulative.memory_gb,
+                snapshot.cumulative.network_mbps,
+            )
+        except Exception as e:
+            logger.warning(f'Error fetching cumulative for Task {task_id}: {e}')
+
+        try:
+            snapshot.frequency_results = get_resource_frequency(
+                node_id=node_id,
+                task_id=task_id,
+                cpu_value=running_task.task.initial_cpu,
+                memory_value=running_task.task.initial_memory,
+                session=session,
+            )
+            for freq in snapshot.frequency_results:
+                logger.debug(
+                    "Frequency for %s %s=%s: count=%s",
+                    task_id,
+                    freq.field,
+                    freq.value,
+                    freq.count,
+                )
+        except Exception as e:
+            logger.warning(f'Error fetching frequency for Task {task_id}: {e}')
+
+        _apply_metrics_to_task(running_task, snapshot, top_entities)
+        snapshots[task_id] = snapshot
+
+    return snapshots
+
+
+def _apply_metrics_to_task(
+    running_task: RunningTask,
+    snapshot: TaskMetricsSnapshot,
+    top_entities: list[TopEntityResult]
+) -> None:
+    """
+    Apply collected metrics to update task resource estimates.
+    """
+    initial_cpu = running_task.task.initial_cpu
+    initial_memory = running_task.task.initial_memory
+
+    if snapshot.cpu_p50 is not None:
+        running_task.task.initial_cpu = snapshot.cpu_p50
+    if snapshot.memory_p50 is not None:
+        running_task.task.initial_memory = snapshot.memory_p50
+
+    if snapshot.frequency_results:
+        for freq in snapshot.frequency_results:
+            if freq.count == 0:
+                logger.warning(
+                    "Task %s: %s=%s has zero frequency - estimate may be unusual",
+                    snapshot.task_id,
+                    freq.field,
+                    freq.value,
+                )
+
+    task_key = f"{snapshot.node_id};{snapshot.task_id}"
+    for top in top_entities:
+        if top.entity_key == task_key:
+            logger.info(
+                "Task %s is top consumer for %s: %s",
+                snapshot.task_id,
+                top.field,
+                top.value,
+            )
+
+    if (
+        running_task.task.initial_cpu != initial_cpu
+        or running_task.task.initial_memory != initial_memory
+    ):
+        logger.debug(
+            "Updated Task %s - CPU: %s -> %s, Memory: %s -> %s",
+            snapshot.task_id,
+            initial_cpu,
+            running_task.task.initial_cpu,
+            initial_memory,
+            running_task.task.initial_memory,
         )
 
-        cpu_quantiles = metric_quantiles.get('cpu', {})
-        memory_quantiles = metric_quantiles.get('memory', {})
-        if not cpu_quantiles or not memory_quantiles:
-            logger.warning(f'No quantiles found for Task {task_id} on Node {node_id}. Skipping update.')
-            continue
 
-        initial_cpu = running_task.task.initial_cpu
-        initial_memory = running_task.task.initial_memory
-
-        median_cpu = pick_percentile(cpu_quantiles, 50.0, initial_cpu)
-        median_memory = pick_percentile(memory_quantiles, 50.0, initial_memory)
-
-        running_task.task.initial_cpu = median_cpu
-        running_task.task.initial_memory = median_memory
-
-        logger.debug(f"Updated Task {task_id} on Node {node_id} - CPU: {initial_cpu} -> {median_cpu}, Memory: {initial_memory} -> {median_memory}")
+def update_tasks_with_quantiles(
+    running_tasks: dict[str, RunningTask],
+    session=None,
+    quantiles=None
+):
+    """
+    Deprecated: Use update_tasks_with_metrics instead.
+    """
+    return update_tasks_with_metrics(running_tasks, session, quantiles)
 
 
 def get_metric_quantiles(node_id: str, task_id: str, session=None, quantiles=None):
@@ -92,7 +215,8 @@ def get_metric_quantiles(node_id: str, task_id: str, session=None, quantiles=Non
 
     if session is None:
         session = requests.Session()
-    quantiles = [50]
+    if quantiles is None:
+        quantiles = [50]
 
     url = ES_URL
     index_name = ES_INDEX_NAME
@@ -144,32 +268,68 @@ def get_metric_quantiles(node_id: str, task_id: str, session=None, quantiles=Non
     }
 
 
-def send_top_entities_query(session=None) -> None:
+def get_top_entities(
+    session: requests.Session = None,
+    fields: list[str] = None
+) -> list[TopEntityResult]:
+    """
+    Query the top entity (highest value) for each specified metric field.
+    """
     if session is None:
         session = requests.Session()
-    aggs = {
-        "top_cpu": {"top_entities": {"field": "cpu_cores"}}
-    }
-    send_search_request(
-        session=session,
-        request_type="top_entities",
-        query=None,
-        aggs=aggs,
-        url=ES_URL,
-        index_name=ES_INDEX_NAME,
-        api_key=ES_API_KEY,
-        also_es=True,
-    )
+    if fields is None:
+        fields = ["cpu_cores", "memory_gb", "network_mbps"]
+
+    results = []
+    for field in fields:
+        aggs = {
+            f"top_{field}": {"top_entities": {"field": field}}
+        }
+        response = send_search_request(
+            session=session,
+            request_type="top_entities",
+            query=None,
+            aggs=aggs,
+            url=ES_URL,
+            index_name=ES_INDEX_NAME,
+            api_key=ES_API_KEY,
+            also_es=True,
+        )
+        if response is not None:
+            agg_result = response.get("aggregations", {}).get(f"top_{field}", {})
+            entity_key = agg_result.get("key", "")
+            value = agg_result.get("value", 0.0)
+            if entity_key:
+                results.append(
+                    TopEntityResult(
+                        field=field,
+                        entity_key=entity_key,
+                        value=float(value),
+                    )
+                )
+
+    return results
 
 
-def send_cumulative_query(node_id: str, task_id: str, session=None) -> None:
+def get_cumulative_usage(
+    node_id: str,
+    task_id: str,
+    session: requests.Session = None
+) -> CumulativeResult:
+    """
+    Query cumulative (total sum) resource usage for a specific task on a node.
+    """
     if session is None:
         session = requests.Session()
+
     key = f"{node_id};{task_id}"
+    fields = ["cpu_cores", "memory_gb", "network_mbps"]
     aggs = {
-        "cpu_cumulative": {"cumulative": {"field": "cpu_cores", "key": key}}
+        f"{field}_cumulative": {"cumulative": {"field": field, "key": key}}
+        for field in fields
     }
-    send_search_request(
+
+    response = send_search_request(
         session=session,
         request_type="cumulative",
         query=None,
@@ -180,17 +340,49 @@ def send_cumulative_query(node_id: str, task_id: str, session=None) -> None:
         also_es=True,
     )
 
+    if response is None:
+        return CumulativeResult(cpu_cores=0.0, memory_gb=0.0, network_mbps=0.0)
 
-def send_frequency_query(node_id: str, task_id: str, value: float, session=None) -> None:
+    aggregations = response.get("aggregations", {})
+    return CumulativeResult(
+        cpu_cores=float(aggregations.get("cpu_cores_cumulative", {}).get("value", 0)),
+        memory_gb=float(aggregations.get("memory_gb_cumulative", {}).get("value", 0)),
+        network_mbps=float(aggregations.get("network_mbps_cumulative", {}).get("value", 0)),
+    )
+
+
+def get_resource_frequency(
+    node_id: str,
+    task_id: str,
+    cpu_value: float = None,
+    memory_value: float = None,
+    network_value: float = None,
+    session: requests.Session = None
+) -> list[FrequencyResult]:
+    """
+    Query how frequently a task uses specific resource values.
+    """
     if session is None:
         session = requests.Session()
+
     key = f"{node_id};{task_id}"
-    aggs = {
-        "cpu_frequency": {
-            "frequency": {"field": "cpu_cores", "key": key, "value": value}
-        }
+    aggs = {}
+    value_map = {
+        "cpu_cores": cpu_value,
+        "memory_gb": memory_value,
+        "network_mbps": network_value,
     }
-    send_search_request(
+
+    for field, value in value_map.items():
+        if value is not None:
+            aggs[f"{field}_frequency"] = {
+                "frequency": {"field": field, "key": key, "value": value}
+            }
+
+    if not aggs:
+        return []
+
+    response = send_search_request(
         session=session,
         request_type="frequency",
         query=None,
@@ -199,6 +391,37 @@ def send_frequency_query(node_id: str, task_id: str, value: float, session=None)
         index_name=ES_INDEX_NAME,
         api_key=ES_API_KEY,
         also_es=True,
+    )
+
+    if response is None:
+        return []
+
+    results = []
+    aggregations = response.get("aggregations", {})
+    for field, value in value_map.items():
+        if value is not None:
+            agg_key = f"{field}_frequency"
+            agg_result = aggregations.get(agg_key, {})
+            count = int(agg_result.get("count", 0))
+            results.append(FrequencyResult(field=field, value=value, count=count))
+
+    return results
+
+
+def send_top_entities_query(session=None) -> None:
+    get_top_entities(session=session)
+
+
+def send_cumulative_query(node_id: str, task_id: str, session=None) -> None:
+    get_cumulative_usage(node_id=node_id, task_id=task_id, session=session)
+
+
+def send_frequency_query(node_id: str, task_id: str, value: float, session=None) -> None:
+    get_resource_frequency(
+        node_id=node_id,
+        task_id=task_id,
+        cpu_value=value,
+        session=session,
     )
 
 
@@ -266,7 +489,7 @@ def send_search_request(
         return None
 
 
-def pick_percentile(values: dict, percentile: float, default: float) -> float:
+def pick_percentile(values: dict, percentile: float, default: float | None) -> float | None:
     direct = values.get(str(percentile))
     if direct is not None:
         return direct
