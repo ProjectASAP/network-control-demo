@@ -1,9 +1,10 @@
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use serde::Serialize;
 use sketchlib_rust::{
-    CountMin, FastPath, Hydra, KLL, SketchInput, Vector2D, XLCountMin,
+    CountMin, FastPath, Hydra, KLL, SketchInput, Vector2D, XLCountMin, hash_it_to_128,
     common::input::{HydraCounter, HydraQuery},
     sketches::kll::CDF,
 };
@@ -52,33 +53,33 @@ impl MetricKll {
     }
 }
 
-struct MetricCdfs {
-    cpu_cores: CDF,
-    memory_gb: CDF,
-    network_mbps: CDF,
-}
+// struct MetricCdfs {
+//     cpu_cores: CDF,
+//     memory_gb: CDF,
+//     network_mbps: CDF,
+// }
 
-impl MetricCdfs {
-    fn from_sketches(sketches: MetricKll) -> Self {
-        Self {
-            cpu_cores: sketches.cpu_cores.cdf(),
-            memory_gb: sketches.memory_gb.cdf(),
-            network_mbps: sketches.network_mbps.cdf(),
-        }
-    }
+// impl MetricCdfs {
+//     fn from_sketches(sketches: MetricKll) -> Self {
+//         Self {
+//             cpu_cores: sketches.cpu_cores.cdf(),
+//             memory_gb: sketches.memory_gb.cdf(),
+//             network_mbps: sketches.network_mbps.cdf(),
+//         }
+//     }
 
-    fn query_percentile(&self, field: MetricField, percent: f64) -> Option<f64> {
-        if !(0.0..=100.0).contains(&percent) {
-            return None;
-        }
-        let quantile = percent / 100.0;
-        match field {
-            MetricField::CpuCores => Some(self.cpu_cores.query(quantile)),
-            MetricField::MemoryGb => Some(self.memory_gb.query(quantile)),
-            MetricField::NetworkMbps => Some(self.network_mbps.query(quantile)),
-        }
-    }
-}
+//     fn query_percentile(&self, field: MetricField, percent: f64) -> Option<f64> {
+//         if !(0.0..=100.0).contains(&percent) {
+//             return None;
+//         }
+//         let quantile = percent / 100.0;
+//         match field {
+//             MetricField::CpuCores => Some(self.cpu_cores.query(quantile)),
+//             MetricField::MemoryGb => Some(self.memory_gb.query(quantile)),
+//             MetricField::NetworkMbps => Some(self.network_mbps.query(quantile)),
+//         }
+//     }
+// }
 
 struct MetricHydra {
     cpu_quantile: Hydra,
@@ -123,42 +124,160 @@ fn split_key(key: &str) -> Option<Vec<&str>> {
     if parts.is_empty() { None } else { Some(parts) }
 }
 
+#[inline(always)]
+fn mask_bits(cols: usize) -> u32 {
+    if cols.is_power_of_two() {
+        cols.ilog2()
+    } else {
+        cols.ilog2() + 1
+    }
+}
+
+#[inline(always)]
+fn clamp_i128_to_i64(value: i128) -> i64 {
+    if value > i64::MAX as i128 {
+        i64::MAX
+    } else if value < i64::MIN as i128 {
+        i64::MIN
+    } else {
+        value as i64
+    }
+}
+
 #[derive(Clone)]
+struct AtomicCountMin {
+    inner: XLCountMin<FastPath>,
+}
+
+impl Default for AtomicCountMin {
+    fn default() -> Self {
+        Self {
+            inner: XLCountMin::default(),
+        }
+    }
+}
+
+impl AtomicCountMin {
+    fn with_dimensions(rows: usize, cols: usize) -> Self {
+        Self {
+            inner: XLCountMin::with_dimensions(rows, cols),
+        }
+    }
+
+    #[inline(always)]
+    fn insert_many(&self, value: &SketchInput, many: i128) {
+        if many == 0 {
+            return;
+        }
+        let many = clamp_i128_to_i64(many);
+        let rows = self.inner.rows();
+        let cols = self.inner.cols();
+        let hashed_val = hash_it_to_128(0, value);
+        let mask_bits = mask_bits(cols);
+        let mask = (1u128 << mask_bits) - 1;
+        let counts = self.inner.as_storage();
+        for row in 0..rows {
+            let hashed = (hashed_val >> (mask_bits as usize * row)) & mask;
+            let col = (hashed as usize) % cols;
+            let idx = row * cols + col;
+            counts[idx].fetch_add(many, Ordering::Relaxed);
+        }
+    }
+
+    #[inline(always)]
+    fn estimate(&self, value: &SketchInput) -> i128 {
+        let rows = self.inner.rows();
+        let cols = self.inner.cols();
+        let hashed_val = hash_it_to_128(0, value);
+        let mask_bits = mask_bits(cols);
+        let mask = (1u128 << mask_bits) - 1;
+        let counts = self.inner.as_storage();
+
+        let hashed = hashed_val & mask;
+        let col = (hashed as usize) % cols;
+        let mut min = counts[col].load(Ordering::Relaxed);
+        for row in 1..rows {
+            let hashed = (hashed_val >> (mask_bits as usize * row)) & mask;
+            let col = (hashed as usize) % cols;
+            let idx = row * cols + col;
+            let value = counts[idx].load(Ordering::Relaxed);
+            if value < min {
+                min = value;
+            }
+        }
+        i128::from(min)
+    }
+
+    #[inline(always)]
+    fn update_max(&self, value: &SketchInput, next: i128) {
+        let next = clamp_i128_to_i64(next);
+        let rows = self.inner.rows();
+        let cols = self.inner.cols();
+        let hashed_val = hash_it_to_128(0, value);
+        let mask_bits = mask_bits(cols);
+        let mask = (1u128 << mask_bits) - 1;
+        let counts = self.inner.as_storage();
+        for row in 0..rows {
+            let hashed = (hashed_val >> (mask_bits as usize * row)) & mask;
+            let col = (hashed as usize) % cols;
+            let idx = row * cols + col;
+            let counter = &counts[idx];
+            let mut current = counter.load(Ordering::Relaxed);
+            while next > current {
+                match counter.compare_exchange_weak(
+                    current,
+                    next,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                ) {
+                    Ok(_) => break,
+                    Err(updated) => current = updated,
+                }
+            }
+        }
+    }
+}
+
+#[derive(Default)]
+struct TopEntityState {
+    key: Option<String>,
+    value: i128,
+}
+
 struct CountMinPair {
-    top_entities: XLCountMin<FastPath>,
-    cumulative: XLCountMin<FastPath>,
-    top_key: Option<String>,
-    top_value: i128,
+    top_entities: AtomicCountMin,
+    cumulative: AtomicCountMin,
+    top_state: RwLock<TopEntityState>,
 }
 
 impl Default for CountMinPair {
     fn default() -> Self {
         Self {
-            top_entities: XLCountMin::default(),
-            cumulative: XLCountMin::default(),
-            top_key: None,
-            top_value: 0,
+            top_entities: AtomicCountMin::default(),
+            cumulative: AtomicCountMin::default(),
+            top_state: RwLock::new(TopEntityState::default()),
         }
     }
 }
 
 impl CountMinPair {
-    fn update_top_entities(&mut self, key: &str, key_input: &SketchInput, value: i128) {
+    fn update_top_entities(&self, key: &str, key_input: &SketchInput, value: i128) {
         if value <= 0 {
             return;
         }
         let current = self.top_entities.estimate(key_input);
         if value > current {
-            let delta = value - current;
-            self.top_entities.insert_many(key_input, delta);
-            if self.top_key.as_deref() != Some(key) {
-                self.top_key = Some(key.to_string());
+            self.top_entities.update_max(key_input, value);
+            if let Ok(mut state) = self.top_state.write() {
+                if state.key.as_deref() != Some(key) {
+                    state.key = Some(key.to_string());
+                }
+                state.value = value;
             }
-            self.top_value = value;
         }
     }
 
-    fn update_cumulative(&mut self, key_input: &SketchInput, value: i128) {
+    fn update_cumulative(&self, key_input: &SketchInput, value: i128) {
         if value <= 0 {
             return;
         }
@@ -166,9 +285,10 @@ impl CountMinPair {
     }
 
     fn top_entity(&self) -> Option<EntityEstimate> {
-        self.top_key.as_ref().map(|key| EntityEstimate {
+        let state = self.top_state.read().ok()?;
+        state.key.as_ref().map(|key| EntityEstimate {
             key: key.clone(),
-            value: clamp_i128_to_i32(self.top_value),
+            value: clamp_i128_to_i32(state.value),
         })
     }
 
@@ -185,11 +305,11 @@ struct MetricCountMins {
 }
 
 impl MetricCountMins {
-    fn update(&mut self, field: MetricField, key: &str, key_input: &SketchInput, value: i128) {
+    fn update(&self, field: MetricField, key: &str, key_input: &SketchInput, value: i128) {
         let pair = match field {
-            MetricField::CpuCores => &mut self.cpu_cores,
-            MetricField::MemoryGb => &mut self.memory_gb,
-            MetricField::NetworkMbps => &mut self.network_mbps,
+            MetricField::CpuCores => &self.cpu_cores,
+            MetricField::MemoryGb => &self.memory_gb,
+            MetricField::NetworkMbps => &self.network_mbps,
         };
 
         pair.update_top_entities(key, key_input, value);
@@ -260,7 +380,7 @@ pub struct EntityEstimate {
 
 pub struct MetricStore {
     klls: Mutex<MetricKll>,
-    countmins: Mutex<MetricCountMins>,
+    countmins: MetricCountMins,
     frequency_by_label: Mutex<MetricFrequencyHydra>,
     quantile_by_label: Mutex<MetricHydra>,
 }
@@ -295,17 +415,12 @@ impl MetricStore {
     }
 
     pub fn top_entity(&self, field: MetricField) -> Option<EntityEstimate> {
-        let countmins = self.countmins.lock().ok()?;
-        countmins.top_entity(field)
+        self.countmins.top_entity(field)
     }
 
     pub fn cumulative_value(&self, field: MetricField, key: &str) -> i32 {
         let key_input = SketchInput::Str(key);
-        let countmins = match self.countmins.lock() {
-            Ok(guard) => guard,
-            Err(_) => return 0,
-        };
-        clamp_i128_to_i32(countmins.cumulative_estimate(field, &key_input))
+        clamp_i128_to_i32(self.countmins.cumulative_estimate(field, &key_input))
     }
 
     pub fn frequency_estimate(&self, field: MetricField, key: &str, value: f64) -> Option<i32> {
@@ -346,10 +461,6 @@ impl MetricStore {
             hydra.update(&key, cpu_value, memory_value, network_value);
         }
 
-        let mut countmins = self
-            .countmins
-            .lock()
-            .map_err(|_| "failed to lock countmin sketches")?;
         let mut freq_hydra = self
             .frequency_by_label
             .lock()
@@ -358,7 +469,7 @@ impl MetricStore {
         if let Some(value) = round_to_i32(cpu_value) {
             let value_i128 = value as i128;
             update_countmins_for_value(
-                &mut countmins,
+                &self.countmins,
                 MetricField::CpuCores,
                 cluster,
                 task,
@@ -370,7 +481,7 @@ impl MetricStore {
         if let Some(value) = round_to_i32(memory_value) {
             let value_i128 = value as i128;
             update_countmins_for_value(
-                &mut countmins,
+                &self.countmins,
                 MetricField::MemoryGb,
                 cluster,
                 task,
@@ -382,7 +493,7 @@ impl MetricStore {
         if let Some(value) = round_to_i32(network_value) {
             let value_i128 = value as i128;
             update_countmins_for_value(
-                &mut countmins,
+                &self.countmins,
                 MetricField::NetworkMbps,
                 cluster,
                 task,
@@ -554,7 +665,7 @@ impl MetricPreAggregation {
     pub fn finish(self) -> MetricStore {
         MetricStore {
             klls: Mutex::new(self.klls),
-            countmins: Mutex::new(self.countmins),
+            countmins: self.countmins,
             frequency_by_label: Mutex::new(self.frequency_hydra),
             quantile_by_label: Mutex::new(self.hydra),
         }
@@ -562,7 +673,7 @@ impl MetricPreAggregation {
 }
 
 fn update_countmins_for_value(
-    countmins: &mut MetricCountMins,
+    countmins: &MetricCountMins,
     field: MetricField,
     cluster: &str,
     task: &str,
