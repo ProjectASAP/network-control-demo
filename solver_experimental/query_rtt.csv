@@ -773,3 +773,63 @@ ae4a5f4d96224aea9940651b4f0cf957,cumulative,es,2.410,200,1,
 ae4a5f4d96224aea9940651b4f0cf957,cumulative,server,2.781,200,1,
 1c8b9a5997774d85a1d615b7597fe22d,frequency,es,2.396,200,1,
 1c8b9a5997774d85a1d615b7597fe22d,frequency,server,2.737,200,1,
+3cc750d0f29c4595af34ab323aed74cc,top_entities,es,15.786,,0,"BadRequestError(400, 'search_phase_execution_exception', 'runtime error')"
+3cc750d0f29c4595af34ab323aed74cc,top_entities,server,5.887,200,1,
+e15ab9c557174b7db36697698ab82e9f,top_entities,es,3.411,,0,"BadRequestError(400, 'search_phase_execution_exception', 'runtime error')"
+e15ab9c557174b7db36697698ab82e9f,top_entities,server,2.648,200,1,
+ef20707a653141169b7749c5003ee610,top_entities,es,3.108,,0,"BadRequestError(400, 'search_phase_execution_exception', 'runtime error')"
+ef20707a653141169b7749c5003ee610,top_entities,server,2.821,200,1,
+74978992975d446d9b83336350107394,percentile,es,3.009,200,1,
+74978992975d446d9b83336350107394,percentile,server,2.593,200,1,
+1a76128fcf484b1aa0edb6302288f808,cumulative,es,2.415,200,1,
+1a76128fcf484b1aa0edb6302288f808,cumulative,server,3.005,200,1,
+d95cfe74a57a48a0aa2195f78d7bbadc,frequency,es,2.386,200,1,
+d95cfe74a57a48a0aa2195f78d7bbadc,frequency,server,2.531,200,1,
+ccbfd9ca474e4025bd19809fa7dfea3d,top_entities,es,3.255,,0,"BadRequestError(400, 'search_phase_execution_exception', 'runtime error')"
+ccbfd9ca474e4025bd19809fa7dfea3d,top_entities,server,2.746,200,1,
+be4bec1f0fff4f28bd186a42c9e815d9,top_entities,es,2.403,,0,"BadRequestError(400, 'search_phase_execution_exception', 'runtime error')"
+be4bec1f0fff4f28bd186a42c9e815d9,top_entities,server,1.614,200,1,
+9566bea5a0694408a5cccba9efb41c72,top_entities,es,2.471,,0,"BadRequestError(400, 'search_phase_execution_exception', 'runtime error')"
+9566bea5a0694408a5cccba9efb41c72,top_entities,server,1.880,200,1,
+0d49da2e7dc541fca6cf46d6b0b8629c,percentile,es,2.147,200,1,
+0d49da2e7dc541fca6cf46d6b0b8629c,percentile,server,1.925,200,1,
+c9abfc92bc48429794fd1c277e51de8c,cumulative,es,1.836,200,1,
+c9abfc92bc48429794fd1c277e51de8c,cumulative,server,2.042,200,1,
+e8db9760bdce41db8269d59209afc9fa,frequency,es,1.892,200,1,
+e8db9760bdce41db8269d59209afc9fa,frequency,server,1.799,200,1,
+afc1bb276f6a40959e0efda3a61d368b,top_entities,es,3.488,,0,"BadRequestError(400, 'search_phase_execution_exception', 'runtime error')"
+afc1bb276f6a40959e0efda3a61d368b,top_entities,server,3.567,200,1,
+a1a5b1c19ef04f1a9298c729998a9206,top_entities,es,2.942,,0,"BadRequestError(400, 'search_phase_execution_exception', 'runtime error')"
+a1a5b1c19ef04f1a9298c729998a9206,top_entities,server,2.581,200,1,
+4a7cd226fabc4ce48b59f419a4de9085,top_entities,es,2.978,,0,"BadRequestError(400, 'search_phase_execution_exception', 'runtime error')"
+4a7cd226fabc4ce48b59f419a4de9085,top_entities,server,2.687,200,1,
+510ee94a6d494206821d27417af08094,percentile,es,2.453,200,1,
+510ee94a6d494206821d27417af08094,percentile,server,2.779,200,1,
+5cf1fe69118e4f068306fa30d555f017,cumulative,es,2.312,200,1,
+5cf1fe69118e4f068306fa30d555f017,cumulative,server,5.914,200,1,
+733f4f1597d449489a42ed43e49a4e05,frequency,es,2.898,200,1,
+733f4f1597d449489a42ed43e49a4e05,frequency,server,3.270,200,1,
+ec7f096c8ab74dadaf5291b0ed4b8ad7,top_entities,es,3.926,,0,"BadRequestError(400, 'search_phase_execution_exception', 'runtime error')"
+ec7f096c8ab74dadaf5291b0ed4b8ad7,top_entities,server,3.810,200,1,
+b8e0f2ac6d9e4251bbe23db70f66afa2,top_entities,es,3.230,,0,"BadRequestError(400, 'search_phase_execution_exception', 'runtime error')"
+b8e0f2ac6d9e4251bbe23db70f66afa2,top_entities,server,2.964,200,1,
+3e969f8e1fbe49c4a169c93c88dc8794,top_entities,es,3.317,,0,"BadRequestError(400, 'search_phase_execution_exception', 'runtime error')"
+3e969f8e1fbe49c4a169c93c88dc8794,top_entities,server,2.863,200,1,
+21aac3fb07a34c9a8643a0bcff4f15f1,percentile,es,2.750,200,1,
+21aac3fb07a34c9a8643a0bcff4f15f1,percentile,server,3.240,200,1,
+f083252518a44d7dab93b84c6e2ea0fe,cumulative,es,2.452,200,1,
+f083252518a44d7dab93b84c6e2ea0fe,cumulative,server,3.081,200,1,
+574c0efec5eb4aeea002e09295d731cb,frequency,es,2.536,200,1,
+574c0efec5eb4aeea002e09295d731cb,frequency,server,3.016,200,1,
+cc0b525f74d6473ca154066188503e79,top_entities,es,3.311,,0,"BadRequestError(400, 'search_phase_execution_exception', 'runtime error')"
+cc0b525f74d6473ca154066188503e79,top_entities,server,3.479,200,1,
+647d48290b9d4db89d0a1842d203809d,top_entities,es,3.317,,0,"BadRequestError(400, 'search_phase_execution_exception', 'runtime error')"
+647d48290b9d4db89d0a1842d203809d,top_entities,server,2.838,200,1,
+c3614a8ec67144718b7432e37e9c5bb7,top_entities,es,3.376,,0,"BadRequestError(400, 'search_phase_execution_exception', 'runtime error')"
+c3614a8ec67144718b7432e37e9c5bb7,top_entities,server,2.877,200,1,
+c89d83b1dd954d4aa948ef6cc6b27170,percentile,es,2.661,200,1,
+c89d83b1dd954d4aa948ef6cc6b27170,percentile,server,3.164,200,1,
+f10bd51a2f7a4a91b279cdfbd1342d73,cumulative,es,2.484,200,1,
+f10bd51a2f7a4a91b279cdfbd1342d73,cumulative,server,2.928,200,1,
+eea1ec7d090e4600843655def5a88d10,frequency,es,2.519,200,1,
+eea1ec7d090e4600843655def5a88d10,frequency,server,3.060,200,1,
