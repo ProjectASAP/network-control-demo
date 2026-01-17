@@ -114,7 +114,7 @@ def assign_tasks(args: AppConfig):
 
         while task_queue or unassigned_tasks or running_tasks:
             time.sleep(args.interval)
-            curr_offset = (time.time() - start_time) * 30
+            curr_offset = (time.time() - start_time)
             logger.debug(f"Current time offset: {curr_offset:.2f} s")
 
             # Filter out finished tasks. For now, don't account for solver time and variable finish times.
