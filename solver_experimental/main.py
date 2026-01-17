@@ -4,6 +4,10 @@ import yaml
 import time
 import argparse
 import datetime
+import csv
+import threading
+import json
+import copy
 from itertools import combinations
 from collections import deque
 from loguru import logger
@@ -32,6 +36,50 @@ class AppConfig:
     query_manager_config: str
     interval: float = 10.0
     log_level: str = "INFO"
+
+
+E2E_LOG_PATH = os.getenv("E2E_LOG_CSV", "e2e.csv")
+_E2E_LOG_LOCK = threading.Lock()
+
+
+def log_e2e(
+    duration_ms: float,
+    curr_offset: float,
+    tasks_to_schedule: int,
+    ran_solver: bool,
+    metrics_source: str,
+    assignment: dict[str, str] | None,
+) -> None:
+    assignment_text = ""
+    if assignment is not None:
+        assignment_text = json.dumps(assignment, separators=(",", ":"), sort_keys=True)
+    timestamp = datetime.datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+    with _E2E_LOG_LOCK:
+        try:
+            needs_header = os.path.getsize(E2E_LOG_PATH) == 0
+        except OSError:
+            needs_header = True
+        with open(E2E_LOG_PATH, "a", newline="") as handle:
+            writer = csv.writer(handle)
+            if needs_header:
+                writer.writerow([
+                    "timestamp",
+                    "offset_s",
+                    "tasks_to_schedule",
+                    "ran_solver",
+                    "metrics_source",
+                    "duration_ms",
+                    "assignment",
+                ])
+            writer.writerow([
+                timestamp,
+                f"{curr_offset:.3f}",
+                str(tasks_to_schedule),
+                "1" if ran_solver else "0",
+                metrics_source,
+                f"{duration_ms:.3f}",
+                assignment_text,
+            ])
 
 
 def assign_tasks(args: AppConfig):
@@ -85,8 +133,21 @@ def assign_tasks(args: AppConfig):
             logger.debug(f"Arrived tasks: {list(arrived_tasks.keys())}")
             logger.debug(f"Unassigned tasks from previous rounds: {list(unassigned_tasks.keys())}")
 
+            tasks_to_schedule = arrived_tasks | unassigned_tasks
+            if not tasks_to_schedule:
+                log_e2e(
+                    duration_ms=-1.0,
+                    curr_offset=curr_offset,
+                    tasks_to_schedule=0,
+                    ran_solver=False,
+                    metrics_source="none",
+                    assignment=None,
+                )
+                logger.info(f"Waiting for tasks to arrive...")
+                continue
+
             query_tasks = dict(running_tasks)
-            for task_id, task in (arrived_tasks | unassigned_tasks).items():
+            for task_id, task in tasks_to_schedule.items():
                 if task_id in query_tasks:
                     continue
                 query_tasks[task_id] = RunningTask(
@@ -95,27 +156,84 @@ def assign_tasks(args: AppConfig):
                     task=task,
                 )
 
+            tasks_to_schedule_es = copy.deepcopy(tasks_to_schedule)
+            running_tasks_es = copy.deepcopy(running_tasks)
+            query_tasks_es = dict(running_tasks_es)
+            for task_id, task in tasks_to_schedule_es.items():
+                if task_id in query_tasks_es:
+                    continue
+                query_tasks_es[task_id] = RunningTask(
+                    node_id=synthetic_node_id,
+                    start_time_s=curr_offset,
+                    task=task,
+                )
+
             # TODO: Execute PromQL queries and do something with results (e.g. update task spec estimates).
             # query_manager.update_task_metrics(running_tasks=query_tasks)
 
-            # Query Elasticsearch instead.
-            task_metrics = update_tasks_with_metrics(running_tasks=query_tasks)
-            if task_metrics:
-                logger.debug(f"Collected metrics for {len(task_metrics)} tasks")
+            # Query Elasticsearch (sketch server) instead.
+            e2e_start = time.perf_counter()
+            assignments: dict[str, RunningTask] = {}
+            leftover_tasks: dict[str, Task] = {}
+            objective_value = None
+            status_code = None
+            try:
+                task_metrics = update_tasks_with_metrics(running_tasks=query_tasks)
+                if task_metrics:
+                    logger.debug(f"Collected metrics for {len(task_metrics)} tasks")
 
-            tasks_to_schedule = arrived_tasks | unassigned_tasks
-            if not tasks_to_schedule:
-                logger.info(f"Waiting for tasks to arrive...")
-                continue
+                logger.info(f"Scheduling {len(tasks_to_schedule)} tasks...")
+                assignments, leftover_tasks, objective_value, status_code = solver.solve(
+                    tasks=tasks_to_schedule,
+                    task_graph=task_graph,
+                    running_tasks=running_tasks,
+                    paths=paths
+                )
+                logger.debug(f"Solver status (sketch): {pulp.LpStatus[status_code]}")
+            finally:
+                duration_ms = (time.perf_counter() - e2e_start) * 1000.0
+                assignment_map = {task_id: rt.node_id for task_id, rt in assignments.items()}
+                log_e2e(
+                    duration_ms=duration_ms,
+                    curr_offset=curr_offset,
+                    tasks_to_schedule=len(tasks_to_schedule),
+                    ran_solver=True,
+                    metrics_source="sketch",
+                    assignment=assignment_map,
+                )
 
-            logger.info(f"Scheduling {len(tasks_to_schedule)} tasks...")
-            assignments, leftover_tasks, objective_value, status_code = solver.solve(
-                tasks=tasks_to_schedule,
-                task_graph=task_graph,
-                running_tasks=running_tasks,
-                paths=paths
-            )
-            logger.debug(f"Solver status: {pulp.LpStatus[status_code]}")
+            es_error = None
+            es_start = time.perf_counter()
+            assignments_es: dict[str, RunningTask] = {}
+            try:
+                task_metrics_es = update_tasks_with_metrics(
+                    running_tasks=query_tasks_es,
+                    use_backend=True,
+                )
+                if task_metrics_es:
+                    logger.debug(f"Collected ES metrics for {len(task_metrics_es)} tasks")
+
+                assignments_es, _, _, status_code_es = solver.solve(
+                    tasks=tasks_to_schedule_es,
+                    task_graph=task_graph,
+                    running_tasks=running_tasks_es,
+                    paths=paths
+                )
+                logger.debug(f"Solver status (es): {pulp.LpStatus[status_code_es]}")
+            except Exception as exc:
+                es_error = exc
+                logger.warning(f"ES assignment failed: {exc}")
+            finally:
+                duration_ms = (time.perf_counter() - es_start) * 1000.0
+                assignment_map_es = {task_id: rt.node_id for task_id, rt in assignments_es.items()}
+                log_e2e(
+                    duration_ms=duration_ms,
+                    curr_offset=curr_offset,
+                    tasks_to_schedule=len(tasks_to_schedule_es),
+                    ran_solver=es_error is None,
+                    metrics_source="elasticsearch",
+                    assignment=assignment_map_es,
+                )
 
             unassigned_tasks = leftover_tasks
             running_tasks.update(assignments)
