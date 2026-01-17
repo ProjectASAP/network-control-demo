@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-import json
+from cattrs import structure
+import jsonlines
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, MutableMapping, Sequence, Tuple
+from typing import Mapping, TypeVar
 import pandas as pd
 import datetime as dt
-import math
 import networkx as nx
 
 from .entities import Edge, EdgeKey, Node, Task, TaskCommunication
+
+
+T = TypeVar("T")
 
 
 def load_nodes(path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs) -> dict[str, Node]:
@@ -27,6 +30,19 @@ def load_nodes(path: str | Path, column_names: Mapping[str, str] | None = None, 
             ...
         ]
     """
+
+    # NOTE: Support JSONL format for easier data representation.
+    ext = Path(path).suffix.lower()
+    if ext == ".jsonl":
+        entities = load_entities_jsonl(path, Node)
+        result = {}
+        for node in entities:
+            if node.node_id in result:
+                continue
+            result[node.node_id] = node
+        return result
+
+    # TODO: Old CSV loading logic. Remove/refactor later.
     df = pd.read_csv(path, **kwargs)
     if column_names is not None:
         df = df.rename(columns=column_names)
@@ -35,13 +51,7 @@ def load_nodes(path: str | Path, column_names: Mapping[str, str] | None = None, 
     for row in payload:
         if row["node_id"] in result:
             continue
-        node = Node(
-            node_id=str(row["node_id"]),
-            cpu_capacity=float(row["cpu_capacity"]),
-            memory_capacity=float(row["memory_capacity"]),
-            used_cpu=float(row.get("used_cpu", 0)),
-            used_memory=float(row.get("used_memory", 0)),
-        )
+        node = structure(row, Node)
         result[node.node_id] = node
     return result
 
@@ -61,6 +71,19 @@ def load_edges(path: str | Path, column_names: Mapping[str, str] | None = None, 
             ...
         ]
     """
+    # NOTE: Support JSONL format for easier data representation.
+    ext = Path(path).suffix.lower()
+    if ext == ".jsonl":
+        entities = load_entities_jsonl(path, Edge)
+        result = {}
+        for edge in entities:
+            key: EdgeKey = tuple(sorted(edge.edge_id)) # type: ignore
+            if key in result:
+                continue
+            result[key] = edge
+        return result
+
+    # TODO: Old CSV loading logic. Remove/refactor later.
     df = pd.read_csv(path, **kwargs)
     if column_names is not None:
         df = df.rename(columns=column_names)
@@ -96,6 +119,18 @@ def load_tasks(path: str | Path, column_names: Mapping[str, str] | None = None, 
             }
         ]
     """
+    # NOTE: Support JSONL format for easier data representation.
+    ext = Path(path).suffix.lower()
+    if ext == ".jsonl":
+        entities = load_entities_jsonl(path, Task)
+        result = {}
+        for task in entities:
+            if task.task_id in result:
+                continue
+            result[task.task_id] = task
+        return result
+
+    # TODO: Old CSV loading logic. Remove/refactor later.
     df = pd.read_csv(path, **kwargs).fillna("") # Fill NaN in case certain tasks don't have peers.
     if column_names is not None:
         df = df.rename(columns=column_names)
@@ -129,33 +164,10 @@ def build_task_graph(tasks: dict[str, Task]) -> nx.DiGraph:
     return task_graph
 
 
-def load_task_communications(path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs) -> dict[tuple[str, str], TaskCommunication]:
-    """
-    Load task communication demands from a CSV file. Specify mapping between column names and expected fields if they differ.
-
-    Expected format:
-        [
-            {
-                "source_task_id": "task1",
-                "target_task_id": "task2",
-                "bandwidth": 20
-            },
-            ...
-        ]
-    """
-    df = pd.read_csv(path, **kwargs)
-    if column_names is not None:
-        df = df.rename(columns=column_names)
-    payload = df.to_dict(orient="records")
-    result = {}
-    for row in payload:
-        t_i, t_j = str(row["source_task_id"]), str(row["target_task_id"])
-        if (t_i, t_j) in result:
-            continue
-        comm = TaskCommunication(
-            source_task_id=t_i,
-            target_task_id=t_j,
-            bandwidth=float(row["bandwidth"]),
-        )
-        result[(comm.source_task_id, comm.target_task_id)] = comm
-    return result
+def load_entities_jsonl(path: str | Path, cls: type[T]) -> list[T]:
+    results = []
+    with jsonlines.open(path, mode="r") as reader:
+        for obj in reader:
+            entity = structure(obj, cls)
+            results.append(entity)
+    return results

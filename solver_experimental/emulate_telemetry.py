@@ -207,8 +207,8 @@ def generate_timeseries(size: int, base_value: float = 1) -> np.ndarray:
 
 
 def create_emulator() -> MetricsEmulator:
-    nodes = load_nodes('dummy_data/nodes.csv')
-    edges = load_edges('dummy_data/edges.csv')
+    nodes = load_nodes('dummy_data/nodes.jsonl')
+    edges = load_edges('dummy_data/edges.jsonl')
     network = NetworkTopology(nodes=nodes.values(), edges=edges.values(), undirected=True)
     return MetricsEmulator(network=network)
 
