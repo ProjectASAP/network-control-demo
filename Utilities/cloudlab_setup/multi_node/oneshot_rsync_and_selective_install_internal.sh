@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if [ "$#" -ne 3 ]; then
     echo "Usage: $0 <num_nodes> <cloudlab_username> <hostname_suffix>"

@@ -1,0 +1,42 @@
+# QueryEngine Docker Compose Template
+# This template is rendered with Jinja2 to generate the final docker-compose.yml
+services:
+  prometheusclient:
+    image: sketchdb-prometheusclient:latest
+    cap_add:
+      - SYS_PTRACE # For py-spy monitoring
+    security_opt: # For pyspy monitoring, gives container permission to trace processes
+      - seccomp=unconfined
+      - apparmor=unconfined
+    container_name: sketchdb-prometheusclient
+    volumes:
+      - "/scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test4/sketchdb/prometheus_client_output:/app/outputs"
+      - "/scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test4/sketchdb/prometheus_client_output:/app/prometheus_client_output"
+      - "/scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test4/controller_client_configs/sketchdb.yaml:/app/prometheus_client_config.yaml:ro"
+      - "/scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test4/controller_output/inference_config.yaml:/app/query_engine_config_file.yaml:ro"
+    network_mode: "host" # Allows prometheus client to send requests to localhost, not ideal for production
+    command: [
+      "--config_file", "/app/prometheus_client_config.yaml",
+      "--output_dir", "/app/prometheus_client_output",
+      "--output_file", "/app/prometheus_client_output/prometheus_client_output.txt",
+      "--query_engine_config_file", "/app/query_engine_config_file.yaml",
+      "--align_query_time",
+      "--server_for_alignment", "sketchdb",
+    ]
+    # pid: "container:sketchdb-queryengine"
+    pid: "host" # So py-spy can access processes running on the host
+    extra_hosts:
+    # host.docker.internal allows prometheus client to curl servers running on host system localhost,
+    # but this requires changing the server urls that the client reads from localhost:<PORT> to host.docker.internal:<PORT>
+    # Maybe there is a more elegant solution?
+     # - "host.docker.internal:host-gateway"
+      - "prometheus:127.0.0.1"
+      - "sketchdb:127.0.0.1"
+    restart: no
+
+# networks:
+#  prometheusclient-net:
+#    driver: bridge
+#    ipam:
+#      config:
+#        - subnet: 172.20.0.0/16

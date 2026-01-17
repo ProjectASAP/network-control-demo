@@ -1,0 +1,11 @@
+{
+  "queries": [
+    "quantile_over_time(0.95, fake_metric_total[5m])"
+  ],
+  "servers": [
+    "prometheus",
+    "sketchdb"
+  ],
+  "repetitions": 10,
+  "total_queries": 1
+}

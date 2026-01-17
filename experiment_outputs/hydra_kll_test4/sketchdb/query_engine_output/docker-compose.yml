@@ -1,0 +1,53 @@
+# QueryEngine Rust Docker Compose Template
+# This template is rendered with Jinja2 to generate the final docker-compose.yml
+
+version: '3.8'
+
+services:
+  queryengine-rust:
+    image: sketchdb-queryengine-rust:latest
+    container_name: sketchdb-queryengine-rust
+    environment:
+      - RUST_LOG=info
+      - RUST_BACKTRACE=1
+    ports:
+      - "8088:8088"
+    volumes:
+      # Mount output directory for experiment results
+      - "/scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test4/sketchdb/query_engine_output:/app/outputs"
+      # Mount controller output directory for configuration files (read-only)
+      - "/scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test4/controller_output:/app/controller_output:ro"
+    networks:
+      - sketchdb-net
+    command: [
+      "--kafka-topic", "flink_output",
+      "--kafka-broker", "10.10.1.1:9092",
+      "--input-format", "json",
+      "--config", "/app/controller_output/inference_config.yaml",
+      "--streaming-config", "/app/controller_output/streaming_config.yaml",
+      "--prometheus-server", "http://10.10.1.1:9090",
+      "--prometheus-scrape-interval", "10",
+      "--delete-existing-db",
+      "--log-level", "INFO",
+      "--output-dir", "/app/outputs",
+      "--streaming-engine", "arroyo",
+      "--decompress-json"
+    ]
+    extra_hosts:
+      - "kafka:10.10.1.1"
+      - "prometheus:10.10.1.1"
+    restart: no
+
+networks:
+  sketchdb-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Optional: Named volumes for development
+volumes:
+  queryengine_outputs:
+    driver: local
+  controller_configs:
+    driver: local

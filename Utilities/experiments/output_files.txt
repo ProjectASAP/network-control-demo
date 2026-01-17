@@ -1,0 +1,23 @@
+yuanyc@node0:~$ ls -la /scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test/sketchdb/prometheus_client_output/
+total 1148
+drwxr-xr-x 2 yuanyc softmeasure-PG0   4096 Nov  3 18:56 .
+drwxr-xr-x 8 yuanyc softmeasure-PG0   4096 Nov  3 18:56 ..
+-rw-r--r-- 1 root   root                 0 Nov  3 18:56 http_requests.log
+-rw-r--r-- 1 yuanyc softmeasure-PG0   2145 Nov  3 18:56 prometheus-client-docker-compose.yml
+-rw-r--r-- 1 root   root            829925 Nov  3 22:45 prometheus_client.log
+-rw-r--r-- 1 root   root                 0 Nov  3 18:56 query_latency_exporter.log
+-rw-r--r-- 1 root   root            322889 Nov  3 22:45 urllib3_debug.log
+yuanyc@node0:~$ ls -la /scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test/sketchdb/remote_monitor_output/
+total 324
+drwxr-xr-x 2 yuanyc softmeasure-PG0   4096 Nov  3 18:56 .
+drwxr-xr-x 8 yuanyc softmeasure-PG0   4096 Nov  3 18:56 ..
+-rw-r--r-- 1 yuanyc softmeasure-PG0      0 Nov  3 18:56 query_cost_exporter.log
+-rw-r--r-- 1 yuanyc softmeasure-PG0 316847 Nov  3 22:46 remote_monitor.log
+yuanyc@node0:~$ ls -la /scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test/sketchdb/arroyosketch_output/
+total 32
+drwxr-xr-x 2 yuanyc softmeasure-PG0 4096 Nov  3 17:07 .
+drwxr-xr-x 8 yuanyc softmeasure-PG0 4096 Nov  3 18:56 ..
+-rw-r--r-- 1 yuanyc softmeasure-PG0  238 Nov  3 18:53 connection_profile.json
+-rw-r--r-- 1 yuanyc softmeasure-PG0  773 Nov  3 18:53 connection_table_sink.json
+-rw-r--r-- 1 yuanyc softmeasure-PG0 6586 Nov  3 18:53 connection_table_source.json
+-rw-r--r-- 1 yuanyc softmeasure-PG0 5875 Nov  3 18:53 pipeline.json

@@ -1,0 +1,40 @@
+exporters:
+  exporter_list:
+    fake_exporter:
+      dataset: zipf
+      metric_type: counter
+      num_labels: 3
+      num_ports_per_server: 1
+      num_values_per_label: 20
+      start_port: 50000
+      synthetic_data_value_scale: 10000
+    node_exporter:
+      extra_flags: --collector.disable-defaults --collector.cpu
+      port: 9100
+  only_start_if_queries_exist: true
+metrics:
+- exporter: fake_exporter
+  labels:
+  - instance
+  - job
+  - label_0
+  - label_1
+  - label_2
+  metric: fake_metric_total
+query_groups:
+- client_options:
+    query_time_offset: 10
+    repetitions: 10
+    starting_delay: 310
+  controller_options:
+    accuracy_sla: 0.99
+    latency_sla: 1
+  id: 1
+  queries:
+  - quantile_over_time(0.95, fake_metric_total[5m])
+  repetition_delay: 30
+servers:
+- name: prometheus
+  url: http://localhost:9090
+- name: sketchdb
+  url: http://localhost:8088

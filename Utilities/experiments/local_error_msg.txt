@@ -1,0 +1,82 @@
+ssh -o StrictHostKeyChecking=no yuanyc@node0.HydraKllTesting2.softmeasure-PG0.wisc.cloudlab.us "pgrep -f remote_monitor.py"
+Remote monitor is still running. Will check again in 10 seconds
+ssh -o StrictHostKeyChecking=no yuanyc@node0.HydraKllTesting2.softmeasure-PG0.wisc.cloudlab.us "pgrep -f remote_monitor.py"
+rsync -azh -e "ssh -o StrictHostKeyChecking=no" yuanyc@node0.HydraKllTesting2.softmeasure-PG0.wisc.cloudlab.us:/scratch/sketch_db_for_prometheus/prometheus/data /Users/yancheng/ProjectASAP/network-control-demo/experiment_outputs/hydra_kll_test/sketchdb/prometheus_data/
+Error executing job with overrides: ['experiment_type=hydrakll_test', 'cloudlab.num_nodes=1', 'cloudlab.username=yuanyc', 'cloudlab.hostname_suffix=HydraKllTesting2.softmeasure-PG0.wisc.cloudlab.us', 'experiment.name=hydra_kll_test']
+Traceback (most recent call last):
+  File "/Users/yancheng/ProjectASAP/network-control-demo/Utilities/experiments/experiment_run_e2e.py", line 526, in <module>
+    main()
+    ~~~~^^
+  File "/Users/yancheng/SlidingPrometheus/slideaway/lib/python3.13/site-packages/hydra/main.py", line 94, in decorated_main
+    _run_hydra(
+    ~~~~~~~~~~^
+        args=args,
+        ^^^^^^^^^^
+    ...<3 lines>...
+        config_name=config_name,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/yancheng/SlidingPrometheus/slideaway/lib/python3.13/site-packages/hydra/_internal/utils.py", line 394, in _run_hydra
+    _run_app(
+    ~~~~~~~~^
+        run=args.run,
+        ^^^^^^^^^^^^^
+    ...<5 lines>...
+        overrides=overrides,
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/yancheng/SlidingPrometheus/slideaway/lib/python3.13/site-packages/hydra/_internal/utils.py", line 457, in _run_app
+    run_and_report(
+    ~~~~~~~~~~~~~~^
+        lambda: hydra.run(
+        ^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        )
+        ^
+    )
+    ^
+  File "/Users/yancheng/SlidingPrometheus/slideaway/lib/python3.13/site-packages/hydra/_internal/utils.py", line 223, in run_and_report
+    raise ex
+  File "/Users/yancheng/SlidingPrometheus/slideaway/lib/python3.13/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+  File "/Users/yancheng/SlidingPrometheus/slideaway/lib/python3.13/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+            ~~~~~~~~~^
+        config_name=config_name,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+        task_function=task_function,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        overrides=overrides,
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/yancheng/SlidingPrometheus/slideaway/lib/python3.13/site-packages/hydra/_internal/hydra.py", line 132, in run
+    _ = ret.return_value
+        ^^^^^^^^^^^^^^^^
+  File "/Users/yancheng/SlidingPrometheus/slideaway/lib/python3.13/site-packages/hydra/core/utils.py", line 260, in return_value
+    raise self._return_value
+  File "/Users/yancheng/SlidingPrometheus/slideaway/lib/python3.13/site-packages/hydra/core/utils.py", line 186, in run_job
+    ret.return_value = task_function(task_cfg)
+                       ~~~~~~~~~~~~~^^^^^^^^^^
+  File "/Users/yancheng/ProjectASAP/network-control-demo/Utilities/experiments/experiment_run_e2e.py", line 464, in main
+    sync.copy_prometheus_data(provider, local_experiment_dir)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yancheng/ProjectASAP/network-control-demo/Utilities/experiments/experiment_utils/sync.py", line 27, in copy_prometheus_data
+    utils.run_cmd(cmd, popen=False, ignore_errors=False)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yancheng/ProjectASAP/network-control-demo/Utilities/experiments/utils.py", line 31, in run_cmd
+    return subprocess.run(
+           ~~~~~~~~~~~~~~^
+        cmd,
+        ^^^^
+    ...<4 lines>...
+        text=True,
+        ^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Cellar/python@3.13/3.13.7/Frameworks/Python.framework/Versions/3.13/lib/python3.13/subprocess.py", line 577, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command 'rsync -azh -e "ssh -o StrictHostKeyChecking=no" yuanyc@node0.HydraKllTesting2.softmeasure-PG0.wisc.cloudlab.us:/scratch/sketch_db_for_prometheus/prometheus/data /Users/yancheng/ProjectASAP/network-control-demo/experiment_outputs/hydra_kll_test/sketchdb/prometheus_data/' returned non-zero exit status 255.

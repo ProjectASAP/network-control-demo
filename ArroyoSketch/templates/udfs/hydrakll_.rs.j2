@@ -138,7 +138,7 @@ impl HydraKllSketch {
 }
 
 #[udf]
-fn hydra_kll(keys: Vec<&str>, values: Vec<f64>) -> Option<Vec<u8>> {
+fn hydrakll_(keys: Vec<&str>, values: Vec<f64>) -> Option<Vec<u8>> {
     // Create a new HydraKLL
     let mut hydra = HydraKllSketch::new();
 

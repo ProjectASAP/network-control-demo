@@ -1,0 +1,113 @@
+experiment:
+  name: hydra_kll_test3
+cloudlab:
+  num_nodes: 1
+  username: yuanyc
+  hostname_suffix: HydraKllTesting2.softmeasure-PG0.wisc.cloudlab.us
+logging:
+  level: INFO
+profiling:
+  query_engine: false
+  prometheus_time: null
+  flink: false
+  arroyo: false
+throughput:
+  arroyo: false
+  prometheus: false
+manual:
+  query_engine: false
+  remote_monitor: false
+flow:
+  no_teardown: false
+  replace_query_engine_with_dumb_consumer: false
+  steady_state_wait: 60
+streaming:
+  engine: arroyo
+  parallelism: 1
+  flink_input_format: json
+  flink_output_format: json
+  enable_object_reuse: false
+  do_local_flink: false
+  forward_unsupported_queries: false
+  use_kafka_ingest: false
+  remote_write:
+    ip: 10.10.1.1
+    base_port: 8080
+    path: /receive
+prometheus:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+  recording_rules:
+    interval: 5s
+fake_exporter_language: python
+query_engine_language: rust
+query_engine:
+  dump_precomputes: false
+prometheus_client:
+  parallel: false
+use_container:
+  query_engine: true
+  arroyo: true
+  controller: true
+  fake_exporter: true
+  prometheus_client: true
+  grafana: true
+grafana:
+  host: localhost:3000
+  user: admin
+  password: admin
+experiment_variants:
+  sketchdboffline:
+    experiment_dir: ???
+    labels:
+    - label_0
+    - label_1
+    - label_2
+    - instance
+    - job
+    groupby: ???
+    aggregation: ???
+experiment_params:
+  experiment:
+  - mode: sketchdb
+    query_prometheus_too: true
+  servers:
+  - name: prometheus
+    url: http://localhost:9090
+  - name: sketchdb
+    url: http://localhost:8088
+  exporters:
+    only_start_if_queries_exist: true
+    exporter_list:
+      node_exporter:
+        port: 9100
+        extra_flags: --collector.disable-defaults --collector.cpu
+      fake_exporter:
+        num_ports_per_server: 1
+        start_port: 50000
+        dataset: zipf
+        synthetic_data_value_scale: 10000
+        num_labels: 3
+        num_values_per_label: 20
+        metric_type: counter
+  query_groups:
+  - id: 1
+    queries:
+    - quantile_over_time(0.95, fake_metric_total[5m])
+    repetition_delay: 300
+    client_options:
+      repetitions: 10
+      query_time_offset: 10
+      starting_delay: 310
+    controller_options:
+      accuracy_sla: 0.99
+      latency_sla: 1
+  metrics:
+  - metric: fake_metric_total
+    labels:
+    - instance
+    - job
+    - label_0
+    - label_1
+    - label_2
+    exporter: fake_exporter

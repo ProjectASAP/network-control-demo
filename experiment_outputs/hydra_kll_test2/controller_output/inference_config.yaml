@@ -1,0 +1,12 @@
+metrics:
+  fake_metric_total:
+  - instance
+  - job
+  - label_0
+  - label_1
+  - label_2
+queries:
+- aggregations:
+  - aggregation_id: 1
+    num_aggregates_to_retain: 1
+  query: quantile_over_time(0.95, fake_metric_total[5m])

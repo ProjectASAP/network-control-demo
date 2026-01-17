@@ -1,0 +1,24 @@
+alerting:
+  alertmanagers:
+  - static_configs:
+    - targets: []
+global:
+  evaluation_interval: 10s
+  scrape_interval: 10s
+remote_write:
+- url: http://10.10.1.1:8080/receive
+  write_relabel_configs:
+  - action: keep
+    regex: fake_metric_total
+    source_labels:
+    - __name__
+scrape_configs:
+- job_name: fake_exporter
+  metric_relabel_configs:
+  - action: keep
+    regex: fake_metric_total
+    source_labels:
+    - __name__
+  static_configs:
+  - targets:
+    - 10.10.1.2:50000

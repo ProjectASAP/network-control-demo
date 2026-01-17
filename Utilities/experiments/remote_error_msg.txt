@@ -1,0 +1,28 @@
+yuanyc@node0:/scratch/sketch_db_for_prometheus/code/ArroyoSketch$ python run_arroyosketch.py     --source_type prometheus_remote_write     --prometheus_bind_ip 10.10.1.1     --prometheus_base_port 8080     --prometheus_path /receive     --parallelism 1     --output_format json     --pipeline_name hydra_kll_test     --config_file_path /scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test/controller_output/streaming_config.yaml     --output_kafka_topic flink_output     --output_dir /scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test/sketchdb/arroyosketch_output
+Created connection profile at: /scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test/sketchdb/arroyosketch_output/connection_profile.json
+Created source table at: /scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test/sketchdb/arroyosketch_output/connection_table_source.json
+No connection table found with name flink_output_table
+Created sink table at: /scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test/sketchdb/arroyosketch_output/connection_table_sink.json
+Generated SQL query for aggregation ID 1: 
+INSERT INTO
+    flink_output_table
+SELECT
+    gzip_compress(hydrakll_(concat_ws(';', labels.instance, labels.job, labels.label_0, labels.label_1, labels.label_2), value)) as precompute,
+    1 as aggregation_id,
+    '' as key,
+    TUMBLE(INTERVAL '300 seconds') as window
+FROM
+    prometheus_8080_fake_metric_total
+GROUP BY
+    window, key
+;
+Sent stop request for pipeline: pl_0FRAZqq7h2
+Got status for pipeline: pl_0FRAZqq7h2
+data['stop']: immediate <class 'str'>
+data['actionInProgress']: True <class 'bool'>
+Got status for pipeline: pl_0FRAZqq7h2
+data['stop']: immediate <class 'str'>
+data['actionInProgress']: False <class 'bool'>
+Sent delete request for pipeline: pl_0FRAZqq7h2
+Created pipeline at: /scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test/sketchdb/arroyosketch_output/pipeline.json
+Pipeline created with ID: pl_wF6ucgJnS9

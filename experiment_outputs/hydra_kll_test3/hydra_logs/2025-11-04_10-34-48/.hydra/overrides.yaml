@@ -1,0 +1,5 @@
+- experiment_type=hydrakll_test
+- cloudlab.num_nodes=1
+- cloudlab.username=yuanyc
+- cloudlab.hostname_suffix=HydraKllTesting2.softmeasure-PG0.wisc.cloudlab.us
+- experiment.name=hydra_kll_test3

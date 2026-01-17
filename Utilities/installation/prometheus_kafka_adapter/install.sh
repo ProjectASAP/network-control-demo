@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if [ $# -ne 1 ]; then
     echo "Usage: $0 <path_to_prometheus_kafka_adapter>"

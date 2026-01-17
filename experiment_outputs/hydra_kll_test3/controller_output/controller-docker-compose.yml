@@ -1,0 +1,14 @@
+services:
+  controller:
+    image: sketchdb-controller:latest
+    container_name: sketchdb-controller
+    volumes:
+      - /scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test3/controller_client_configs/sketchdb.yaml:/app/input/config.yaml:ro
+      - /scratch/sketch_db_for_prometheus/experiment_outputs/hydra_kll_test3/controller_output:/app/output
+    command: [
+      "--input_config", "/app/input/config.yaml",
+      "--output_dir", "/app/output",
+      "--prometheus_scrape_interval", "10",
+      "--streaming_engine", "arroyo"
+    ]
+    restart: on-failure

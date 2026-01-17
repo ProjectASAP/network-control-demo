@@ -1,0 +1,27 @@
+aggregations:
+- aggregationId: 1
+  aggregationSubType: ''
+  aggregationType: HydraKLL
+  labels:
+    aggregated:
+    - instance
+    - job
+    - label_0
+    - label_1
+    - label_2
+    grouping: []
+    rollup: []
+  metric: fake_metric_total
+  parameters:
+    K: 20
+    depth: 1
+    width: 32
+  spatialFilter: ''
+  tumblingWindowSize: 30
+metrics:
+  fake_metric_total:
+  - instance
+  - job
+  - label_0
+  - label_1
+  - label_2
