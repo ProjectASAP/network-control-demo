@@ -22,10 +22,13 @@ SERVER_URL = 'http://localhost:10101'
 INTERVAL = 60  # seconds
 TIMEOUT = 5  # seconds
 
+# Random seed for reproducibility.
+SEED = 42
+_RNG = np.random.default_rng(SEED)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Load the ML model
     background_loop = asyncio.create_task(periodically_send_metrics())  # Adjust the sleep duration as needed
     yield
     background_loop.cancel()
@@ -192,8 +195,7 @@ def generate_timeseries(size: int, base_value: float = 1) -> np.ndarray:
     Returns:
         List of emulated metric values.
     """
-    rng = np.random.default_rng()
-
+    rng = _RNG
     period = rng.uniform(0, 10 * size)
     a = rng.uniform(0.05, 0.95)
     b = 2 * np.pi / period
