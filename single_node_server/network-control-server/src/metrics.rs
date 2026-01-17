@@ -1,5 +1,4 @@
 use std::sync::{Mutex, RwLock};
-use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use serde::Serialize;
@@ -125,12 +124,8 @@ fn split_key(key: &str) -> Option<Vec<&str>> {
 }
 
 #[inline(always)]
-fn mask_bits(cols: usize) -> u32 {
-    if cols.is_power_of_two() {
-        cols.ilog2()
-    } else {
-        cols.ilog2() + 1
-    }
+fn hash_key_128(key: &str) -> u128 {
+    hash_it_to_128(0, &SketchInput::Str(key))
 }
 
 #[inline(always)]
@@ -144,15 +139,14 @@ fn clamp_i128_to_i64(value: i128) -> i64 {
     }
 }
 
-#[derive(Clone)]
 struct AtomicCountMin {
-    inner: XLCountMin<FastPath>,
+    inner: RwLock<XLCountMin<FastPath>>,
 }
 
 impl Default for AtomicCountMin {
     fn default() -> Self {
         Self {
-            inner: XLCountMin::default(),
+            inner: RwLock::new(XLCountMin::default()),
         }
     }
 }
@@ -160,81 +154,48 @@ impl Default for AtomicCountMin {
 impl AtomicCountMin {
     fn with_dimensions(rows: usize, cols: usize) -> Self {
         Self {
-            inner: XLCountMin::with_dimensions(rows, cols),
+            inner: RwLock::new(XLCountMin::with_dimensions(rows, cols)),
         }
     }
 
     #[inline(always)]
-    fn insert_many(&self, value: &SketchInput, many: i128) {
+    fn insert_many_with_hash(&self, hashed_val: u128, many: i128) {
         if many == 0 {
             return;
         }
-        let many = clamp_i128_to_i64(many);
-        let rows = self.inner.rows();
-        let cols = self.inner.cols();
-        let hashed_val = hash_it_to_128(0, value);
-        let mask_bits = mask_bits(cols);
-        let mask = (1u128 << mask_bits) - 1;
-        let counts = self.inner.as_storage();
-        for row in 0..rows {
-            let hashed = (hashed_val >> (mask_bits as usize * row)) & mask;
-            let col = (hashed as usize) % cols;
-            let idx = row * cols + col;
-            counts[idx].fetch_add(many, Ordering::Relaxed);
-        }
+        let many = i128::from(clamp_i128_to_i64(many));
+        let mut inner = match self.inner.write() {
+            Ok(inner) => inner,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        inner.fast_insert_many_with_hash_value(hashed_val, many);
     }
 
     #[inline(always)]
-    fn estimate(&self, value: &SketchInput) -> i128 {
-        let rows = self.inner.rows();
-        let cols = self.inner.cols();
-        let hashed_val = hash_it_to_128(0, value);
-        let mask_bits = mask_bits(cols);
-        let mask = (1u128 << mask_bits) - 1;
-        let counts = self.inner.as_storage();
-
-        let hashed = hashed_val & mask;
-        let col = (hashed as usize) % cols;
-        let mut min = counts[col].load(Ordering::Relaxed);
-        for row in 1..rows {
-            let hashed = (hashed_val >> (mask_bits as usize * row)) & mask;
-            let col = (hashed as usize) % cols;
-            let idx = row * cols + col;
-            let value = counts[idx].load(Ordering::Relaxed);
-            if value < min {
-                min = value;
-            }
-        }
-        i128::from(min)
+    fn estimate_with_hash(&self, hashed_val: u128) -> i128 {
+        let inner = match self.inner.read() {
+            Ok(inner) => inner,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        inner.fast_estimate_with_hash(hashed_val)
     }
 
     #[inline(always)]
-    fn update_max(&self, value: &SketchInput, next: i128) {
-        let next = clamp_i128_to_i64(next);
-        let rows = self.inner.rows();
-        let cols = self.inner.cols();
-        let hashed_val = hash_it_to_128(0, value);
-        let mask_bits = mask_bits(cols);
-        let mask = (1u128 << mask_bits) - 1;
-        let counts = self.inner.as_storage();
-        for row in 0..rows {
-            let hashed = (hashed_val >> (mask_bits as usize * row)) & mask;
-            let col = (hashed as usize) % cols;
-            let idx = row * cols + col;
-            let counter = &counts[idx];
-            let mut current = counter.load(Ordering::Relaxed);
-            while next > current {
-                match counter.compare_exchange_weak(
-                    current,
-                    next,
-                    Ordering::Relaxed,
-                    Ordering::Relaxed,
-                ) {
-                    Ok(_) => break,
-                    Err(updated) => current = updated,
+    fn update_max_with_hash(&self, hashed_val: u128, next: i128) {
+        let next = i128::from(clamp_i128_to_i64(next));
+        let mut inner = match self.inner.write() {
+            Ok(inner) => inner,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        inner.as_storage_mut().fast_insert(
+            |counter, value, _| {
+                if *value > *counter {
+                    *counter = *value;
                 }
-            }
-        }
+            },
+            next,
+            hashed_val,
+        );
     }
 }
 
@@ -261,13 +222,13 @@ impl Default for CountMinPair {
 }
 
 impl CountMinPair {
-    fn update_top_entities(&self, key: &str, key_input: &SketchInput, value: i128) {
+    fn update_top_entities(&self, key: &str, key_hash: u128, value: i128) {
         if value <= 0 {
             return;
         }
-        let current = self.top_entities.estimate(key_input);
+        let current = self.top_entities.estimate_with_hash(key_hash);
         if value > current {
-            self.top_entities.update_max(key_input, value);
+            self.top_entities.update_max_with_hash(key_hash, value);
             if let Ok(mut state) = self.top_state.write() {
                 if state.key.as_deref() != Some(key) {
                     state.key = Some(key.to_string());
@@ -277,11 +238,11 @@ impl CountMinPair {
         }
     }
 
-    fn update_cumulative(&self, key_input: &SketchInput, value: i128) {
+    fn update_cumulative(&self, key_hash: u128, value: i128) {
         if value <= 0 {
             return;
         }
-        self.cumulative.insert_many(key_input, value);
+        self.cumulative.insert_many_with_hash(key_hash, value);
     }
 
     fn top_entity(&self) -> Option<EntityEstimate> {
@@ -292,8 +253,8 @@ impl CountMinPair {
         })
     }
 
-    fn estimate_cumulative(&self, key_input: &SketchInput) -> i128 {
-        self.cumulative.estimate(key_input)
+    fn estimate_cumulative(&self, key_hash: u128) -> i128 {
+        self.cumulative.estimate_with_hash(key_hash)
     }
 }
 
@@ -305,15 +266,15 @@ struct MetricCountMins {
 }
 
 impl MetricCountMins {
-    fn update(&self, field: MetricField, key: &str, key_input: &SketchInput, value: i128) {
+    fn update(&self, field: MetricField, key: &str, key_hash: u128, value: i128) {
         let pair = match field {
             MetricField::CpuCores => &self.cpu_cores,
             MetricField::MemoryGb => &self.memory_gb,
             MetricField::NetworkMbps => &self.network_mbps,
         };
 
-        pair.update_top_entities(key, key_input, value);
-        pair.update_cumulative(key_input, value);
+        pair.update_top_entities(key, key_hash, value);
+        pair.update_cumulative(key_hash, value);
     }
 
     fn top_entity(&self, field: MetricField) -> Option<EntityEstimate> {
@@ -324,11 +285,11 @@ impl MetricCountMins {
         }
     }
 
-    fn cumulative_estimate(&self, field: MetricField, key_input: &SketchInput) -> i128 {
+    fn cumulative_estimate(&self, field: MetricField, key_hash: u128) -> i128 {
         match field {
-            MetricField::CpuCores => self.cpu_cores.estimate_cumulative(key_input),
-            MetricField::MemoryGb => self.memory_gb.estimate_cumulative(key_input),
-            MetricField::NetworkMbps => self.network_mbps.estimate_cumulative(key_input),
+            MetricField::CpuCores => self.cpu_cores.estimate_cumulative(key_hash),
+            MetricField::MemoryGb => self.memory_gb.estimate_cumulative(key_hash),
+            MetricField::NetworkMbps => self.network_mbps.estimate_cumulative(key_hash),
         }
     }
 }
@@ -419,8 +380,8 @@ impl MetricStore {
     }
 
     pub fn cumulative_value(&self, field: MetricField, key: &str) -> i32 {
-        let key_input = SketchInput::Str(key);
-        clamp_i128_to_i32(self.countmins.cumulative_estimate(field, &key_input))
+        let key_hash = hash_key_128(key);
+        clamp_i128_to_i32(self.countmins.cumulative_estimate(field, key_hash))
     }
 
     pub fn frequency_estimate(&self, field: MetricField, key: &str, value: f64) -> Option<i32> {
@@ -543,17 +504,17 @@ impl MetricPreAggregation {
         task: &str,
         value: i128,
     ) {
-        let full_input = SketchInput::Str(&self.key_buffer);
+        let full_hash = hash_key_128(&self.key_buffer);
         self.countmins
-            .update(field, &self.key_buffer, &full_input, value);
+            .update(field, &self.key_buffer, full_hash, value);
 
-        let cluster_input = SketchInput::Str(cluster);
+        let cluster_hash = hash_key_128(cluster);
         self.countmins
-            .update(field, cluster, &cluster_input, value);
+            .update(field, cluster, cluster_hash, value);
 
-        let task_input = SketchInput::Str(task);
+        let task_hash = hash_key_128(task);
         self.countmins
-            .update(field, task, &task_input, value);
+            .update(field, task, task_hash, value);
     }
 
     pub fn insert(
@@ -680,14 +641,14 @@ fn update_countmins_for_value(
     full_key: &str,
     value: i128,
 ) {
-    let full_input = SketchInput::Str(full_key);
-    countmins.update(field, full_key, &full_input, value);
+    let full_hash = hash_key_128(full_key);
+    countmins.update(field, full_key, full_hash, value);
 
-    let cluster_input = SketchInput::Str(cluster);
-    countmins.update(field, cluster, &cluster_input, value);
+    let cluster_hash = hash_key_128(cluster);
+    countmins.update(field, cluster, cluster_hash, value);
 
-    let task_input = SketchInput::Str(task);
-    countmins.update(field, task, &task_input, value);
+    let task_hash = hash_key_128(task);
+    countmins.update(field, task, task_hash, value);
 }
 
 #[inline(always)]

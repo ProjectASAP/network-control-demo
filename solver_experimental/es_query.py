@@ -66,7 +66,8 @@ class TaskMetricsSnapshot:
 def update_tasks_with_metrics(
     running_tasks: dict[str, RunningTask],
     session: requests.Session = None,
-    quantiles: list[int] = None
+    quantiles: list[int] = None,
+    use_backend: bool = False,
 ) -> dict[str, TaskMetricsSnapshot]:
     """
     Update running tasks with metrics from all query types and return snapshots.
@@ -81,7 +82,7 @@ def update_tasks_with_metrics(
     top_entities: list[TopEntityResult] = []
     if running_tasks:
         try:
-            top_entities = get_top_entities(session=session)
+            top_entities = get_top_entities(session=session, use_backend=use_backend)
             for top in top_entities:
                 logger.debug(f"Top entity for {top.field}: {top.entity_key} = {top.value}")
         except Exception as e:
@@ -97,6 +98,7 @@ def update_tasks_with_metrics(
                 task_id=task_id,
                 session=session,
                 quantiles=quantiles,
+                use_backend=use_backend,
             )
             cpu_quantiles = metric_quantiles.get('cpu', {})
             memory_quantiles = metric_quantiles.get('memory', {})
@@ -111,6 +113,7 @@ def update_tasks_with_metrics(
                 node_id=node_id,
                 task_id=task_id,
                 session=session,
+                use_backend=use_backend,
             )
             logger.debug(
                 "Cumulative for %s: CPU=%s, Memory=%s, Network=%s",
@@ -129,6 +132,7 @@ def update_tasks_with_metrics(
                 cpu_value=running_task.task.initial_cpu,
                 memory_value=running_task.task.initial_memory,
                 session=session,
+                use_backend=use_backend,
             )
             for freq in snapshot.frequency_results:
                 logger.debug(
@@ -200,17 +204,29 @@ def _apply_metrics_to_task(
 def update_tasks_with_quantiles(
     running_tasks: dict[str, RunningTask],
     session=None,
-    quantiles=None
+    quantiles=None,
+    use_backend: bool = False,
 ):
     """
     Deprecated: Use update_tasks_with_metrics instead.
     """
-    return update_tasks_with_metrics(running_tasks, session, quantiles)
+    return update_tasks_with_metrics(
+        running_tasks=running_tasks,
+        session=session,
+        quantiles=quantiles,
+        use_backend=use_backend,
+    )
 
 
-def get_metric_quantiles(node_id: str, task_id: str, session=None, quantiles=None):
+def get_metric_quantiles(
+    node_id: str,
+    task_id: str,
+    session=None,
+    quantiles=None,
+    use_backend: bool = False,
+):
     """
-    Get quantiles of CPU and memory usage for a given task on a node from sketchlib backed ES server.
+    Get quantiles of CPU and memory usage for a given task on a node.
     """
 
     if session is None:
@@ -218,9 +234,6 @@ def get_metric_quantiles(node_id: str, task_id: str, session=None, quantiles=Non
     if quantiles is None:
         quantiles = [50]
 
-    url = ES_URL
-    index_name = ES_INDEX_NAME
-    api_key = ES_API_KEY
     query = {
         'bool': {
             'must': [
@@ -233,34 +246,44 @@ def get_metric_quantiles(node_id: str, task_id: str, session=None, quantiles=Non
     aggs = {
         "cpu_quantiles": {
             "percentiles": {
-                "field": "cpu_cores", 
+                "field": "cpu_cores",
                 "percents": quantiles
             }
         },
         "memory_quantiles": {
             "percentiles": {
-                "field": "memory_gb", 
+                "field": "memory_gb",
                 "percents": quantiles
             }
         }
     }
 
-    response = send_search_request(
-        session=session,
-        request_type="percentile",
-        query=query,
-        aggs=aggs,
-        url=url,
-        index_name=index_name,
-        api_key=api_key,
-        also_es=True,
-    )
+    if use_backend:
+        response = send_backend_search_request(
+            session=session,
+            request_type="percentile",
+            query=query,
+            aggs=aggs,
+            url=ES_BACKEND_URL,
+            index_name=ES_INDEX_NAME,
+            api_key=ES_BACKEND_API_KEY,
+        )
+    else:
+        response = send_search_request(
+            session=session,
+            request_type="percentile",
+            query=query,
+            aggs=aggs,
+            url=ES_URL,
+            index_name=ES_INDEX_NAME,
+            api_key=ES_API_KEY,
+            also_es=True,
+        )
     if response is None:
         raise RuntimeError("percentile request failed")
 
-    output = response
-    cpu_quantiles = output['aggregations']['cpu_quantiles']['values']
-    memory_quantiles = output['aggregations']['memory_quantiles']['values']
+    cpu_quantiles = response['aggregations']['cpu_quantiles']['values']
+    memory_quantiles = response['aggregations']['memory_quantiles']['values']
 
     return {
         'cpu': cpu_quantiles,
@@ -270,7 +293,8 @@ def get_metric_quantiles(node_id: str, task_id: str, session=None, quantiles=Non
 
 def get_top_entities(
     session: requests.Session = None,
-    fields: list[str] = None
+    fields: list[str] = None,
+    use_backend: bool = False,
 ) -> list[TopEntityResult]:
     """
     Query the top entity (highest value) for each specified metric field.
@@ -285,20 +309,40 @@ def get_top_entities(
         aggs = {
             f"top_{field}": {"top_entities": {"field": field}}
         }
-        response = send_search_request(
-            session=session,
-            request_type="top_entities",
-            query=None,
-            aggs=aggs,
-            url=ES_URL,
-            index_name=ES_INDEX_NAME,
-            api_key=ES_API_KEY,
-            also_es=True,
-        )
+        if use_backend:
+            response = send_backend_search_request(
+                session=session,
+                request_type="top_entities",
+                query=None,
+                aggs=aggs,
+                url=ES_BACKEND_URL,
+                index_name=ES_INDEX_NAME,
+                api_key=ES_BACKEND_API_KEY,
+            )
+        else:
+            response = send_search_request(
+                session=session,
+                request_type="top_entities",
+                query=None,
+                aggs=aggs,
+                url=ES_URL,
+                index_name=ES_INDEX_NAME,
+                api_key=ES_API_KEY,
+                also_es=True,
+            )
         if response is not None:
             agg_result = response.get("aggregations", {}).get(f"top_{field}", {})
-            entity_key = agg_result.get("key", "")
-            value = agg_result.get("value", 0.0)
+            entity_key = ""
+            value = 0.0
+            if "buckets" in agg_result:
+                buckets = agg_result.get("buckets", [])
+                if buckets:
+                    bucket = buckets[0]
+                    entity_key = bucket.get("key", "")
+                    value = bucket.get("max_value", {}).get("value", 0.0)
+            else:
+                entity_key = agg_result.get("key", "")
+                value = agg_result.get("value", 0.0)
             if entity_key:
                 results.append(
                     TopEntityResult(
@@ -314,7 +358,8 @@ def get_top_entities(
 def get_cumulative_usage(
     node_id: str,
     task_id: str,
-    session: requests.Session = None
+    session: requests.Session = None,
+    use_backend: bool = False,
 ) -> CumulativeResult:
     """
     Query cumulative (total sum) resource usage for a specific task on a node.
@@ -329,16 +374,27 @@ def get_cumulative_usage(
         for field in fields
     }
 
-    response = send_search_request(
-        session=session,
-        request_type="cumulative",
-        query=None,
-        aggs=aggs,
-        url=ES_URL,
-        index_name=ES_INDEX_NAME,
-        api_key=ES_API_KEY,
-        also_es=True,
-    )
+    if use_backend:
+        response = send_backend_search_request(
+            session=session,
+            request_type="cumulative",
+            query=None,
+            aggs=aggs,
+            url=ES_BACKEND_URL,
+            index_name=ES_INDEX_NAME,
+            api_key=ES_BACKEND_API_KEY,
+        )
+    else:
+        response = send_search_request(
+            session=session,
+            request_type="cumulative",
+            query=None,
+            aggs=aggs,
+            url=ES_URL,
+            index_name=ES_INDEX_NAME,
+            api_key=ES_API_KEY,
+            also_es=True,
+        )
 
     if response is None:
         return CumulativeResult(cpu_cores=0.0, memory_gb=0.0, network_mbps=0.0)
@@ -357,7 +413,8 @@ def get_resource_frequency(
     cpu_value: float = None,
     memory_value: float = None,
     network_value: float = None,
-    session: requests.Session = None
+    session: requests.Session = None,
+    use_backend: bool = False,
 ) -> list[FrequencyResult]:
     """
     Query how frequently a task uses specific resource values.
@@ -382,16 +439,27 @@ def get_resource_frequency(
     if not aggs:
         return []
 
-    response = send_search_request(
-        session=session,
-        request_type="frequency",
-        query=None,
-        aggs=aggs,
-        url=ES_URL,
-        index_name=ES_INDEX_NAME,
-        api_key=ES_API_KEY,
-        also_es=True,
-    )
+    if use_backend:
+        response = send_backend_search_request(
+            session=session,
+            request_type="frequency",
+            query=None,
+            aggs=aggs,
+            url=ES_BACKEND_URL,
+            index_name=ES_INDEX_NAME,
+            api_key=ES_BACKEND_API_KEY,
+        )
+    else:
+        response = send_search_request(
+            session=session,
+            request_type="frequency",
+            query=None,
+            aggs=aggs,
+            url=ES_URL,
+            index_name=ES_INDEX_NAME,
+            api_key=ES_API_KEY,
+            also_es=True,
+        )
 
     if response is None:
         return []
@@ -402,7 +470,10 @@ def get_resource_frequency(
         if value is not None:
             agg_key = f"{field}_frequency"
             agg_result = aggregations.get(agg_key, {})
-            count = int(agg_result.get("count", 0))
+            count_value = agg_result.get("count")
+            if count_value is None:
+                count_value = agg_result.get("value", 0)
+            count = int(count_value or 0)
             results.append(FrequencyResult(field=field, value=value, count=count))
 
     return results
@@ -481,6 +552,64 @@ def send_search_request(
             request_id=request_id,
             request_type=request_type,
             target="server",
+            duration_ms=duration_ms,
+            status=None,
+            ok=False,
+            error=str(exc),
+        )
+        return None
+
+
+def send_backend_search_request(
+    session: requests.Session,
+    request_type: str,
+    query: dict | None,
+    aggs: dict,
+    url: str,
+    index_name: str,
+    api_key: str,
+) -> dict | None:
+    request_id = uuid.uuid4().hex
+    es_query, es_aggs = build_backend_es_request(request_type, query or {}, aggs)
+    if es_aggs is None:
+        return None
+    payload = {
+        "size": 0,
+        "aggs": es_aggs,
+    }
+    if es_query is not None:
+        payload["query"] = es_query
+
+    endpoint = f'{url}/{index_name}/_search'
+    headers = {
+        "Content-Type": "application/json",
+        "X-Request-Id": request_id,
+        "X-Request-Type": request_type,
+    }
+    if api_key:
+        headers["Authorization"] = f"ApiKey {api_key}"
+
+    start_t = time.perf_counter()
+    try:
+        response = session.post(endpoint, json=payload, headers=headers)
+        duration_ms = (time.perf_counter() - start_t) * 1000.0
+        log_rtt(
+            request_id=request_id,
+            request_type=request_type,
+            target="es",
+            duration_ms=duration_ms,
+            status=response.status_code,
+            ok=response.ok,
+        )
+        if not response.ok:
+            return None
+        return response.json()
+    except Exception as exc:
+        duration_ms = (time.perf_counter() - start_t) * 1000.0
+        log_rtt(
+            request_id=request_id,
+            request_type=request_type,
+            target="es",
             duration_ms=duration_ms,
             status=None,
             ok=False,

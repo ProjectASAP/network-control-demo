@@ -1,6 +1,9 @@
 import sys
 import time
+import os
+import json
 import jsonlines
+import datetime
 import numpy as np
 import networkx as nx
 from dataclasses import dataclass, field
@@ -18,9 +21,60 @@ from scheduler.load_info import load_nodes, load_edges
 
 
 # Paramters for sending metrics to server.
-SERVER_URL = 'http://localhost:10101'
+SERVER_URL = os.getenv("SKETCH_SERVER_URL", "http://localhost:10101")
+ES_BACKEND_URL = os.getenv("ES_BACKEND_URL", "http://localhost:9200")
+ES_BACKEND_API_KEY = os.getenv("ES_BACKEND_API_KEY", os.getenv("ES_API_KEY", "")).strip()
+ES_INDEX_NAME = os.getenv("ES_INDEX_NAME", "cluster-metrics")
 INTERVAL = 60  # seconds
 TIMEOUT = 5  # seconds
+SKETCH_INGEST_ENABLED = os.getenv("SKETCH_INGEST_ENABLED", "1").lower() not in ("0", "false", "no")
+ES_INGEST_ENABLED = os.getenv("ES_INGEST_ENABLED", "1").lower() not in ("0", "false", "no")
+
+
+def build_es_bulk_payload(records: list[dict]) -> str:
+    lines = []
+    timestamp = datetime.datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+    for record in records:
+        tasks = record.get("task", [])
+        clusters = record.get("cluster", [])
+        cpu = record.get("cpu_cores", [])
+        memory = record.get("memory_gb", [])
+        network = record.get("network_mbps", [])
+        count = min(len(tasks), len(clusters), len(cpu), len(memory), len(network))
+        for idx in range(count):
+            lines.append(json.dumps({"index": {}}))
+            doc = {
+                "task": tasks[idx],
+                "cluster": clusters[idx],
+                "cpu_cores": cpu[idx],
+                "memory_gb": memory[idx],
+                "network_mbps": network[idx],
+                "@timestamp": timestamp,
+            }
+            lines.append(json.dumps(doc))
+    if not lines:
+        return ""
+    return "\n".join(lines) + "\n"
+
+
+async def send_es_bulk(client: httpx.AsyncClient, records: list[dict]) -> None:
+    if not ES_INGEST_ENABLED or not ES_BACKEND_URL:
+        return
+    payload = build_es_bulk_payload(records)
+    if not payload:
+        return
+    headers = {"Content-Type": "application/x-ndjson"}
+    if ES_BACKEND_API_KEY:
+        headers["Authorization"] = f"ApiKey {ES_BACKEND_API_KEY}"
+    endpoint = f"{ES_BACKEND_URL.rstrip('/')}/{ES_INDEX_NAME}/_bulk"
+    try:
+        response = await client.post(endpoint, content=payload, headers=headers, timeout=TIMEOUT)
+        response.raise_for_status()
+        data = response.json()
+        if data.get("errors"):
+            logger.warning("Bulk ingest reported errors from Elasticsearch.")
+    except Exception as exc:
+        logger.error(f"Error sending metrics to Elasticsearch {ES_BACKEND_URL}: {exc}")
 
 
 @asynccontextmanager
@@ -52,17 +106,20 @@ async def ingest(assignments: list[dict]):
 async def periodically_send_metrics():
     async with httpx.AsyncClient() as client:
         while True:
-            records = emulator.create_metrics_records()
-            posts = []
-            for record in records:
-                logger.trace(f"Sending record: {record}")
-                posts.append(client.post(SERVER_URL, json=record, timeout=TIMEOUT))
-            for record in asyncio.as_completed(posts):
-                try:
-                    response = await record
-                    response.raise_for_status()
-                except Exception as e:
-                    logger.error(f'Error sending metrics to {SERVER_URL}: {e}')
+            records = list(emulator.create_metrics_records())
+            if SKETCH_INGEST_ENABLED:
+                posts = []
+                for record in records:
+                    logger.trace(f"Sending record: {record}")
+                    posts.append(client.post(SERVER_URL, json=record, timeout=TIMEOUT))
+                for record in asyncio.as_completed(posts):
+                    try:
+                        response = await record
+                        response.raise_for_status()
+                    except Exception as e:
+                        logger.error(f'Error sending metrics to {SERVER_URL}: {e}')
+            if ES_INGEST_ENABLED:
+                await send_es_bulk(client, records)
             await asyncio.sleep(INTERVAL)
 
 
