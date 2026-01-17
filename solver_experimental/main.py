@@ -112,14 +112,14 @@ def assign_tasks(args: AppConfig):
         unassigned_tasks: dict[str, Task] = {}
         synthetic_node_id = os.getenv("SYNTHETIC_NODE_ID", "synthetic-node")
 
-        while task_queue:
+        while task_queue or unassigned_tasks or running_tasks:
             time.sleep(args.interval)
-            curr_offset = (time.time() - start_time)
+            curr_offset = (time.time() - start_time) * 30
             logger.debug(f"Current time offset: {curr_offset:.2f} s")
 
             # Filter out finished tasks. For now, don't account for solver time and variable finish times.
             running_tasks = {task_id: rt for task_id, rt in running_tasks.items() if curr_offset - rt.start_time_s >= rt.task.duration_s}
-            logger.debug(f"Currently running tasks: {list(running_tasks.keys())}")
+            logger.debug(f"Currently running tasks ({len(running_tasks)}): {list(running_tasks.keys())}")
 
             arrived_tasks: dict[str, Task] = {}
             # Schedule newly arrived tasks.
@@ -130,8 +130,8 @@ def assign_tasks(args: AppConfig):
                     task_queue.popleft()
                 else:
                     break
-            logger.debug(f"Arrived tasks: {list(arrived_tasks.keys())}")
-            logger.debug(f"Unassigned tasks from previous rounds: {list(unassigned_tasks.keys())}")
+            logger.debug(f"Arrived tasks ({len(arrived_tasks)}): {list(arrived_tasks.keys())}")
+            logger.debug(f"Unassigned tasks from previous rounds ({len(unassigned_tasks)}): {list(unassigned_tasks.keys())}")
 
             tasks_to_schedule = arrived_tasks | unassigned_tasks
             if not tasks_to_schedule:
@@ -238,6 +238,7 @@ def assign_tasks(args: AppConfig):
             unassigned_tasks = leftover_tasks
             running_tasks.update(assignments)
 
+            logger.info(f"Number of running tasks ({len(assignments)} new assignments): {len(running_tasks)}")
             logger.info(f"Number of unassigned tasks after scheduling: {len(unassigned_tasks)}")
             if pulp.LpStatus[status_code] == 'Optimal' and assignments:
                 assignment_repr = "Assignment: "
