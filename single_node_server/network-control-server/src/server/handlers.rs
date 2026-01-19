@@ -25,7 +25,7 @@ use super::types::{
     IngestRecord, MetricsQuery, PercentileAggregation, QueryKeyStatus, RootResponse, SearchRequest,
     TopEntitiesResult,
 };
-use super::upstream::merge_aggregations;
+use super::upstream::{forward_to_upstream, merge_aggregations};
 
 pub async fn run_http_server(
     state: AppState,
@@ -229,9 +229,9 @@ async fn search_handler(
         t.step("aggregations");
     }
 
-    // Step 4: Prepare upstream body (forwarding disabled for now)
-    let mut _upstream_body = request_value;
-    if let Some(aggs_obj) = _upstream_body
+    // Step 4: Prepare upstream body
+    let mut upstream_body = request_value;
+    if let Some(aggs_obj) = upstream_body
         .get_mut("aggs")
         .and_then(Value::as_object_mut)
     {
@@ -246,8 +246,10 @@ async fn search_handler(
     // Step 5: Forward to upstream if needed
     let needs_upstream = has_other || !unhandled.is_empty();
     let mut response_value = if needs_upstream {
-        // NOTE: Upstream forwarding disabled for now.
-        json!({ "aggregations": {} })
+        match forward_to_upstream(&state, &headers, &upstream_body).await {
+            Ok(value) => value,
+            Err(response) => return response,
+        }
     } else {
         json!({ "aggregations": {} })
     };
@@ -277,9 +279,23 @@ async fn search_handler(
         response
             .headers_mut()
             .insert("X-Server-Timing", timing_header.parse().unwrap());
+        let request_type_header = headers
+            .get("x-request-type")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("unknown");
+        let request_type = if request_type_header == "es" {
+            if needs_upstream {
+                "es(forwarded)"
+            } else {
+                "es(native)"
+            }
+        } else {
+            request_type_header
+        };
         write_timing_log(
             &state,
             &headers,
+            request_type,
             "POST",
             "/cluster-metrics/_search",
             response.status(),
@@ -516,9 +532,14 @@ async fn metrics_handler(
         response
             .headers_mut()
             .insert("X-Server-Timing", timing_header.parse().unwrap());
+        let request_type = headers
+            .get("x-request-type")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("unknown");
         write_timing_log(
             &state,
             &headers,
+            request_type,
             "POST",
             "/metrics/:field",
             response.status(),

@@ -3,10 +3,10 @@ use std::time::Instant;
 
 use serde::Serialize;
 
-use super::countmin::{MetricCountMins, clamp_i128_to_i32};
-use super::frequency::{MetricFrequencyHydra, clamp_frequency_estimate, round_to_i32};
+use super::cms_cumulative::{MetricCumulativeAndTop, clamp_i128_to_i32};
+use super::hydra_labels::{MetricFrequencyHydra, clamp_frequency_estimate, round_to_i32};
 use super::key::hash_key_128;
-use super::quantiles::{MetricHydra, MetricQuantiles};
+use super::kll_quantiles::{MetricHydra, MetricQuantiles};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum MetricField {
@@ -39,7 +39,7 @@ pub struct EntityEstimate {
 
 pub struct MetricStore {
     klls: Mutex<MetricQuantiles>,
-    countmins: MetricCountMins,
+    countmins: MetricCumulativeAndTop,
     frequency_by_label: Mutex<MetricFrequencyHydra>,
     quantile_by_label: Mutex<MetricHydra>,
 }
@@ -125,40 +125,26 @@ impl MetricStore {
             .lock()
             .map_err(|_| "failed to lock frequency sketches")?;
 
-        if let Some(value) = round_to_i32(cpu_value) {
-            let value_i128 = value as i128;
-            update_countmins_for_value(
-                &self.countmins,
-                MetricField::CpuCores,
-                cluster,
-                task,
-                &key,
-                value_i128,
-            );
+        let cpu_rounded = round_to_i32(cpu_value);
+        let mem_rounded = round_to_i32(memory_value);
+        let net_rounded = round_to_i32(network_value);
+        update_countmins(
+            &self.countmins,
+            cluster,
+            task,
+            &key,
+            cpu_rounded.map(|value| value as i128).unwrap_or(0),
+            mem_rounded.map(|value| value as i128).unwrap_or(0),
+            net_rounded.map(|value| value as i128).unwrap_or(0),
+        );
+
+        if let Some(value) = cpu_rounded {
             freq_hydra.update(MetricField::CpuCores, &key, value);
         }
-        if let Some(value) = round_to_i32(memory_value) {
-            let value_i128 = value as i128;
-            update_countmins_for_value(
-                &self.countmins,
-                MetricField::MemoryGb,
-                cluster,
-                task,
-                &key,
-                value_i128,
-            );
+        if let Some(value) = mem_rounded {
             freq_hydra.update(MetricField::MemoryGb, &key, value);
         }
-        if let Some(value) = round_to_i32(network_value) {
-            let value_i128 = value as i128;
-            update_countmins_for_value(
-                &self.countmins,
-                MetricField::NetworkMbps,
-                cluster,
-                task,
-                &key,
-                value_i128,
-            );
+        if let Some(value) = net_rounded {
             freq_hydra.update(MetricField::NetworkMbps, &key, value);
         }
 
@@ -178,7 +164,7 @@ pub struct InsertTiming {
 
 pub struct MetricPreAggregation {
     klls: MetricQuantiles,
-    countmins: MetricCountMins,
+    countmins: MetricCumulativeAndTop,
     frequency_hydra: MetricFrequencyHydra,
     hydra: MetricHydra,
     key_buffer: String,
@@ -188,29 +174,41 @@ impl MetricPreAggregation {
     pub fn new() -> Self {
         Self {
             klls: MetricQuantiles::default(),
-            countmins: MetricCountMins::default(),
+            countmins: MetricCumulativeAndTop::default(),
             frequency_hydra: MetricFrequencyHydra::new(),
             hydra: MetricHydra::new(),
             key_buffer: String::with_capacity(128),
         }
     }
 
-    fn update_countmins_for_value(
+    fn update_countmins(
         &mut self,
-        field: MetricField,
         cluster: &str,
         task: &str,
-        value: i128,
+        cpu_value: i128,
+        memory_value: i128,
+        network_value: i128,
     ) {
+        if cpu_value <= 0 && memory_value <= 0 && network_value <= 0 {
+            return;
+        }
+
         let full_hash = hash_key_128(&self.key_buffer);
-        self.countmins
-            .update(field, &self.key_buffer, full_hash, value);
+        self.countmins.update(
+            &self.key_buffer,
+            full_hash,
+            cpu_value,
+            memory_value,
+            network_value,
+        );
 
         let cluster_hash = hash_key_128(cluster);
-        self.countmins.update(field, cluster, cluster_hash, value);
+        self.countmins
+            .update(cluster, cluster_hash, cpu_value, memory_value, network_value);
 
         let task_hash = hash_key_128(task);
-        self.countmins.update(field, task, task_hash, value);
+        self.countmins
+            .update(task, task_hash, cpu_value, memory_value, network_value);
     }
 
     pub fn insert(
@@ -232,21 +230,26 @@ impl MetricPreAggregation {
         self.hydra
             .update(&self.key_buffer, cpu_value, memory_value, network_value);
 
-        if let Some(value) = round_to_i32(cpu_value) {
-            let value_i128 = value as i128;
-            self.update_countmins_for_value(MetricField::CpuCores, cluster, task, value_i128);
+        let cpu_rounded = round_to_i32(cpu_value);
+        let mem_rounded = round_to_i32(memory_value);
+        let net_rounded = round_to_i32(network_value);
+        self.update_countmins(
+            cluster,
+            task,
+            cpu_rounded.map(|value| value as i128).unwrap_or(0),
+            mem_rounded.map(|value| value as i128).unwrap_or(0),
+            net_rounded.map(|value| value as i128).unwrap_or(0),
+        );
+
+        if let Some(value) = cpu_rounded {
             self.frequency_hydra
                 .update(MetricField::CpuCores, &self.key_buffer, value);
         }
-        if let Some(value) = round_to_i32(memory_value) {
-            let value_i128 = value as i128;
-            self.update_countmins_for_value(MetricField::MemoryGb, cluster, task, value_i128);
+        if let Some(value) = mem_rounded {
             self.frequency_hydra
                 .update(MetricField::MemoryGb, &self.key_buffer, value);
         }
-        if let Some(value) = round_to_i32(network_value) {
-            let value_i128 = value as i128;
-            self.update_countmins_for_value(MetricField::NetworkMbps, cluster, task, value_i128);
+        if let Some(value) = net_rounded {
             self.frequency_hydra
                 .update(MetricField::NetworkMbps, &self.key_buffer, value);
         }
@@ -305,15 +308,13 @@ impl MetricPreAggregation {
 
         // CountMin insertion
         let t4 = Instant::now();
-        if let Some(value) = cpu_rounded {
-            self.update_countmins_for_value(MetricField::CpuCores, cluster, task, value as i128);
-        }
-        if let Some(value) = mem_rounded {
-            self.update_countmins_for_value(MetricField::MemoryGb, cluster, task, value as i128);
-        }
-        if let Some(value) = net_rounded {
-            self.update_countmins_for_value(MetricField::NetworkMbps, cluster, task, value as i128);
-        }
+        self.update_countmins(
+            cluster,
+            task,
+            cpu_rounded.map(|value| value as i128).unwrap_or(0),
+            mem_rounded.map(|value| value as i128).unwrap_or(0),
+            net_rounded.map(|value| value as i128).unwrap_or(0),
+        );
         timing.countmin_ns = t4.elapsed().as_nanos() as u64;
 
         timing
@@ -329,20 +330,25 @@ impl MetricPreAggregation {
     }
 }
 
-fn update_countmins_for_value(
-    countmins: &MetricCountMins,
-    field: MetricField,
+fn update_countmins(
+    countmins: &MetricCumulativeAndTop,
     cluster: &str,
     task: &str,
     full_key: &str,
-    value: i128,
+    cpu_value: i128,
+    memory_value: i128,
+    network_value: i128,
 ) {
+    if cpu_value <= 0 && memory_value <= 0 && network_value <= 0 {
+        return;
+    }
+
     let full_hash = hash_key_128(full_key);
-    countmins.update(field, full_key, full_hash, value);
+    countmins.update(full_key, full_hash, cpu_value, memory_value, network_value);
 
     let cluster_hash = hash_key_128(cluster);
-    countmins.update(field, cluster, cluster_hash, value);
+    countmins.update(cluster, cluster_hash, cpu_value, memory_value, network_value);
 
     let task_hash = hash_key_128(task);
-    countmins.update(field, task, task_hash, value);
+    countmins.update(task, task_hash, cpu_value, memory_value, network_value);
 }

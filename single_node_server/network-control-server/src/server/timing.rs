@@ -71,6 +71,7 @@ impl QueryTiming {
 pub(crate) fn write_timing_log(
     state: &AppState,
     headers: &HeaderMap,
+    request_type: &str,
     _method: &str,
     _path: &str,
     status: axum::http::StatusCode,
@@ -83,10 +84,11 @@ pub(crate) fn write_timing_log(
         .get("x-request-id")
         .and_then(|value| value.to_str().ok())
         .unwrap_or("unknown");
-    let request_type = headers
-        .get("x-request-type")
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("unknown");
+    let request_type = if request_type.is_empty() {
+        "unknown"
+    } else {
+        request_type
+    };
     let mut steps: BTreeMap<&str, f64> = BTreeMap::new();
     for (name, ms) in &timing.steps {
         steps.insert(name.as_str(), *ms);
