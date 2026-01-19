@@ -8,7 +8,7 @@ use std::{
     fs::OpenOptions,
     io::{BufWriter, Write},
     path::Path,
-    sync::{mpsc, Arc},
+    sync::{Arc, mpsc},
     thread,
     time::Instant,
 };
@@ -65,7 +65,11 @@ async fn main() {
         upstream_url: env::var("UPSTREAM_URL")
             .unwrap_or_else(|_| "http://localhost:9200/cluster-metrics/_search".to_string()),
         timing_enabled,
-        timing_sender: if timing_enabled { init_timing_sender() } else { None },
+        timing_sender: if timing_enabled {
+            init_timing_sender()
+        } else {
+            None
+        },
         no_ingest,
         cache: Arc::new(QueryCache::new(
             env::var("QUERY_CACHE_TTL_MS")
@@ -84,18 +88,14 @@ async fn main() {
 }
 
 fn init_timing_sender() -> Option<TimingSender> {
-    let path = env::var("SERVER_TIMING_CSV")
-        .unwrap_or_else(|_| "server_request_timing.csv".to_string());
+    let path =
+        env::var("SERVER_TIMING_CSV").unwrap_or_else(|_| "server_request_timing.csv".to_string());
     let is_empty = Path::new(&path)
         .metadata()
         .map(|meta| meta.len() == 0)
         .unwrap_or(true);
 
-    let file = match OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-    {
+    let file = match OpenOptions::new().create(true).append(true).open(&path) {
         Ok(file) => file,
         Err(err) => {
             eprintln!("failed to open timing CSV {path}: {err}");
