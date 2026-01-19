@@ -8,9 +8,9 @@ mod upstream;
 
 pub use cache::QueryCache;
 pub use handlers::run_http_server;
-pub use logging::start_request_logger;
 #[allow(unused_imports)]
 pub use logging::LogEntry;
+pub use logging::start_request_logger;
 #[allow(unused_imports)]
 pub use timing::QueryTiming;
 pub use types::AppState;

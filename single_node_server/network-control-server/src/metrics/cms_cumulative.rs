@@ -2,18 +2,8 @@ use std::sync::RwLock;
 
 use sketchlib_rust::{FastPath, XLCountMin};
 
+use super::util::clamp_i128_to_i32;
 use super::{EntityEstimate, MetricField};
-
-#[inline(always)]
-fn clamp_i128_to_i64(value: i128) -> i64 {
-    if value > i64::MAX as i128 {
-        i64::MAX
-    } else if value < i64::MIN as i128 {
-        i64::MIN
-    } else {
-        value as i64
-    }
-}
 
 #[derive(Default)]
 struct TopEntityState {
@@ -115,10 +105,7 @@ impl MetricCumulativeAndTop {
         }
     }
 
-    fn top_entity_for_field(
-        &self,
-        top_state: &RwLock<TopEntityState>,
-    ) -> Option<EntityEstimate> {
+    fn top_entity_for_field(&self, top_state: &RwLock<TopEntityState>) -> Option<EntityEstimate> {
         let state = top_state.read().ok()?;
         state.key.as_ref().map(|key| EntityEstimate {
             key: key.clone(),
@@ -128,15 +115,10 @@ impl MetricCumulativeAndTop {
 }
 
 #[inline(always)]
-fn insert_many_with_hash(
-    inner: &RwLock<XLCountMin<FastPath>>,
-    hashed_val: u128,
-    many: i128,
-) {
+fn insert_many_with_hash(inner: &RwLock<XLCountMin<FastPath>>, hashed_val: u128, many: i128) {
     if many == 0 {
         return;
     }
-    let many = i128::from(clamp_i128_to_i64(many));
     let mut inner = match inner.write() {
         Ok(inner) => inner,
         Err(poisoned) => poisoned.into_inner(),
@@ -155,7 +137,6 @@ fn estimate_with_hash(inner: &RwLock<XLCountMin<FastPath>>, hashed_val: u128) ->
 
 #[inline(always)]
 fn update_max_with_hash(inner: &RwLock<XLCountMin<FastPath>>, hashed_val: u128, next: i128) {
-    let next = i128::from(clamp_i128_to_i64(next));
     let mut inner = match inner.write() {
         Ok(inner) => inner,
         Err(poisoned) => poisoned.into_inner(),
@@ -169,15 +150,4 @@ fn update_max_with_hash(inner: &RwLock<XLCountMin<FastPath>>, hashed_val: u128, 
         next,
         hashed_val,
     );
-}
-
-#[inline(always)]
-pub(super) fn clamp_i128_to_i32(value: i128) -> i32 {
-    if value > i32::MAX as i128 {
-        i32::MAX
-    } else if value < i32::MIN as i128 {
-        i32::MIN
-    } else {
-        value as i32
-    }
 }

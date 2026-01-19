@@ -3,10 +3,11 @@ use std::time::Instant;
 
 use serde::Serialize;
 
-use super::cms_cumulative::{MetricCumulativeAndTop, clamp_i128_to_i32};
+use super::cms_cumulative::MetricCumulativeAndTop;
 use super::hydra_labels::{MetricFrequencyHydra, clamp_frequency_estimate, round_to_i32};
 use super::key::hash_key_128;
 use super::kll_quantiles::{MetricHydra, MetricQuantiles};
+use super::util::clamp_i128_to_i32;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum MetricField {
@@ -203,8 +204,13 @@ impl MetricPreAggregation {
         );
 
         let cluster_hash = hash_key_128(cluster);
-        self.countmins
-            .update(cluster, cluster_hash, cpu_value, memory_value, network_value);
+        self.countmins.update(
+            cluster,
+            cluster_hash,
+            cpu_value,
+            memory_value,
+            network_value,
+        );
 
         let task_hash = hash_key_128(task);
         self.countmins
@@ -347,7 +353,13 @@ fn update_countmins(
     countmins.update(full_key, full_hash, cpu_value, memory_value, network_value);
 
     let cluster_hash = hash_key_128(cluster);
-    countmins.update(cluster, cluster_hash, cpu_value, memory_value, network_value);
+    countmins.update(
+        cluster,
+        cluster_hash,
+        cpu_value,
+        memory_value,
+        network_value,
+    );
 
     let task_hash = hash_key_128(task);
     countmins.update(task, task_hash, cpu_value, memory_value, network_value);

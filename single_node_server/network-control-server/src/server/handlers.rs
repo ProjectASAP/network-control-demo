@@ -231,10 +231,7 @@ async fn search_handler(
 
     // Step 4: Prepare upstream body
     let mut upstream_body = request_value;
-    if let Some(aggs_obj) = upstream_body
-        .get_mut("aggs")
-        .and_then(Value::as_object_mut)
-    {
+    if let Some(aggs_obj) = upstream_body.get_mut("aggs").and_then(Value::as_object_mut) {
         for name in &handled_names {
             aggs_obj.remove(name);
         }
