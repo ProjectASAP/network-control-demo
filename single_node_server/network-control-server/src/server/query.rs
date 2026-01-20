@@ -4,10 +4,11 @@ use serde_json::Value;
 
 use crate::metrics::{EntityEstimate, MetricField};
 
+use super::QueryCache;
 use super::types::AppState;
 use super::types::{
-    CumulativeAggregation, FrequencyAggregation, PercentileAggregation, QueryKeyStatus,
-    TopEntitiesAggregation, TopEntitiesResult,
+    CumulativeAggregation, PercentileAggregation, QueryKeyStatus, TopEntitiesAggregation,
+    TopEntitiesResult,
 };
 
 pub(crate) fn build_percentile_response(percents: &[f64], values: &[f64]) -> BTreeMap<String, f64> {
@@ -36,7 +37,6 @@ pub(crate) fn handle_percentiles(
     let field = MetricField::from_spec(&pct.field)
         .ok_or_else(|| format!("unsupported percentile field: {}", pct.field))?;
 
-    let mut values = BTreeMap::new();
     let explicit_key = pct
         .key
         .as_ref()
@@ -46,31 +46,48 @@ pub(crate) fn handle_percentiles(
         return Err("percentiles key is required when provided".to_string());
     }
     let key = explicit_key.or(query_key);
-    if let Some(cached) = state.cache.get_percentiles(field, key, &pct.percents) {
-        return Ok(Some(build_percentile_response(&pct.percents, &cached)));
+    let cache_key = if state.cache.is_enabled() {
+        Some(QueryCache::build_percentiles_cache_key(
+            field,
+            key,
+            &pct.percents,
+        ))
+    } else {
+        None
+    };
+    if let Some(cache_key) = cache_key.as_ref() {
+        if let Some(cached) = state.cache.get_percentiles_with_key(cache_key) {
+            return Ok(Some(build_percentile_response(&pct.percents, &cached)));
+        }
     }
 
+    let query_results = if let Some(key) = key {
+        state
+            .store
+            .query_percentiles_by_key(field, key, &pct.percents)
+    } else {
+        state.store.query_percentiles(field, &pct.percents)
+    };
+    let query_results = query_results.unwrap_or_else(|| vec![None; pct.percents.len()]);
+
+    let mut values = BTreeMap::new();
     let mut cache_values = Vec::with_capacity(pct.percents.len());
     let mut all_present = true;
-    for percent in &pct.percents {
-        let value = if let Some(key) = key {
-            state.store.query_percentile_by_key(field, key, *percent)
-        } else {
-            state.store.query_percentile(field, *percent)
-        };
-
+    for (percent, value) in pct.percents.iter().zip(query_results.iter()) {
         if let Some(value) = value {
-            values.insert(percent.to_string(), value);
-            cache_values.push(value);
+            values.insert(percent.to_string(), *value);
+            cache_values.push(*value);
         } else {
             all_present = false;
         }
     }
 
     if all_present && !cache_values.is_empty() {
-        state
-            .cache
-            .set_percentiles(field, key, &pct.percents, cache_values);
+        if let Some(cache_key) = cache_key {
+            state
+                .cache
+                .set_percentiles_with_key(cache_key, cache_values);
+        }
     }
 
     Ok(Some(values))
@@ -157,23 +174,6 @@ pub(crate) fn handle_cumulative(
         return Err("cumulative key is required".to_string());
     }
     Ok(state.store.cumulative_value(field, cum.key.trim()))
-}
-
-pub(crate) fn handle_frequency(
-    state: &AppState,
-    freq: &FrequencyAggregation,
-) -> Result<i32, String> {
-    let field = MetricField::from_spec(&freq.field)
-        .ok_or_else(|| format!("unsupported frequency field: {}", freq.field))?;
-    let key = freq.key.trim();
-    if key.is_empty() {
-        return Err("frequency key is required".to_string());
-    }
-
-    state
-        .store
-        .frequency_estimate(field, key, freq.value)
-        .ok_or_else(|| format!("invalid frequency value: {}", freq.value))
 }
 
 pub(crate) fn extract_query_key(query_value: Option<&Value>) -> QueryKeyStatus {

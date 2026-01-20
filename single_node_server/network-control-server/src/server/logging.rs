@@ -26,33 +26,29 @@ pub(crate) async fn log_request_middleware(
     next: Next,
 ) -> Response {
     let (parts, body) = req.into_parts();
-    let method = parts.method.clone();
-    let uri = parts.uri.clone();
-    let headers = parts.headers.clone();
-
-    let body_bytes = match to_bytes(body, usize::MAX).await {
-        Ok(bytes) => bytes,
-        Err(err) => {
-            eprintln!("failed to read request body: {err}");
-            Bytes::new()
-        }
-    };
-
-    let log_body = body_bytes.clone();
-    let log_method = method.clone();
-    let log_uri = uri.clone();
-    let log_headers = headers.clone();
     if let Some(log_tx) = &state.log_tx {
+        let body_bytes = match to_bytes(body, usize::MAX).await {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                eprintln!("failed to read request body: {err}");
+                Bytes::new()
+            }
+        };
         let log_entry = LogEntry {
-            method: log_method,
-            uri: log_uri,
-            headers: log_headers,
-            body: log_body,
+            method: parts.method.clone(),
+            uri: parts.uri.clone(),
+            headers: parts.headers.clone(),
+            body: body_bytes.clone(),
         };
         let _ = log_tx.try_send(log_entry);
+        let req = axum::http::Request::from_parts(parts, Body::from(body_bytes));
+        let response = next.run(req).await;
+        let status = response.status();
+        eprintln!("response status: {}", status);
+        return response;
     }
 
-    let req = axum::http::Request::from_parts(parts, Body::from(body_bytes));
+    let req = axum::http::Request::from_parts(parts, body);
     let response = next.run(req).await;
     let status = response.status();
     eprintln!("response status: {}", status);

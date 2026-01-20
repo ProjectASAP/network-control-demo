@@ -43,8 +43,6 @@ pub(crate) struct AggregationRequest {
     #[serde(default)]
     pub(crate) percentiles: Option<PercentileAggregation>,
     #[serde(default)]
-    pub(crate) frequency: Option<FrequencyAggregation>,
-    #[serde(default)]
     pub(crate) top_entities: Option<TopEntitiesAggregation>,
     #[serde(default)]
     pub(crate) cumulative: Option<CumulativeAggregation>,
@@ -74,13 +72,6 @@ pub(crate) struct CumulativeAggregation {
     pub(crate) key: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct FrequencyAggregation {
-    pub(crate) field: String,
-    pub(crate) key: String,
-    pub(crate) value: f64,
-}
-
 #[derive(Debug, Deserialize)]
 pub(crate) struct MetricsQuery {
     pub(crate) quantiles: Vec<String>,
@@ -92,7 +83,6 @@ pub(crate) struct BatchQueryRequest {
     pub(crate) fields: Option<Vec<String>>,
     pub(crate) aggs: Vec<String>,
     pub(crate) percents: Option<Vec<f64>>,
-    pub(crate) frequency_value: Option<f64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -100,7 +90,6 @@ pub(crate) struct BatchQueryResult {
     pub(crate) key: String,
     pub(crate) percentiles: Option<HashMap<String, HashMap<String, f64>>>,
     pub(crate) cumulative: Option<HashMap<String, i32>>,
-    pub(crate) frequency: Option<HashMap<String, i32>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -121,7 +110,6 @@ pub(crate) enum AggregationKind {
     Percentiles(PercentileAggregation),
     TopEntities(TopEntitiesAggregation),
     Cumulative(CumulativeAggregation),
-    Frequency(FrequencyAggregation),
 }
 
 pub(crate) enum QueryKeyStatus {
@@ -137,30 +125,21 @@ pub(crate) enum TopEntitiesResult {
 
 impl AggregationRequest {
     pub(crate) fn kind(&self) -> Option<AggregationKind> {
-        let mut kind = None;
-        let mut count = 0;
-        if let Some(pct) = self.percentiles.clone() {
-            kind = Some(AggregationKind::Percentiles(pct));
-            count += 1;
+        let percentiles = self.percentiles.as_ref();
+        let top_entities = self.top_entities.as_ref();
+        let cumulative = self.cumulative.as_ref();
+        let count = usize::from(percentiles.is_some())
+            + usize::from(top_entities.is_some())
+            + usize::from(cumulative.is_some());
+        if count != 1 || !self.other.is_empty() {
+            return None;
         }
-
-        if let Some(top) = self.top_entities.clone() {
-            kind = Some(AggregationKind::TopEntities(top));
-            count += 1;
+        if let Some(pct) = percentiles {
+            return Some(AggregationKind::Percentiles(pct.clone()));
         }
-        if let Some(cum) = self.cumulative.clone() {
-            kind = Some(AggregationKind::Cumulative(cum));
-            count += 1;
+        if let Some(top) = top_entities {
+            return Some(AggregationKind::TopEntities(top.clone()));
         }
-        if let Some(freq) = self.frequency.clone() {
-            kind = Some(AggregationKind::Frequency(freq));
-            count += 1;
-        }
-
-        if count == 1 && self.other.is_empty() {
-            kind
-        } else {
-            None
-        }
+        cumulative.map(|cum| AggregationKind::Cumulative(cum.clone()))
     }
 }

@@ -77,6 +77,7 @@ impl MetricStore {
         Some(value)
     }
 
+    #[allow(dead_code)]
     pub fn query_percentile_by_key(
         &self,
         field: MetricField,
@@ -89,6 +90,84 @@ impl MetricStore {
         let quantile = percent / 100.0;
         let hydra = self.hydra_by_label.lock().ok()?;
         hydra.query_quantile(field, key, quantile)
+    }
+
+    pub fn query_percentiles(
+        &self,
+        field: MetricField,
+        percents: &[f64],
+    ) -> Option<Vec<Option<f64>>> {
+        let klls = self.klls.lock().ok()?;
+        let results = match field {
+            MetricField::CpuCores => {
+                let cpu = match klls.cpu_cores.read() {
+                    Ok(c) => c,
+                    Err(p) => p.into_inner(),
+                };
+                percents
+                    .iter()
+                    .map(|percent| {
+                        if !(0.0..=100.0).contains(percent) {
+                            None
+                        } else {
+                            Some(cpu.quantile(percent / 100.0))
+                        }
+                    })
+                    .collect()
+            }
+            MetricField::MemoryGb => {
+                let mem = match klls.memory_gb.read() {
+                    Ok(m) => m,
+                    Err(p) => p.into_inner(),
+                };
+                percents
+                    .iter()
+                    .map(|percent| {
+                        if !(0.0..=100.0).contains(percent) {
+                            None
+                        } else {
+                            Some(mem.quantile(percent / 100.0))
+                        }
+                    })
+                    .collect()
+            }
+            MetricField::NetworkMbps => {
+                let net = match klls.network_mbps.read() {
+                    Ok(n) => n,
+                    Err(p) => p.into_inner(),
+                };
+                percents
+                    .iter()
+                    .map(|percent| {
+                        if !(0.0..=100.0).contains(percent) {
+                            None
+                        } else {
+                            Some(net.quantile(percent / 100.0))
+                        }
+                    })
+                    .collect()
+            }
+        };
+        Some(results)
+    }
+
+    pub fn query_percentiles_by_key(
+        &self,
+        field: MetricField,
+        key: &str,
+        percents: &[f64],
+    ) -> Option<Vec<Option<f64>>> {
+        let hydra = self.hydra_by_label.lock().ok()?;
+        let mut results = Vec::with_capacity(percents.len());
+        for percent in percents {
+            if !(0.0..=100.0).contains(percent) {
+                results.push(None);
+                continue;
+            }
+            let quantile = percent / 100.0;
+            results.push(hydra.query_quantile(field, key, quantile));
+        }
+        Some(results)
     }
 
     pub fn top_entity(&self, field: MetricField) -> Option<EntityEstimate> {
