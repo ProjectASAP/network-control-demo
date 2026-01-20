@@ -27,6 +27,7 @@ pub mod nexmark;
 pub mod polling_http;
 pub mod preview;
 pub mod prometheus_impulse;
+pub mod prometheus_remote_write_optimized;
 pub mod prometheus_remote_write_schemaless;
 pub mod prometheus_remote_write_with_schema;
 pub mod rabbitmq;
@@ -53,6 +54,7 @@ pub fn connectors() -> HashMap<&'static str, Box<dyn ErasedConnector>> {
         Box::new(polling_http::PollingHTTPConnector {}),
         Box::new(preview::PreviewConnector {}),
         Box::new(prometheus_impulse::PrometheusImpulseConnector {}),
+        Box::new(prometheus_remote_write_optimized::PrometheusRemoteWriteOptimizedConnector {}),
         Box::new(prometheus_remote_write_schemaless::PrometheusRemoteWriteSchemalessConnector {}),
         Box::new(prometheus_remote_write_with_schema::PrometheusRemoteWriteWithSchemaConnector {}),
         Box::new(rabbitmq::RabbitmqConnector {}),

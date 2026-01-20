@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 set -e
 
@@ -53,6 +53,7 @@ if ! command -v pnpm &> /dev/null; then
     curl -fsSL https://get.pnpm.io/install.sh | sh -
     source ~/.bashrc
     sudo cp "$HOME/.local/share/pnpm/pnpm" /usr/local/bin/pnpm
+    sudo cp -r "$HOME/.local/share/pnpm/.tools" /usr/local/bin/
 else
     echo "pnpm already installed"
 fi
@@ -70,6 +71,6 @@ sudo -u postgres psql -c "SELECT 1 FROM pg_database WHERE datname='arroyo'" | gr
 
 echo "Arroyo dependencies setup completed!"
 
-sudo apt install -y linux-tools-common linux-tools-generic linux-tools-`uname -r`
+sudo apt install -y linux-tools-common linux-tools-generic "linux-tools-$(uname -r)"
 cargo install flamegraph
 echo "Installed flamegraph for profiling"

@@ -7,19 +7,25 @@ import subprocess
 from typing import Optional
 
 import utils
+import constants
 from .base import BaseService
 from experiment_utils.providers.base import InfrastructureProvider
 
 
 class PrometheusClientService(BaseService):
-    def __init__(self, provider: InfrastructureProvider, use_container: bool):
+    def __init__(
+        self,
+        provider: InfrastructureProvider,
+        use_container: bool,
+        node_offset: int,
+    ):
         super().__init__(provider)
         self.use_container = use_container
+        self.node_offset = node_offset
         self.container_name = "sketchdb-prometheusclient"
-        # Hard coded port numbers for opening ports in docker-compose
-        self.query_engine_port = 8088
-        self.prometheus_port = 9090
-        self.latency_exporter_socket_addr = f"{self.provider.get_node_ip(0)}:9150"
+        self.latency_exporter_socket_addr = (
+            f"{self.provider.get_node_ip(node_offset)}:9150"
+        )
         self.compose_file = None
 
     def start(
@@ -99,12 +105,16 @@ class PrometheusClientService(BaseService):
         gen_compose_cmd += f" --config-file {config_file}"
         gen_compose_cmd += f" --client-output-dir {output_dir}"
         gen_compose_cmd += f" --client-output-file {output_file}"
-        gen_compose_cmd += f" --prometheus-host {self.provider.get_node_ip(0)}"
-        gen_compose_cmd += f" --sketchdb-host {self.provider.get_node_ip(0)}"
+        gen_compose_cmd += (
+            f" --prometheus-host {self.provider.get_node_ip(self.node_offset)}"
+        )
+        gen_compose_cmd += (
+            f" --sketchdb-host {self.provider.get_node_ip(self.node_offset)}"
+        )
         if parallel:
             gen_compose_cmd += " --parallel"
 
-        if experiment_mode == "sketchdb":
+        if experiment_mode == constants.SKETCHDB_EXPERIMENT_NAME:
             assert query_engine_config_file is not None
             gen_compose_cmd += f" --align-query-time --server-for-alignment sketchdb --query-engine-config-file {query_engine_config_file}"
 
@@ -143,7 +153,7 @@ class PrometheusClientService(BaseService):
             config_file, output_dir, output_file, " --parallel" if parallel else ""
         )
 
-        if experiment_mode == "sketchdb":
+        if experiment_mode == constants.SKETCHDB_EXPERIMENT_NAME:
             assert query_engine_config_file is not None
             cmd += " --align_query_time --server_for_alignment sketchdb --query_engine_config_file {}".format(
                 query_engine_config_file
@@ -152,7 +162,7 @@ class PrometheusClientService(BaseService):
         # TODO Update handling of config yaml so port:ip isn't hardcoded and always
         #      matches the IP:PORT for scrape target in the generated prometheus config
         if export_cost_and_latency:
-            cmd += f" --export_latencies_for_prometheus {self.provider.get_node_ip(0)}:9150"
+            cmd += f" --export_latencies_for_prometheus {self.provider.get_node_ip(self.node_offset)}:9150"
 
         if profile_query_engine_pid is not None:
             cmd += " --profile_query_engine_pid {}".format(profile_query_engine_pid)
@@ -181,7 +191,7 @@ class PrometheusClientService(BaseService):
                     self.compose_file = None
                 else:
                     self.provider.execute_command(
-                        node_idx=0,
+                        node_idx=self.node_offset,
                         cmd=cmd,
                         cmd_dir=None,
                         nohup=False,
@@ -195,7 +205,7 @@ class PrometheusClientService(BaseService):
                     utils.run_cmd(cmd, popen=False)
                 else:
                     self.provider.execute_command(
-                        node_idx=0,
+                        node_idx=self.node_offset,
                         cmd=cmd,
                         cmd_dir=None,
                         nohup=False,
@@ -214,7 +224,7 @@ class PrometheusClientService(BaseService):
             utils.run_cmd(cmd, popen=False)
         else:
             self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=None,
                 nohup=False,

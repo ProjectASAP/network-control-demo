@@ -1,5 +1,4 @@
 use promql_utilities::ast_matching::promql_pattern::TokenData;
-// use promql_utilities::ast_matching::promql_pattern_factory::PromQLPatternFactory;
 use promql_utilities::ast_matching::{PromQLPattern, PromQLPatternBuilder};
 use serde_json::json;
 use std::collections::HashMap;

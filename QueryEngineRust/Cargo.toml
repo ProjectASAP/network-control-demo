@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 promql_utilities = { path = "../CommonDependencies/dependencies/rs/promql_utilities" }
+sql_utilities = { path = "../CommonDependencies/dependencies/rs/sql_utilities" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
@@ -33,6 +34,15 @@ xxhash-rust = { version = "0.8", features = ["xxh32", "xxh64"] }
 dsrs = { git = "https://github.com/SketchDB/datasketches-rs" }
 base64 = "0.21"
 hex = "0.4"
+sqlparser = "0.59.0"
 
 [dev-dependencies]
 tempfile = "3.20.0"
+
+[features]
+#default = ["lock_profiling", "extra_debugging"]
+default = []
+# Enable lock profiling instrumentation
+lock_profiling = []
+# Enable extra debugging output
+extra_debugging = []

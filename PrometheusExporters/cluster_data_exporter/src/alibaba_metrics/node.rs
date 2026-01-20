@@ -9,6 +9,7 @@ use std::io::BufReader;
 use std::path::Path;
 use std::thread;
 use std::time::Duration;
+use tracing::{debug, info};
 
 type BoxedErr = Box<dyn std::error::Error + Send + Sync + 'static>;
 type CsvGzReader<File> = Reader<GzDecoder<BufReader<File>>>;
@@ -135,8 +136,11 @@ pub fn get_reader(
 /// sometimes the data is listed in order of decreasing timestamp and other
 /// times it's listed in order of increasing timestamp, so the timestamps
 /// are modified to work with the exporter before being queued
+///
+/// @NOTE: SPEEDUP_FACTOR can be set via --speedup CLI argument for faster-than-realtime export
 pub fn get_normalized_start_time(time_millis: u64) -> Duration {
-    Duration::from_millis(time_millis)
+    let speedup = crate::alibaba_metrics::SPEEDUP_FACTOR.get().unwrap_or(&1);
+    Duration::from_millis(time_millis / speedup)
 }
 
 /// @brief Reads the csv data from .csv.gz files and adds them to the queue.
@@ -222,7 +226,7 @@ pub fn export_from_queue() {
 
     // No more files to read and empty queue
     if NODE_DATA_QUEUE.is_closed() && NODE_DATA_QUEUE.is_empty() {
-        println!("No more Node data to export, shutting down...");
+        info!("No more Node data to export, shutting down");
         std::process::exit(0);
     }
 }

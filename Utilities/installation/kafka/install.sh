@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 if [ -z "$1" ]; then
     echo "Usage: $0 <install_dir>"
@@ -29,8 +29,9 @@ HOST_IP=$(ip a | grep 10.10 | awk '{print $2}' | cut -d '/' -f1)
 
 # Set up Kafka configuration
 sed -i "s|log.dirs=.*|log.dirs=$KAFKA_LOG_DIR|g" $KAFKA_CONFIG_FILE
-# if message.max.bytes is set, modify value to 4MB. Else set it to 4MB explicitly
-set_property "$KAFKA_CONFIG_FILE" "message.max.bytes" "4194304"
+# Increase message size limit to 20MB to accommodate large precomputes (e.g., 3x65536 CountMinSketch)
+set_property "$KAFKA_CONFIG_FILE" "message.max.bytes" "20971520"
+set_property "$KAFKA_CONFIG_FILE" "replica.fetch.max.bytes" "20971520"
 set_property "$KAFKA_CONFIG_FILE" "log.retention.hours" "1"
 set_property "$KAFKA_CONFIG_FILE" "advertised.listeners" "PLAINTEXT://"$HOST_IP":9092"
 

@@ -40,6 +40,11 @@ OmegaConf.register_new_resolver(
     "local_experiment_dir", lambda: constants.LOCAL_EXPERIMENT_DIR
 )
 
+# Register custom resolver for remote write IP based on node_offset
+OmegaConf.register_new_resolver(
+    "remote_write_ip", lambda node_offset: f"10.10.1.{node_offset + 1}"
+)
+
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg: DictConfig):
@@ -64,71 +69,106 @@ def main(cfg: DictConfig):
     print(f"Provider: {type(provider).__name__}")
     print(f"Nodes: {num_nodes_in_experiment}")
 
-    kafka_service = KafkaService(provider, num_tries=KAFKA_NUM_TRIES)
-    flink_service = FlinkService(provider)
+    kafka_service = KafkaService(provider, args.node_offset, num_tries=KAFKA_NUM_TRIES)
+    flink_service = FlinkService(provider, args.node_offset)
 
     # Initialize both query engine languages
     query_engine_service_rust = QueryEngineServiceFactory.create_query_engine_service(
-        "rust", provider, use_container=True
+        "rust", provider, use_container=True, node_offset=args.node_offset
     )
     query_engine_service_python = QueryEngineServiceFactory.create_query_engine_service(
-        "python", provider, use_container=True
+        "python", provider, use_container=True, node_offset=args.node_offset
     )
     query_engine_service_rust_native = (
         QueryEngineServiceFactory.create_query_engine_service(
-            "rust", provider, use_container=False
+            "rust", provider, use_container=False, node_offset=args.node_offset
         )
     )
     query_engine_service_python_native = (
         QueryEngineServiceFactory.create_query_engine_service(
-            "python", provider, use_container=False
+            "python", provider, use_container=False, node_offset=args.node_offset
         )
     )
 
-    system_exporters_service = SystemExportersService(provider, num_nodes_in_experiment)
-    prometheus_service = create_prometheus_service(
-        cfg, provider, num_nodes_in_experiment
+    system_exporters_service = SystemExportersService(
+        provider, num_nodes_in_experiment, args.node_offset
     )
-    prometheus_kafka_adapter_service = PrometheusKafkaAdapterService(provider)
+    prometheus_service = create_prometheus_service(
+        cfg, provider, num_nodes_in_experiment, args.node_offset
+    )
+    prometheus_kafka_adapter_service = PrometheusKafkaAdapterService(
+        provider, args.node_offset
+    )
 
-    arroyo_service_container = ArroyoService(provider, use_container=True)
-    arroyo_service_native = ArroyoService(provider, use_container=False)
+    arroyo_service_container = ArroyoService(
+        provider, use_container=True, node_offset=args.node_offset
+    )
+    arroyo_service_native = ArroyoService(
+        provider, use_container=False, node_offset=args.node_offset
+    )
 
-    deathstar_service = DeathstarService(provider, num_nodes_in_experiment)
+    deathstar_service = DeathstarService(
+        provider, num_nodes_in_experiment, args.node_offset
+    )
 
-    controller_service_container = ControllerService(provider, use_container=True)
-    controller_service_native = ControllerService(provider, use_container=False)
+    controller_service_container = ControllerService(
+        provider, use_container=True, node_offset=args.node_offset
+    )
+    controller_service_native = ControllerService(
+        provider, use_container=False, node_offset=args.node_offset
+    )
 
-    dumb_consumer_service = DumbKafkaConsumerService(provider)
+    dumb_consumer_service = DumbKafkaConsumerService(provider, args.node_offset)
 
     prometheus_client_service_container = PrometheusClientService(
-        provider, use_container=True
+        provider, use_container=True, node_offset=args.node_offset
     )
     prometheus_client_service_native = PrometheusClientService(
-        provider, use_container=False
+        provider, use_container=False, node_offset=args.node_offset
     )
 
-    remote_monitor_service = RemoteMonitorService(provider)
+    remote_monitor_service = RemoteMonitorService(provider, args.node_offset)
 
-    grafana_service = GrafanaService(provider, num_nodes_in_experiment)
+    grafana_service = GrafanaService(
+        provider, num_nodes_in_experiment, args.node_offset
+    )
 
     avalanche_service = AvalancheExporterService(
-        provider, num_nodes_in_experiment, use_container=False
+        provider,
+        num_nodes_in_experiment,
+        use_container=False,
+        node_offset=args.node_offset,
     )
 
     # Initialize both exporter languages
     fake_exporter_service_rust = ExporterServiceFactory.create_exporter_service(
-        "rust", provider, num_nodes_in_experiment, use_container=True
+        "rust",
+        provider,
+        num_nodes_in_experiment,
+        use_container=True,
+        node_offset=args.node_offset,
     )
     fake_exporter_service_python = ExporterServiceFactory.create_exporter_service(
-        "python", provider, num_nodes_in_experiment, use_container=True
+        "python",
+        provider,
+        num_nodes_in_experiment,
+        use_container=True,
+        node_offset=args.node_offset,
     )
     fake_exporter_service_rust_native = ExporterServiceFactory.create_exporter_service(
-        "rust", provider, num_nodes_in_experiment, use_container=False
+        "rust",
+        provider,
+        num_nodes_in_experiment,
+        use_container=False,
+        node_offset=args.node_offset,
     )
     fake_exporter_service_python_native = (
         ExporterServiceFactory.create_exporter_service(
-            "python", provider, num_nodes_in_experiment, use_container=False
+            "python",
+            provider,
+            num_nodes_in_experiment,
+            use_container=False,
+            node_offset=args.node_offset,
         )
     )
 

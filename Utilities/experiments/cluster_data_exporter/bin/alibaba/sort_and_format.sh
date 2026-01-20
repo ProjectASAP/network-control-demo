@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # Script to process alibaba Node and MSResource data files with year-specific configurations 
 # Usage: ./sort_and_format.sh <input_directory> --year <year> [-n] [-m]

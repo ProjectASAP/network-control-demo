@@ -8,6 +8,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::thread;
 use std::time::Duration;
+use tracing::{debug, info};
 
 const FILENAME_PARTS_2021: [&str; 2] = ["MSResource_", ".csv.gz"];
 const FILENAME_PARTS_2022: [&str; 2] = ["MSMetrics_", ".csv.gz"];
@@ -198,8 +199,11 @@ pub fn read_and_queue(
 /// sometimes the data is listed in order of decreasing timestamp and other
 /// times it's listed in order of increasing timestamp, so the timestamps
 /// are modified to work with the exporter before being queued
+///
+/// @NOTE: SPEEDUP_FACTOR can be set via --speedup CLI argument for faster-than-realtime export
 pub fn get_normalized_start_time(time_millis: u64) -> Duration {
-    Duration::from_millis(time_millis)
+    let speedup = crate::alibaba_metrics::SPEEDUP_FACTOR.get().unwrap_or(&1);
+    Duration::from_millis(time_millis / speedup)
 }
 
 /// @brief Exports a single line from the MS_RESOURCE_DATA_QUEUE
@@ -238,7 +242,7 @@ pub fn export_from_queue() {
 
     // No more files to read and empty queue
     if MS_RESOURCE_DATA_QUEUE.is_closed() && MS_RESOURCE_DATA_QUEUE.is_empty() {
-        println!("No more MSResource data to export, shutting down...");
+        info!("No more MSResource data to export, shutting down");
         std::process::exit(0);
     }
 }

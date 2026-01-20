@@ -1,9 +1,12 @@
-use crate::data_model::{InferenceConfig, StreamingConfig};
+use crate::data_model::{InferenceConfig, QueryLanguage, StreamingConfig};
 use anyhow::{Context, Result};
 
 /// Read inference configuration from a YAML file
-pub fn read_inference_config(yaml_file: &str) -> Result<InferenceConfig> {
-    let config = InferenceConfig::from_yaml_file(yaml_file)
+pub fn read_inference_config(
+    yaml_file: &str,
+    query_language: QueryLanguage,
+) -> Result<InferenceConfig> {
+    let config = InferenceConfig::from_yaml_file(yaml_file, query_language)
         .with_context(|| format!("Failed to parse YAML config from: {yaml_file}"))?;
 
     Ok(config)
@@ -27,6 +30,7 @@ pub fn read_streaming_config(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::data_model::QueryLanguage;
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -86,8 +90,11 @@ queries:
 
         let mut inference_temp_file = NamedTempFile::new().unwrap();
         write!(inference_temp_file, "{inference_yaml_content}").unwrap();
-        let inference_config =
-            read_inference_config(inference_temp_file.path().to_str().unwrap()).unwrap();
+        let inference_config = read_inference_config(
+            inference_temp_file.path().to_str().unwrap(),
+            QueryLanguage::promql,
+        )
+        .unwrap();
         assert!(!inference_config.query_configs.is_empty());
 
         let mut streaming_temp_file = NamedTempFile::new().unwrap();
@@ -130,7 +137,9 @@ queries:
         let mut temp_file = NamedTempFile::new().unwrap();
         write!(temp_file, "{yaml_content}").unwrap();
 
-        let config = read_inference_config(temp_file.path().to_str().unwrap()).unwrap();
+        let config =
+            read_inference_config(temp_file.path().to_str().unwrap(), QueryLanguage::promql)
+                .unwrap();
         assert!(!config.query_configs.is_empty());
     }
 }

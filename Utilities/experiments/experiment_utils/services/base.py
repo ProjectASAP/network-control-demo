@@ -79,16 +79,20 @@ class BaseService(ABC):
 class DockerServiceBase(BaseService):
     """Abstract base class for Docker-based services with common container management."""
 
-    def __init__(self, provider: InfrastructureProvider, num_nodes: int):
+    def __init__(
+        self, provider: InfrastructureProvider, num_nodes: int, node_offset: int
+    ):
         """
         Initialize Docker service base.
 
         Args:
             provider: Infrastructure provider for node communication and management
             num_nodes: Number of nodes to manage
+            node_offset: Starting node index offset
         """
         super().__init__(provider)
         self.num_nodes = num_nodes
+        self.node_offset = node_offset
 
     @abstractmethod
     def get_container_name(self) -> str:
@@ -116,7 +120,7 @@ class DockerServiceBase(BaseService):
         try:
             cmd = f"docker stats {container_name} --no-stream --format 'table {{{{.CPUPerc}}}},{{{{.MemUsage}}}},{{{{.MemPerc}}}}'"
             result = self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=None,
                 nohup=False,
@@ -146,7 +150,7 @@ class DockerServiceBase(BaseService):
 
         # Remove any lingering data directories
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd="docker volume prune -f",
             cmd_dir=None,
             nohup=False,
@@ -166,7 +170,7 @@ class DockerServiceBase(BaseService):
             # Check if container is running
             cmd = f"docker ps --filter name={container_name} --format '{{{{.Status}}}}'"
             result = self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=None,
                 nohup=False,
@@ -184,7 +188,7 @@ class DockerServiceBase(BaseService):
         # Kill and remove container if it exists, ignore errors
         cleanup_cmd = f"docker kill {container_name} 2>/dev/null || true; docker rm {container_name} 2>/dev/null || true"
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cleanup_cmd,
             cmd_dir=None,
             nohup=False,
@@ -203,7 +207,7 @@ class DockerServiceBase(BaseService):
                 try:
                     cmd = f"curl -s {service_url}{health_endpoint}"
                     result = self.provider.execute_command(
-                        node_idx=0,
+                        node_idx=self.node_offset,
                         cmd=cmd,
                         cmd_dir=None,
                         nohup=False,

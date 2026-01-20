@@ -14,14 +14,16 @@ from experiment_utils.providers.base import InfrastructureProvider
 class FlinkService(BaseService):
     """Service for managing Flink cluster and jobs."""
 
-    def __init__(self, provider: InfrastructureProvider):
+    def __init__(self, provider: InfrastructureProvider, node_offset: int):
         """
         Initialize Flink service.
 
         Args:
             provider: Infrastructure provider for node communication and management
+            node_offset: Starting node index offset
         """
         super().__init__(provider)
+        self.node_offset = node_offset
         self.active_jobs = []
 
     def start(self, **kwargs) -> None:
@@ -43,7 +45,7 @@ class FlinkService(BaseService):
         cmd_dir = os.path.join(self.provider.get_home_dir(), "flink")
 
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=cmd_dir,
             nohup=False,
@@ -65,7 +67,7 @@ class FlinkService(BaseService):
         cmd = "./bin/stop-cluster.sh"
         cmd_dir = os.path.join(self.provider.get_home_dir(), "flink")
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=cmd_dir,
             nohup=False,
@@ -88,7 +90,7 @@ class FlinkService(BaseService):
         )
 
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=flink_dir,
             nohup=False,
@@ -102,7 +104,7 @@ class FlinkService(BaseService):
         """Stop all Java processes (useful for local Flink mode)."""
         cmd = "pkill -f java"
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -132,7 +134,7 @@ class FlinkService(BaseService):
         )
 
         result = self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -215,7 +217,7 @@ class FlinkService(BaseService):
         )
 
         popen = self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=flinksketch_dir,
             nohup=True,
@@ -259,7 +261,7 @@ class FlinkService(BaseService):
             if flink_pids:
                 cmd = ";".join(["kill -9 {}".format(pid) for pid in flink_pids])
                 self.provider.execute_command(
-                    node_idx=0,
+                    node_idx=self.node_offset,
                     cmd=cmd,
                     cmd_dir=None,
                     nohup=False,
@@ -273,7 +275,7 @@ class FlinkService(BaseService):
                 )
                 cmd = "{} cancel {}".format(flink_exe, job_id)
                 self.provider.execute_command(
-                    node_idx=0,
+                    node_idx=self.node_offset,
                     cmd=cmd,
                     cmd_dir=None,
                     nohup=False,
@@ -301,7 +303,7 @@ class FlinkService(BaseService):
         try:
             cmd = "jps | grep -q StandaloneSessionClusterEntrypoint"
             result = self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=None,
                 nohup=False,

@@ -12,10 +12,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import constants  # noqa: E402
 
 RESOURCES = ["cpu_percent", "memory_info"]
+PROMETHEUS_PROCESS_KEYWORD = "prometheus.yml"
 
 relevant_stats = {
     "sum": lambda x: sum(x),
     "max": lambda x: max(x),
+    "median": lambda x: np.median(x),
     "p95": lambda x: np.percentile(x, 95),
     "p99": lambda x: np.percentile(x, 99),
 }
@@ -26,6 +28,56 @@ def pretty_print(key, value):
         print(key, humanize.naturalsize(value))
     else:
         print(key, round(value, 2))
+
+
+def calculate_query_cpu(monitor_info, experiment_mode):
+    """
+    Calculate Query CPU timeseries for the given experiment mode.
+
+    Args:
+        monitor_info: Dictionary with PIDs as keys and monitoring data as values
+        experiment_mode: Name of the current experiment mode
+
+    Returns:
+        List of Query CPU values (timeseries)
+    """
+    pids = [pid for pid in monitor_info.keys() if pid != "all"]
+
+    if experiment_mode == constants.SKETCHDB_EXPERIMENT_NAME:
+        # Sum CPU across all PIDs except those with keyword="prometheus"
+        query_cpu = [0 for _ in range(len(monitor_info[pids[0]]["cpu_percent"]))]
+
+        for pid in pids:
+            keyword = monitor_info[pid]["keyword"]
+            if keyword != PROMETHEUS_PROCESS_KEYWORD:
+                for i in range(len(monitor_info[pid]["cpu_percent"])):
+                    query_cpu[i] += monitor_info[pid]["cpu_percent"][i]
+
+        return query_cpu
+
+    elif experiment_mode == constants.BASELINE_EXPERIMENT_NAME:
+        # Find prometheus PID(s) and get their CPU timeseries
+        prometheus_cpu = None
+        for pid in pids:
+            if monitor_info[pid]["keyword"] == PROMETHEUS_PROCESS_KEYWORD:
+                prometheus_cpu = monitor_info[pid]["cpu_percent"][:]
+                break
+
+        if prometheus_cpu is None:
+            raise ValueError(f"No prometheus PID found in mode {experiment_mode}")
+
+        # Calculate 5th percentile (ingestion cost)
+        prometheus_ingestion_cost = np.percentile(prometheus_cpu, 5)
+
+        # Subtract ingestion cost from each time point
+        query_cpu = [cpu - prometheus_ingestion_cost for cpu in prometheus_cpu]
+
+        return query_cpu
+
+    else:
+        raise AssertionError(
+            f"Query CPU calculation not supported for mode: {experiment_mode}"
+        )
 
 
 def plot_resource_usage(monitor_info, experiment_mode, args):
@@ -90,6 +142,61 @@ def plot_resource_usage(monitor_info, experiment_mode, args):
             plt.close()
 
 
+def plot_query_cpu(query_cpu, experiment_mode, args):
+    """
+    Plot Query CPU timeseries.
+
+    Args:
+        query_cpu: List of Query CPU values (timeseries)
+        experiment_mode: Name of the current experiment mode
+        args: Command-line arguments
+    """
+    # Set global font size to 24
+    plt.rcParams.update({"font.size": 22})
+
+    plt.figure(figsize=(20, 8))
+
+    # Plot Query CPU timeseries
+    x_values = list(range(len(query_cpu)))
+    plt.plot(x_values, query_cpu, label="Query CPU", linewidth=2)
+
+    # Add labels and title
+    plt.ylabel("Query CPU Usage (%)")
+    plt.xlabel("Time (samples)")
+    plt.title(f"{experiment_mode}: Query CPU")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+
+    # Save or show based on args
+    if args.save:
+        # Make plot fullscreen before saving
+        mng = plt.get_current_fig_manager()
+        try:
+            mng.full_screen_toggle()  # For Qt backend
+        except AttributeError:
+            try:
+                mng.window.showMaximized()  # For TkAgg backend
+            except Exception:
+                try:
+                    mng.frame.Maximize(True)  # For WX backend
+                except Exception:
+                    try:
+                        mng.resize(*mng.window.maxsize())  # For other backends
+                    except Exception:
+                        print("Warning: Could not maximize figure window")
+
+        output_filename = f"mode_{experiment_mode}_query_cpu.png"
+        output_path = os.path.join(args.output_dir, output_filename)
+        os.makedirs(args.output_dir, exist_ok=True)
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+        print(f"Saved Query CPU plot to {output_path}")
+
+    if args.show:
+        plt.show()
+    else:
+        plt.close()
+
+
 def main(args):
     if not args.print and not args.plot:
         raise ValueError("Must specify either --print or --plot")
@@ -113,9 +220,18 @@ def main(args):
 
     experiment_dir = os.path.join(constants.LOCAL_EXPERIMENT_DIR, args.experiment_name)
 
+    if not os.path.exists(experiment_dir):
+        raise ValueError(f"Experiment directory {experiment_dir} does not exist")
+
     if args.plot and args.save:
         if args.save_to_experiment_dir:
             args.output_dir = experiment_dir
+
+    # Initialize machine-readable output structure
+    machine_readable_output = {
+        "experiment_name": args.experiment_name,
+        "experiment_modes": {},
+    }
 
     experiment_modes: List[str] = []
     if args.all_experiment_modes:
@@ -129,14 +245,13 @@ def main(args):
         # find all directories in experiment_dir recursively that contain monitor_output.json
         experiment_modes = [
             d
-            for d, _, files in os.walk(
-                os.path.join(experiment_dir, "remote_monitor_output")
-            )
-            if "monitor_output.json" in files
+            for d, _, files in os.walk(experiment_dir)
+            if "monitor_output.json" in files and d.endswith("remote_monitor_output")
         ]
-        # for each directory, experiment mode is the entire path relative to experiment_dir
+        # for each directory, experiment mode is the parent directory relative to experiment_dir
         experiment_modes = [
-            os.path.relpath(d, experiment_dir) for d in experiment_modes
+            os.path.dirname(os.path.relpath(d, experiment_dir))
+            for d in experiment_modes
         ]
         # remove the experiment_dir prefix
         experiment_modes = [
@@ -145,10 +260,16 @@ def main(args):
     else:
         experiment_modes = [args.experiment_mode]
 
+    if not args.machine_readable:
+        print(f"Experiment modes to analyze: {experiment_modes}")
+
     experiment_mode_to_overall_resource_usage = {}
+    experiment_mode_to_query_cpu = {}
 
     for experiment_mode in experiment_modes:
-        print("-" * 20 + f" Mode: {experiment_mode} " + "-" * 20)
+        if not args.machine_readable:
+            print("-" * 20 + f" Mode: {experiment_mode} " + "-" * 20)
+
         monitor_info_file = os.path.join(
             experiment_dir,
             experiment_mode,
@@ -201,14 +322,43 @@ def main(args):
 
         experiment_mode_to_overall_resource_usage[experiment_mode] = monitor_info["all"]
 
+        # Calculate Query CPU for this experiment mode
+        try:
+            query_cpu = calculate_query_cpu(monitor_info, experiment_mode)
+            experiment_mode_to_query_cpu[experiment_mode] = query_cpu
+        except (AssertionError, ValueError) as e:
+            if not args.machine_readable:
+                print(f"Skipping Query CPU calculation for {experiment_mode}: {e}")
+
+        # Initialize mode data for machine-readable output
+        if args.machine_readable:
+            machine_readable_output["experiment_modes"][experiment_mode] = {
+                "processes": {},
+                "overall": {},
+            }
+
         for pid in monitor_info.keys():
             keyword = monitor_info[pid]["keyword"]
-            print(pid, keyword)
+            if not args.machine_readable:
+                print(pid, keyword)
+
+            # Collect statistics for machine-readable output
+            if args.machine_readable:
+                process_stats = {}
+                for resource in RESOURCES:
+                    process_stats[resource] = {}
+                    for stat, agg_func in relevant_stats.items():
+                        value = agg_func(monitor_info[pid][resource])
+                        process_stats[resource][stat] = value
+
+                machine_readable_output["experiment_modes"][experiment_mode][
+                    "processes"
+                ][f"{pid}_{keyword}"] = process_stats
 
             for resource in RESOURCES:
                 resources_across_pids[resource].extend(monitor_info[pid][resource])
 
-                if args.print:
+                if args.print and not args.machine_readable:
                     for stat, agg_func in relevant_stats.items():
                         pretty_print(
                             f"{experiment_mode} {keyword} {resource} {stat}",
@@ -224,25 +374,91 @@ def main(args):
         if args.plot:
             plot_resource_usage(monitor_info, experiment_mode, args)
 
+            # Plot Query CPU if available
+            if experiment_mode in experiment_mode_to_query_cpu:
+                plot_query_cpu(
+                    experiment_mode_to_query_cpu[experiment_mode], experiment_mode, args
+                )
+
+    # Calculate and output benefit statistics
     if (
-        "prometheus" in experiment_mode_to_overall_resource_usage
-        and "sketchdb" in experiment_mode_to_overall_resource_usage
-        and args.print
+        constants.BASELINE_EXPERIMENT_NAME in experiment_mode_to_overall_resource_usage
+        and constants.SKETCHDB_EXPERIMENT_NAME
+        in experiment_mode_to_overall_resource_usage
     ):
+        benefit_stats = {}
         for resource in RESOURCES:
+            benefit_stats[resource] = {}
             for stat, agg_func in relevant_stats.items():
                 # divide prometheus agg_func(resource) by sketchdb agg_func(resource)
                 prometheus_value = agg_func(
-                    experiment_mode_to_overall_resource_usage["prometheus"][resource]
+                    experiment_mode_to_overall_resource_usage[
+                        constants.BASELINE_EXPERIMENT_NAME
+                    ][resource]
                 )
                 sketchdb_value = agg_func(
-                    experiment_mode_to_overall_resource_usage["sketchdb"][resource]
+                    experiment_mode_to_overall_resource_usage[
+                        constants.SKETCHDB_EXPERIMENT_NAME
+                    ][resource]
                 )
-                print(
-                    "Benefit for {}({}): {}".format(
-                        stat, resource, prometheus_value / sketchdb_value
-                    )
+                benefit = prometheus_value / sketchdb_value
+                benefit_stats[resource][stat] = benefit
+
+                if args.print and not args.machine_readable:
+                    print(f"Benefit for {stat}({resource}): {benefit}")
+
+        if args.machine_readable:
+            machine_readable_output["benefit"] = benefit_stats
+
+    # Handle Query CPU statistics
+    if experiment_mode_to_query_cpu:
+        if not args.machine_readable and args.print:
+            print("\n" + "=" * 60)
+            print("Query CPU Statistics")
+            print("=" * 60)
+
+        query_cpu_stats = {}
+        for experiment_mode, query_cpu in experiment_mode_to_query_cpu.items():
+            query_cpu_stats[experiment_mode] = {}
+            if not args.machine_readable and args.print:
+                print(f"\n{experiment_mode}:")
+
+            for stat, agg_func in relevant_stats.items():
+                value = agg_func(query_cpu)
+                query_cpu_stats[experiment_mode][stat] = value
+                if not args.machine_readable and args.print:
+                    print(f"  {stat}: {round(value, 2)}%")
+
+        if args.machine_readable:
+            machine_readable_output["query_cpu"] = query_cpu_stats
+
+        # Calculate benefit if both prometheus and sketchdb are present
+        if (
+            constants.BASELINE_EXPERIMENT_NAME in experiment_mode_to_query_cpu
+            and constants.SKETCHDB_EXPERIMENT_NAME in experiment_mode_to_query_cpu
+        ):
+            query_cpu_benefit = {}
+            if not args.machine_readable and args.print:
+                print("\nQuery CPU Benefit (prometheus / sketchdb):")
+
+            for stat, agg_func in relevant_stats.items():
+                prometheus_value = agg_func(
+                    experiment_mode_to_query_cpu[constants.BASELINE_EXPERIMENT_NAME]
                 )
+                sketchdb_value = agg_func(
+                    experiment_mode_to_query_cpu[constants.SKETCHDB_EXPERIMENT_NAME]
+                )
+                benefit = prometheus_value / sketchdb_value
+                query_cpu_benefit[stat] = benefit
+                if not args.machine_readable and args.print:
+                    print(f"  {stat}: {round(benefit, 2)}x")
+
+            if args.machine_readable:
+                machine_readable_output["query_cpu_benefit"] = query_cpu_benefit
+
+    # Output machine-readable results
+    if args.machine_readable:
+        print(json.dumps(machine_readable_output, indent=2))
 
 
 if __name__ == "__main__":
@@ -265,6 +481,12 @@ if __name__ == "__main__":
         "--save_to_experiment_dir",
         action="store_true",
         help="Save to experiment directory",
+    )
+    parser.add_argument(
+        "--machine-readable",
+        action="store_true",
+        default=False,
+        help="Output results in machine-readable JSON format",
     )
     args = parser.parse_args()
     main(args)

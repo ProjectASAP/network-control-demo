@@ -15,15 +15,18 @@ from experiment_utils.providers.base import InfrastructureProvider
 class GrafanaService(DockerServiceBase):
     """Docker-based Grafana service for experiment dashboards."""
 
-    def __init__(self, provider: InfrastructureProvider, num_nodes: int):
+    def __init__(
+        self, provider: InfrastructureProvider, num_nodes: int, node_offset: int
+    ):
         """
         Initialize Grafana service.
 
         Args:
             provider: Infrastructure provider for node communication and management
             num_nodes: Number of nodes to manage
+            node_offset: Starting node index offset
         """
-        super().__init__(provider, num_nodes)
+        super().__init__(provider, num_nodes, node_offset)
         self.container_name = "grafana-demo"
 
     def get_container_name(self) -> str:
@@ -70,7 +73,7 @@ class GrafanaService(DockerServiceBase):
         print(f"Starting Grafana container: {cmd}")
 
         result = self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -94,7 +97,7 @@ class GrafanaService(DockerServiceBase):
         # Stop the container (will auto-remove due to --rm flag)
         stop_cmd = f"docker stop {self.container_name} 2>/dev/null || true"
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=stop_cmd,
             cmd_dir=None,
             nohup=False,
@@ -132,7 +135,7 @@ class GrafanaService(DockerServiceBase):
 
             # Execute the command on the CloudLab node
             result = self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=cmd_dir,
                 nohup=False,

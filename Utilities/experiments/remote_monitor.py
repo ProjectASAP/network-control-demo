@@ -163,7 +163,9 @@ def stop_profiling_arroyo_pids(
 
 
 # TODO Provide some way of specifying which hooks will be used
-def get_process_monitor_hooks(export_cost: bool, provider) -> List[ProcessMonitorHook]:
+def get_process_monitor_hooks(
+    export_cost: bool, provider, node_offset: int
+) -> List[ProcessMonitorHook]:
     hooks = []
     # TODO Ideally the cost exporter should be configured by either the experiment
     #      config yaml or from the command line
@@ -182,7 +184,7 @@ def get_process_monitor_hooks(export_cost: bool, provider) -> List[ProcessMonito
             ],
         }
         cost_exporter_hook = QueryCostExporterHook(
-            monitors_and_models, addr=provider.get_node_ip(0), port=9151
+            monitors_and_models, addr=provider.get_node_ip(node_offset), port=9151
         )
         hooks.append(cost_exporter_hook)
 
@@ -264,7 +266,9 @@ def main(args):
     # Create provider for getting network IPs (use CloudLab IPs for Prometheus to scrape)
     ip_provider = CloudLabLocalProvider(username="user", use_cloudlab_ips=True)
     monitor_hooks = get_process_monitor_hooks(
-        export_cost=export_cost_and_latency, provider=ip_provider
+        export_cost=export_cost_and_latency,
+        provider=ip_provider,
+        node_offset=args.node_offset,
     )
 
     monitor, control_pipe, monitor_pipe = process_monitor.start_monitor(
@@ -300,6 +304,7 @@ def main(args):
         prometheus_client_service = PrometheusClientService(
             provider,
             use_container=args.use_container_prometheus_client,
+            node_offset=args.node_offset,
         )
         prometheus_client_service.start(
             args.experiment_mode,
@@ -414,6 +419,11 @@ if __name__ == "__main__":
         "--prometheus_client_parallel",
         action="store_true",
         help="Enable parallel execution in Prometheus client",
+    )
+    parser.add_argument(
+        "--node_offset",
+        type=int,
+        required=True,
     )
     args = parser.parse_args()
     args.keywords = args.keywords.strip().split(",")

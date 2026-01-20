@@ -4,6 +4,7 @@ Parquet serializer for query results using JSON columns for labels.
 
 import json
 import os
+import threading
 from typing import Any, Dict, List, Optional
 import pandas as pd
 import pyarrow as pa
@@ -49,6 +50,7 @@ class ParquetResultsSerializer(ResultsSerializer):
         # Define schemas for streaming
         self._results_schema = pa.schema(
             [
+                ("query_group_idx", pa.int64()),
                 ("server_name", pa.string()),
                 ("query", pa.string()),
                 ("query_idx", pa.int64()),
@@ -60,6 +62,7 @@ class ParquetResultsSerializer(ResultsSerializer):
 
         self._latency_schema = pa.schema(
             [
+                ("query_group_idx", pa.int64()),
                 ("server_name", pa.string()),
                 ("query_idx", pa.int64()),
                 ("repetition_idx", pa.int64()),
@@ -67,6 +70,9 @@ class ParquetResultsSerializer(ResultsSerializer):
                 ("cumulative_latency", pa.float64()),
             ]
         )
+
+        # Thread safety for streaming writes
+        self._write_lock = threading.Lock()
 
     def write_results(
         self, results_across_servers: Dict[str, Dict[int, QueryResultAcrossTime]]
@@ -142,16 +148,38 @@ class ParquetResultsSerializer(ResultsSerializer):
         # Read metadata
         metadata = self._read_metadata()
 
+        # Handle both old and new metadata formats
+        if "query_groups" in metadata:
+            # New format with query groups
+            all_queries = []
+            query_idx_to_repetitions = {}
+            global_query_idx = 0
+
+            for qg in metadata["query_groups"]:
+                for query in qg["queries"]:
+                    all_queries.append(query)
+                    query_idx_to_repetitions[global_query_idx] = qg["repetitions"]
+                    global_query_idx += 1
+
+            servers = metadata["servers"]
+        else:
+            # Old format (backward compatible)
+            all_queries = metadata["queries"]
+            servers = metadata["servers"]
+            query_idx_to_repetitions = {
+                i: metadata["repetitions"] for i in range(len(all_queries))
+            }
+
         # Initialize nested structure
         results = {}
-        for server in metadata["servers"]:
+        for server in servers:
             results[server] = {}
-            for query_idx in range(metadata["total_queries"]):
+            for query_idx, query in enumerate(all_queries):
                 results[server][query_idx] = QueryResultAcrossTime(
                     server,
-                    metadata["queries"][query_idx],
+                    query,
                     query_idx,
-                    metadata["repetitions"],
+                    query_idx_to_repetitions[query_idx],
                 )
 
         # Read latencies
@@ -182,6 +210,7 @@ class ParquetResultsSerializer(ResultsSerializer):
                         result=None,  # Will be populated below
                         latency=latency,
                         cumulative_latency=cumulative_latency,
+                        query_group_idx=row.get("query_group_idx", 0),
                     )
                     query_results[key].result = {}
 
@@ -207,12 +236,13 @@ class ParquetResultsSerializer(ResultsSerializer):
                 # Create empty QueryResult with just latency data
                 empty_result = QueryResult(
                     server_name=server_name,
-                    query=metadata["queries"][query_idx],
+                    query=all_queries[query_idx],
                     query_idx=query_idx,
                     repetition_idx=repetition_idx,
                     result=None,
                     latency=latency,
                     cumulative_latency=cumulative_latency,
+                    query_group_idx=0,  # Default for backward compatibility
                 )
                 results[server_name][query_idx].add_result(empty_result)
 
@@ -264,39 +294,42 @@ class ParquetResultsSerializer(ResultsSerializer):
         ):
             raise RuntimeError("Streaming write session not started")
 
-        # Add result records to batch
-        if query_result.result:
-            for frozenset_key, value in query_result.result.items():
-                labels_dict = dict(frozenset_key)
-                labels_json = json.dumps(labels_dict, sort_keys=True)
+        with self._write_lock:
+            # Add result records to batch
+            if query_result.result:
+                for frozenset_key, value in query_result.result.items():
+                    labels_dict = dict(frozenset_key)
+                    labels_json = json.dumps(labels_dict, sort_keys=True)
 
-                self._results_batch.append(
-                    {
-                        "server_name": query_result.server_name,
-                        "query": query_result.query,
-                        "query_idx": query_result.query_idx,
-                        "repetition_idx": query_result.repetition_idx,
-                        "result_labels": labels_json,
-                        "result_value": value,
-                    }
-                )
+                    self._results_batch.append(
+                        {
+                            "query_group_idx": query_result.query_group_idx,
+                            "server_name": query_result.server_name,
+                            "query": query_result.query,
+                            "query_idx": query_result.query_idx,
+                            "repetition_idx": query_result.repetition_idx,
+                            "result_labels": labels_json,
+                            "result_value": value,
+                        }
+                    )
 
-        # Add latency record to batch
-        self._latency_batch.append(
-            {
-                "server_name": query_result.server_name,
-                "query_idx": query_result.query_idx,
-                "repetition_idx": query_result.repetition_idx,
-                "latency": query_result.latency,
-                "cumulative_latency": query_result.cumulative_latency,
-            }
-        )
+            # Add latency record to batch
+            self._latency_batch.append(
+                {
+                    "query_group_idx": query_result.query_group_idx,
+                    "server_name": query_result.server_name,
+                    "query_idx": query_result.query_idx,
+                    "repetition_idx": query_result.repetition_idx,
+                    "latency": query_result.latency,
+                    "cumulative_latency": query_result.cumulative_latency,
+                }
+            )
 
-        # Flush batches if they reach batch_size
-        if len(self._results_batch) >= self.batch_size:
-            self._flush_results_batch()
-        if len(self._latency_batch) >= self.batch_size:
-            self._flush_latency_batch()
+            # Flush batches if they reach batch_size
+            if len(self._results_batch) >= self.batch_size:
+                self._flush_results_batch()
+            if len(self._latency_batch) >= self.batch_size:
+                self._flush_latency_batch()
 
     def streaming_write_end(self) -> None:
         """Finalize streaming write session and close any open resources."""
@@ -417,16 +450,38 @@ class ParquetResultsSerializer(ResultsSerializer):
         # Read metadata
         metadata = self._read_metadata()
 
+        # Handle both old and new metadata formats
+        if "query_groups" in metadata:
+            # New format with query groups
+            all_queries = []
+            query_idx_to_repetitions = {}
+            global_query_idx = 0
+
+            for qg in metadata["query_groups"]:
+                for query in qg["queries"]:
+                    all_queries.append(query)
+                    query_idx_to_repetitions[global_query_idx] = qg["repetitions"]
+                    global_query_idx += 1
+
+            servers = metadata["servers"]
+        else:
+            # Old format (backward compatible)
+            all_queries = metadata["queries"]
+            servers = metadata["servers"]
+            query_idx_to_repetitions = {
+                i: metadata["repetitions"] for i in range(len(all_queries))
+            }
+
         # Initialize nested structure
         latencies = {}
-        for server in metadata["servers"]:
+        for server in servers:
             latencies[server] = {}
-            for query_idx in range(metadata["total_queries"]):
+            for query_idx, query in enumerate(all_queries):
                 latencies[server][query_idx] = LatencyResultAcrossTime(
                     server,
-                    metadata["queries"][query_idx],
+                    query,
                     query_idx,
-                    metadata["repetitions"],
+                    query_idx_to_repetitions[query_idx],
                 )
 
         # Read only latency data
@@ -435,11 +490,12 @@ class ParquetResultsSerializer(ResultsSerializer):
             for _, row in latency_df.iterrows():
                 latency_result = LatencyResult(
                     server_name=row["server_name"],
-                    query=metadata["queries"][row["query_idx"]],
+                    query=all_queries[row["query_idx"]],
                     query_idx=row["query_idx"],
                     repetition_idx=row["repetition_idx"],
                     latency=row["latency"],
                     cumulative_latency=row["cumulative_latency"],
+                    query_group_idx=row.get("query_group_idx", 0),
                 )
 
                 latencies[row["server_name"]][row["query_idx"]].add_latency_result(

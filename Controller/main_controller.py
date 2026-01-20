@@ -31,6 +31,19 @@ def main(args):
 
     metric_config = MetricConfig(input_config_yaml["metrics"])
 
+    # Read aggregate cleanup configuration (default to enabled if not specified)
+    aggregate_cleanup_enabled = input_config_yaml.get("aggregate_cleanup", {}).get(
+        "enabled", True
+    )
+    logger.info("Aggregate cleanup enabled: {}", aggregate_cleanup_enabled)
+
+    # Read sketch parameters configuration (use None to apply defaults in logics.py)
+    sketch_parameters = input_config_yaml.get("sketch_parameters", None)
+    if sketch_parameters:
+        logger.info("Using custom sketch parameters: {}", sketch_parameters)
+    else:
+        logger.info("Using default sketch parameters")
+
     streaming_aggregation_configs_map = {}
     query_aggregation_config_keys_map = {}
 
@@ -40,6 +53,7 @@ def main(args):
                 "query": query_string,
                 "t_repeat": query_group_yaml["repetition_delay"],
                 "options": query_group_yaml["controller_options"],
+                "aggregate_cleanup_enabled": aggregate_cleanup_enabled,
             }
 
             logger.debug("Processing query {}", query_string)
@@ -49,9 +63,16 @@ def main(args):
                 metric_config,
                 args.prometheus_scrape_interval,
                 args.streaming_engine,
+                sketch_parameters,
             )
 
-            if single_query_config.is_supported():
+            should_process_query = single_query_config.is_supported()
+            if args.enable_punting:
+                should_process_query = (
+                    should_process_query and single_query_config.should_be_performant()
+                )
+
+            if should_process_query:
                 query_aggregation_config_keys_map[single_query_config.query] = []
                 current_configs, num_aggregates_to_retain = (
                     single_query_config.get_streaming_aggregation_configs()
@@ -108,6 +129,11 @@ if __name__ == "__main__":
     parser.add_argument("--prometheus_scrape_interval", type=int, required=True)
     parser.add_argument(
         "--streaming_engine", type=str, choices=["flink", "arroyo"], required=True
+    )
+    parser.add_argument(
+        "--enable-punting",
+        action="store_true",
+        help="Enable query punting based on performance heuristics",
     )
     args = parser.parse_args()
     main(args)

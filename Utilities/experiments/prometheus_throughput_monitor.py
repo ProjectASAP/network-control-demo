@@ -25,6 +25,9 @@ THROUGHPUT_METRICS = [
     "prometheus_tsdb_head_samples_appended_total",
     "prometheus_tsdb_symbol_table_size_bytes_total",
     "prometheus_remote_storage_samples_total",
+    "prometheus_remote_storage_bytes_total",
+    "prometheus_remote_storage_succeeded_samples_total",
+    "prometheus_remote_storage_failed_samples_total",
 ]
 
 
@@ -177,7 +180,7 @@ def main():
         "--output_dir", required=True, help="Output directory for metrics"
     )
     parser.add_argument(
-        "--interval", type=int, default=1, help="Polling interval in seconds"
+        "--interval", type=int, required=True, help="Polling interval in seconds"
     )
 
     args = parser.parse_args()

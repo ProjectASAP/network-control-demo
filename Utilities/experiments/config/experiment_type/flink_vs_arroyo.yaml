@@ -4,6 +4,11 @@ experiment:
   #  query_prometheus_too: True
   #- mode: prometheus
 
+# Monitoring tool configuration
+monitoring:
+  tool: prometheus
+  deployment_mode: bare_metal
+
 servers:
 - name: prometheus
   url: http://localhost:9090

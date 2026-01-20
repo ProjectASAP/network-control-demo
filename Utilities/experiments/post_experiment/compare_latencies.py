@@ -1,6 +1,7 @@
 import os
 import sys
 import yaml
+import json
 import argparse
 import numpy as np
 
@@ -163,7 +164,11 @@ def main(args):
     from results_loader import load_latencies_only
     import logging
 
-    logging.basicConfig(level=logging.DEBUG)
+    # Suppress debug logging in machine-readable mode
+    if args.machine_readable:
+        logging.basicConfig(level=logging.ERROR)
+    else:
+        logging.basicConfig(level=logging.DEBUG)
 
     exact_dir = os.path.join(
         experiment_dir, args.exact_experiment_mode, "prometheus_client_output"
@@ -175,14 +180,16 @@ def main(args):
     try:
         exact_latencies = load_latencies_only(exact_dir)
         exact_results = exact_latencies[args.exact_experiment_server_name]
-    except (FileNotFoundError, KeyError):
-        exact_results = None
+    except (FileNotFoundError, KeyError) as e:
+        print(f"Error loading exact latencies: {e}")
+        raise
 
     try:
         estimate_latencies = load_latencies_only(estimate_dir)
         estimate_results = estimate_latencies[args.estimate_experiment_server_name]
-    except (FileNotFoundError, KeyError):
-        estimate_results = None
+    except (FileNotFoundError, KeyError) as e:
+        print(f"Error loading estimate latencies: {e}")
+        raise
 
     query_group_config = None
     config_files = os.listdir(os.path.join(experiment_dir, "experiment_config"))
@@ -196,33 +203,43 @@ def main(args):
         config = yaml.safe_load(f)
         query_group_config = config["query_groups"]
 
-    if len(query_group_config) != 1:
-        raise ValueError(
-            f"Expected exactly one query group in {experiment_dir}, but found {len(query_group_config)}"
-        )
-
-    query_group = query_group_config[0]
-    all_queries = query_group["queries"]
+    # Flatten queries from all query groups
+    all_queries = []
+    for query_group in query_group_config:
+        all_queries.extend(query_group["queries"])
 
     # Compare latencies
     assert exact_results is not None
     assert estimate_results is not None
     comparison_results = compare_latencies(exact_results, estimate_results, all_queries)
 
-    # Print results for each query
-    if args.print_per_query:
-        print_comparison_results(
-            comparison_results,
-            args.exact_experiment_server_name,
-            args.estimate_experiment_server_name,
-        )
+    # Output results based on machine-readable flag
+    if args.machine_readable:
+        # Convert comparison_results to a serializable format
+        output = {
+            "experiment_name": args.experiment_name,
+            "exact_experiment_mode": args.exact_experiment_mode,
+            "estimate_experiment_mode": args.estimate_experiment_mode,
+            "exact_experiment_server_name": args.exact_experiment_server_name,
+            "estimate_experiment_server_name": args.estimate_experiment_server_name,
+            "results": comparison_results,
+        }
+        print(json.dumps(output, indent=2))
+    else:
+        # Print results for each query
+        if args.print_per_query:
+            print_comparison_results(
+                comparison_results,
+                args.exact_experiment_server_name,
+                args.estimate_experiment_server_name,
+            )
 
-    # Print summary results across queries
-    print("\nSummary Results:")
-    print("-" * 100)
-    for k in comparison_results[-1]:
-        print(f"{k}: {comparison_results[-1][k]}")
-    print("-" * 100)
+        # Print summary results across queries
+        print("\nSummary Results:")
+        print("-" * 100)
+        for k in comparison_results[-1]:
+            print(f"{k}: {comparison_results[-1][k]}")
+        print("-" * 100)
 
 
 if __name__ == "__main__":
@@ -233,5 +250,11 @@ if __name__ == "__main__":
     parser.add_argument("--exact_experiment_server_name", type=str, required=False)
     parser.add_argument("--estimate_experiment_server_name", type=str, required=False)
     parser.add_argument("--print_per_query", action="store_true", default=False)
+    parser.add_argument(
+        "--machine-readable",
+        action="store_true",
+        default=False,
+        help="Output results in machine-readable JSON format",
+    )
     args = parser.parse_args()
     main(args)

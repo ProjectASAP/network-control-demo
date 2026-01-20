@@ -1,0 +1,42 @@
+aggregations:
+- aggregationId: 1
+  aggregationSubType: ''
+  aggregationType: DeltaSetAggregator
+  labels:
+    aggregated:
+    - label_0
+    grouping: []
+    rollup:
+    - instance
+    - job
+    - label_1
+    - label_2
+  metric: fake_metric_total
+  parameters: {}
+  spatialFilter: ''
+  tumblingWindowSize: 10
+- aggregationId: 2
+  aggregationSubType: sum
+  aggregationType: CountMinSketch
+  labels:
+    aggregated:
+    - label_0
+    grouping: []
+    rollup:
+    - instance
+    - job
+    - label_1
+    - label_2
+  metric: fake_metric_total
+  parameters:
+    depth: 3
+    width: 65536
+  spatialFilter: ''
+  tumblingWindowSize: 10
+metrics:
+  fake_metric_total:
+  - instance
+  - job
+  - label_0
+  - label_1
+  - label_2

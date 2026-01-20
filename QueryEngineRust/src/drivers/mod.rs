@@ -1,5 +1,6 @@
-pub mod http_server;
-pub mod kafka_consumer;
+pub mod ingest;
+pub mod query;
 
-pub use http_server::{HttpServer, HttpServerConfig};
-pub use kafka_consumer::{KafkaConsumer, KafkaConsumerConfig};
+// Re-export commonly used types for convenience
+pub use ingest::{KafkaConsumer, KafkaConsumerConfig};
+pub use query::{AdapterConfig, HttpServer, HttpServerConfig};

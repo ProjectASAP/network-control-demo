@@ -25,7 +25,15 @@ class StreamingAggregationConfig:
     aggregationId: int
     aggregationType: str
     aggregationSubType: str
-    tumblingWindowSize: int
+
+    # NEW fields for sliding window support (Issue #236)
+    windowSize: int  # Window size in seconds (e.g., 900s for 15m)
+    slideInterval: int  # Slide/hop interval in seconds (e.g., 30s)
+    windowType: str  # "tumbling" or "sliding"
+
+    # DEPRECATED but kept for backward compatibility
+    tumblingWindowSize: int  # For reading old configs
+
     spatialFilter: str
     metric: str
     parameters: dict
@@ -38,6 +46,8 @@ class StreamingAggregationConfig:
             "grouping": KeyByLabelNames([]),
             "aggregated": KeyByLabelNames([]),
         }
+        # Default to tumbling windows for backward compatibility
+        self.windowType = "tumbling"
 
     @staticmethod
     def from_dict(aggregation_config: dict) -> "StreamingAggregationConfig":
@@ -45,7 +55,21 @@ class StreamingAggregationConfig:
         aggregation.aggregationId = aggregation_config["aggregationId"]
         aggregation.aggregationType = aggregation_config["aggregationType"]
         aggregation.aggregationSubType = aggregation_config["aggregationSubType"]
-        aggregation.tumblingWindowSize = aggregation_config["tumblingWindowSize"]
+
+        # NEW: Handle new window fields with backward compatibility
+        aggregation.windowType = aggregation_config.get("windowType", "tumbling")
+        aggregation.windowSize = aggregation_config.get(
+            "windowSize", aggregation_config.get("tumblingWindowSize")
+        )
+        aggregation.slideInterval = aggregation_config.get(
+            "slideInterval", aggregation_config.get("tumblingWindowSize")
+        )
+
+        # Keep deprecated field for backward compatibility
+        aggregation.tumblingWindowSize = aggregation_config.get(
+            "tumblingWindowSize", aggregation.windowSize
+        )
+
         aggregation.spatialFilter = aggregation_config["spatialFilter"]
         aggregation.metric = aggregation_config["metric"]
         aggregation.parameters = aggregation_config["parameters"]
@@ -80,7 +104,10 @@ class StreamingAggregationConfig:
         keys = [
             self.aggregationType,
             self.aggregationSubType,
-            self.tumblingWindowSize,
+            self.windowType,  # NEW: Include window type
+            self.windowSize,  # NEW: Include window size
+            self.slideInterval,  # NEW: Include slide interval
+            self.tumblingWindowSize,  # Keep for backward compatibility
             self.spatialFilter,
             self.metric,
             tuple(self.parameters.items()),

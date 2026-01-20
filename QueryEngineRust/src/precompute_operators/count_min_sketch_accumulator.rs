@@ -4,6 +4,7 @@ use crate::data_model::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 use xxhash_rust::xxh32::xxh32;
 
 use promql_utilities::query_logics::enums::Statistic;
@@ -159,6 +160,68 @@ impl CountMinSketchAccumulator {
             sketch,
         })
     }
+
+    /// Merge multiple accumulators efficiently without cloning all of them
+    /// This is a batch merge operation that creates one sketch and adds all others element-wise
+    ///
+    /// # Arguments
+    /// * `accumulators` - Slice of boxed AggregateCore trait objects to merge
+    ///
+    /// # Returns
+    /// * `Result<Self, Box<dyn std::error::Error + Send + Sync>>` - Merged accumulator or error
+    ///
+    /// # Performance
+    /// This method performs 1 clone (of the first accumulator), compared to the
+    /// sequential merge approach which would perform 3N clones for N accumulators.
+    pub fn merge_multiple(
+        accumulators: &[Box<dyn crate::data_model::AggregateCore>],
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        if accumulators.is_empty() {
+            return Err("No accumulators to merge".into());
+        }
+
+        // Downcast and validate all accumulators first
+        let mut cms_accumulators = Vec::with_capacity(accumulators.len());
+        for acc in accumulators {
+            if acc.get_accumulator_type() != "CountMinSketchAccumulator" {
+                return Err(format!(
+                    "Cannot merge CountMinSketchAccumulator with {}",
+                    acc.get_accumulator_type()
+                )
+                .into());
+            }
+
+            let cms_acc = acc
+                .as_any()
+                .downcast_ref::<CountMinSketchAccumulator>()
+                .ok_or("Failed to downcast to CountMinSketchAccumulator")?;
+            cms_accumulators.push(cms_acc);
+        }
+
+        // Check dimensions are consistent
+        let row_num = cms_accumulators[0].row_num;
+        let col_num = cms_accumulators[0].col_num;
+        for acc in &cms_accumulators {
+            if acc.row_num != row_num || acc.col_num != col_num {
+                return Err(
+                    "Cannot merge CountMinSketch accumulators with different dimensions".into(),
+                );
+            }
+        }
+
+        // Clone first accumulator, then add all others element-wise WITHOUT cloning
+        // Use iterator-based element-wise addition instead of indexing for clarity
+        let mut merged = cms_accumulators[0].clone();
+        for acc in &cms_accumulators[1..] {
+            for (merged_row, acc_row) in merged.sketch.iter_mut().zip(&acc.sketch) {
+                for (m_cell, a_cell) in merged_row.iter_mut().zip(acc_row.iter()) {
+                    *m_cell += *a_cell;
+                }
+            }
+        }
+
+        Ok(merged)
+    }
 }
 
 impl SerializableToSink for CountMinSketchAccumulator {
@@ -211,8 +274,21 @@ impl AggregateCore for CountMinSketchAccumulator {
             .downcast_ref::<CountMinSketchAccumulator>()
             .ok_or("Failed to downcast to CountMinSketchAccumulator")?;
 
-        // Use the existing merge_accumulators method
-        let merged = Self::merge_accumulators(vec![self.clone(), other_cms.clone()])?;
+        // Check dimensions match
+        if self.row_num != other_cms.row_num || self.col_num != other_cms.col_num {
+            return Err(
+                "Cannot merge CountMinSketch accumulators with different dimensions".into(),
+            );
+        }
+
+        // Clone self ONCE, then add other's sketch element-wise directly
+        // This reduces 3 clones to 1 clone
+        let mut merged = self.clone();
+        for i in 0..self.row_num {
+            for j in 0..self.col_num {
+                merged.sketch[i][j] += other_cms.sketch[i][j];
+            }
+        }
 
         Ok(Box::new(merged))
     }
@@ -233,6 +309,7 @@ impl MultipleSubpopulationAggregate for CountMinSketchAccumulator {
         &self,
         _statistic: Statistic,
         key: &KeyByLabelValues,
+        _query_kwargs: Option<&HashMap<String, String>>,
     ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
         Ok(self.query_key(key))
     }
@@ -324,7 +401,7 @@ mod tests {
 
         // Test through MultipleSubpopulationAggregate trait
         let multi_trait: &dyn MultipleSubpopulationAggregate = &cms;
-        assert_eq!(multi_trait.query(Statistic::Sum, &key).unwrap(), 0.0);
+        assert_eq!(multi_trait.query(Statistic::Sum, &key, None).unwrap(), 0.0);
     }
 
     #[test]
@@ -420,11 +497,63 @@ mod tests {
         cms._update(&key, 10.0);
 
         let multi_trait: &dyn MultipleSubpopulationAggregate = &cms;
-        let result = multi_trait.query(Statistic::Sum, &key).unwrap();
+        let result = multi_trait.query(Statistic::Sum, &key, None).unwrap();
         assert!(result >= 10.0);
 
         // get_keys should return empty vector for CountMinSketch
         let keys = multi_trait.get_keys();
         assert!(keys.is_none());
+    }
+
+    #[test]
+    fn test_count_min_sketch_merge_multiple() {
+        // Create 3 CMS accumulators
+        let mut cms1 = CountMinSketchAccumulator::new(2, 3);
+        let mut cms2 = CountMinSketchAccumulator::new(2, 3);
+        let mut cms3 = CountMinSketchAccumulator::new(2, 3);
+
+        // Set different values in each
+        cms1.sketch[0][0] = 5.0;
+        cms1.sketch[1][2] = 10.0;
+
+        cms2.sketch[0][0] = 3.0;
+        cms2.sketch[0][1] = 7.0;
+
+        cms3.sketch[0][0] = 2.0;
+        cms3.sketch[1][2] = 5.0;
+
+        // Box them as AggregateCore trait objects
+        let boxed_accs: Vec<Box<dyn AggregateCore>> =
+            vec![Box::new(cms1), Box::new(cms2), Box::new(cms3)];
+
+        // Use merge_multiple
+        let merged = CountMinSketchAccumulator::merge_multiple(&boxed_accs).unwrap();
+
+        // Verify the merged result
+        assert_eq!(merged.sketch[0][0], 10.0); // 5 + 3 + 2
+        assert_eq!(merged.sketch[0][1], 7.0); // 0 + 7 + 0
+        assert_eq!(merged.sketch[1][2], 15.0); // 10 + 0 + 5
+    }
+
+    #[test]
+    fn test_count_min_sketch_merge_multiple_error_cases() {
+        // Test empty slice
+        let empty: Vec<Box<dyn AggregateCore>> = vec![];
+        assert!(CountMinSketchAccumulator::merge_multiple(&empty).is_err());
+
+        // Test mismatched dimensions
+        let cms1 = CountMinSketchAccumulator::new(2, 3);
+        let cms2 = CountMinSketchAccumulator::new(3, 3); // Different row count
+
+        let boxed_accs: Vec<Box<dyn AggregateCore>> = vec![Box::new(cms1), Box::new(cms2)];
+        assert!(CountMinSketchAccumulator::merge_multiple(&boxed_accs).is_err());
+
+        // Test wrong accumulator type
+        use crate::precompute_operators::sum_accumulator::SumAccumulator;
+        let cms = CountMinSketchAccumulator::new(2, 3);
+        let sum = SumAccumulator::new();
+
+        let mixed_accs: Vec<Box<dyn AggregateCore>> = vec![Box::new(cms), Box::new(sum)];
+        assert!(CountMinSketchAccumulator::merge_multiple(&mixed_accs).is_err());
     }
 }

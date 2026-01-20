@@ -13,14 +13,16 @@ from experiment_utils.providers.base import InfrastructureProvider
 class ArroyoThroughputMonitor(BaseService):
     """Service for monitoring Arroyo pipeline throughput metrics."""
 
-    def __init__(self, provider: InfrastructureProvider):
+    def __init__(self, provider: InfrastructureProvider, node_offset: int):
         """
         Initialize Arroyo throughput monitor.
 
         Args:
             provider: Infrastructure provider for node communication and management
+            node_offset: Starting node index offset
         """
         super().__init__(provider)
+        self.node_offset = node_offset
         self.pipeline_id: Optional[str] = None
         self.output_dir: Optional[str] = None
         self.monitor_script_path = None
@@ -38,7 +40,7 @@ class ArroyoThroughputMonitor(BaseService):
         self.output_dir = os.path.join(experiment_output_dir, "arroyo_throughput")
 
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=f"mkdir -p {self.output_dir}",
             cmd_dir=None,
             nohup=False,
@@ -61,7 +63,7 @@ class ArroyoThroughputMonitor(BaseService):
         cmd += " > {}/arroyo_throughput_monitor.out 2>&1 &".format(self.output_dir)
 
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=True,
@@ -80,7 +82,7 @@ class ArroyoThroughputMonitor(BaseService):
         # Kill the monitoring script on the remote host
         cmd = f"pkill -f 'arroyo_throughput_monitor.py.*{self.pipeline_id}'"
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -100,7 +102,7 @@ class ArroyoThroughputMonitor(BaseService):
         try:
             cmd = f"pgrep -f 'arroyo_throughput_monitor.py.*{self.pipeline_id}'"
             result = self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=None,
                 nohup=False,

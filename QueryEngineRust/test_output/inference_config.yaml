@@ -1,0 +1,14 @@
+metrics:
+  fake_metric_total:
+  - instance
+  - job
+  - label_0
+  - label_1
+  - label_2
+queries:
+- aggregations:
+  - aggregation_id: 1
+    num_aggregates_to_retain: 90
+  - aggregation_id: 2
+    num_aggregates_to_retain: 90
+  query: sum by (label_0) (sum_over_time(fake_metric_total[15m]))

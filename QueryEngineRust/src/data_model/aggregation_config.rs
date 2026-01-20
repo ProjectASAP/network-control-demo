@@ -17,11 +17,20 @@ pub struct AggregationConfig {
     pub aggregated_labels: KeyByLabelNames,
     pub rollup_labels: KeyByLabelNames,
     pub original_yaml: String,
+
+    // NEW fields for sliding window support (Issue #236)
+    pub window_size: u64,    // Window size in seconds (e.g., 900s for 15m)
+    pub slide_interval: u64, // Slide/hop interval in seconds (e.g., 30s)
+    pub window_type: String, // "tumbling" or "sliding"
+
+    // DEPRECATED but kept for backward compatibility
     pub tumbling_window_size: u64,
+
     pub spatial_filter: String,
     pub spatial_filter_normalized: String,
     pub metric: String,
     pub num_aggregates_to_retain: Option<u64>,
+    pub read_count_threshold: Option<u64>,
 }
 
 // TODO: need to implement deserialization methods
@@ -41,9 +50,19 @@ impl AggregationConfig {
         spatial_filter: String,
         metric: String,
         num_aggregates_to_retain: Option<u64>,
+        read_count_threshold: Option<u64>,
+        // NEW parameters for sliding window support
+        window_size: Option<u64>,
+        slide_interval: Option<u64>,
+        window_type: Option<String>,
     ) -> Self {
         // Generate normalized spatial filter (placeholder implementation)
         let spatial_filter_normalized = normalize_spatial_filter(&spatial_filter);
+
+        // Handle backward compatibility: if new fields not provided, use tumbling_window_size
+        let window_size = window_size.unwrap_or(tumbling_window_size);
+        let slide_interval = slide_interval.unwrap_or(tumbling_window_size);
+        let window_type = window_type.unwrap_or_else(|| "tumbling".to_string());
 
         Self {
             aggregation_id,
@@ -54,11 +73,15 @@ impl AggregationConfig {
             aggregated_labels,
             rollup_labels,
             original_yaml,
+            window_size,
+            slide_interval,
+            window_type,
             tumbling_window_size,
             spatial_filter,
             spatial_filter_normalized,
             metric,
             num_aggregates_to_retain,
+            read_count_threshold,
         }
     }
 
@@ -114,14 +137,22 @@ impl AggregationConfig {
             .as_u64()
             .ok_or("Missing tumblingWindowSize")?;
 
+        // NEW: Handle new window fields with backward compatibility
+        let window_type = data
+            .get("windowType")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let window_size = data.get("windowSize").and_then(|v| v.as_u64());
+
+        let slide_interval = data.get("slideInterval").and_then(|v| v.as_u64());
+
         let spatial_filter = data["spatialFilter"].as_str().unwrap_or("").to_string();
 
         let metric = data["metric"].as_str().ok_or("Missing metric")?.to_string();
 
-        let num_aggregates_to_retain = data
-            .get("numAggregatesToRetain")
-            .and_then(|v| v.as_u64())
-            .ok_or("Missing numAggregatesToRetain")?;
+        let num_aggregates_to_retain = data.get("numAggregatesToRetain").and_then(|v| v.as_u64());
+        let read_count_threshold = data.get("readCountThreshold").and_then(|v| v.as_u64());
 
         Ok(Self::new(
             aggregation_id,
@@ -135,7 +166,11 @@ impl AggregationConfig {
             tumbling_window_size,
             spatial_filter,
             metric,
-            Some(num_aggregates_to_retain),
+            num_aggregates_to_retain,
+            read_count_threshold,
+            window_size,
+            slide_interval,
+            window_type,
         ))
     }
 
@@ -150,6 +185,7 @@ impl AggregationConfig {
     pub fn from_yaml_data(
         aggregation_data: &serde_yaml::Value,
         num_aggregates_to_retain: Option<u64>,
+        read_count_threshold: Option<u64>,
     ) -> Result<Self, anyhow::Error> {
         let aggregation_id = aggregation_data["aggregationId"]
             .as_u64()
@@ -210,6 +246,18 @@ impl AggregationConfig {
             .as_u64()
             .ok_or_else(|| anyhow::anyhow!("Missing tumblingWindowSize"))?;
 
+        // NEW: Handle new window fields with backward compatibility
+        let window_type = aggregation_data
+            .get("windowType")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let window_size = aggregation_data.get("windowSize").and_then(|v| v.as_u64());
+
+        let slide_interval = aggregation_data
+            .get("slideInterval")
+            .and_then(|v| v.as_u64());
+
         let spatial_filter = aggregation_data["spatialFilter"]
             .as_str()
             .unwrap_or("")
@@ -233,23 +281,42 @@ impl AggregationConfig {
             spatial_filter,
             metric,
             num_aggregates_to_retain,
+            read_count_threshold,
+            window_size,
+            slide_interval,
+            window_type,
         ))
     }
 }
 
 impl SerializableToSink for AggregationConfig {
     fn serialize_to_json(&self) -> Value {
-        serde_json::json!({
+        let mut json = serde_json::json!({
             "aggregationId": self.aggregation_id,
             "aggregationType": self.aggregation_type,
             "aggregationSubType": self.aggregation_sub_type,
             "parameters": self.parameters,
             "originalYaml": self.original_yaml,
             "tumblingWindowSize": self.tumbling_window_size,
+            // NEW: Include new window fields
+            "windowSize": self.window_size,
+            "slideInterval": self.slide_interval,
+            "windowType": self.window_type,
             "spatialFilter": self.spatial_filter,
             "metric": self.metric,
-            "numAggregatesToRetain": self.num_aggregates_to_retain
-        })
+        });
+
+        // Only include numAggregatesToRetain if it's Some
+        if let Some(num_aggregates) = self.num_aggregates_to_retain {
+            json["numAggregatesToRetain"] = serde_json::json!(num_aggregates);
+        }
+
+        // Only include readCountThreshold if it's Some
+        if let Some(threshold) = self.read_count_threshold {
+            json["readCountThreshold"] = serde_json::json!(threshold);
+        }
+
+        json
     }
 
     fn serialize_to_bytes(&self) -> Vec<u8> {

@@ -80,7 +80,7 @@ fn get_project_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
 /// Gets the path to the experiment config yaml file using the given experiment
 /// type and the expected location in Utilities/experiments/config/experiment_type/
 pub fn get_experiment_config_path(experiment_type: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    
+
     let experiment_types_directory = PathBuf::from("experiment_type");
     let experiment_config_filename = PathBuf::from(
         format!("{}{}", experiment_type, EXPERIMENT_CONFIG_SUFFIX)
@@ -135,9 +135,10 @@ async fn generate_configs_and_compose_files(
     tokio::fs::create_dir_all(&experiment_outputs_base).await?;
     tokio::fs::create_dir_all(&experiment_output_dir).await?;
     tokio::fs::create_dir_all(experiment_output_dir.join("controller_output")).await?;
+    tokio::fs::create_dir_all(experiment_output_dir.join("arroyosketch_output")).await?;
     tokio::fs::create_dir_all(experiment_output_dir.join("sketchdb")).await?;
     tokio::fs::create_dir_all(experiment_output_dir.join("sketchdb/query_engine_output")).await?;
-    
+
     // Generate controller client configs
     if config.experiment_params.is_none() {
         return Err(
@@ -178,7 +179,15 @@ async fn generate_configs_and_compose_files(
         &experiment_outputs_abs,
     ).await?;
 
-    // 2.5. Generate fake exporter compose files
+    // 2.5. Generate ArroyoSketch compose file
+    println!("  - Generating ArroyoSketch compose...");
+    docker_util::generate_arroyosketch_compose(
+        config,
+        experiment_name,
+        &experiment_outputs_abs,
+    ).await?;
+
+    // 2.6. Generate fake exporter compose files
     println!("  - Generating fake exporter compose files...");
     docker_util::generate_fake_exporters_compose(
         config,
@@ -187,9 +196,8 @@ async fn generate_configs_and_compose_files(
 
     // 3. Generate prometheus config
     println!("  - Generating prometheus config...");
-    let prometheus_output_dir = project_root.join("Utilities/docker/prometheus_docker");
+    let prometheus_output_dir = project_root.join("Utilities/docker/prometheus");
     tokio::fs::create_dir_all(&prometheus_output_dir).await?;
-    let output_file = prometheus_output_dir.join("prometheus.yml");
     let num_nodes = config.cloudlab.num_nodes.unwrap_or(1);
 
     // For local deployment, use localhost for all IPs
@@ -222,6 +230,40 @@ async fn generate_configs_and_compose_files(
 
     let uv_project = project_root.join("Utilities/asap-cli/uv_configs/generate_prometheus_config");
 
+    // For local deployment, node_offset is 0
+    // For CloudLab, this would be read from config
+    let node_offset = 0;
+
+    // Set up remote write configuration for SketchDB
+    // For Docker deployment, use arroyo hostname and port 9091
+    let remote_write_ip = config.streaming.remote_write
+        .as_ref()
+        .and_then(|rw| rw.ip.as_deref())
+        .unwrap_or("arroyo");
+
+    let remote_write_base_port = config.streaming.remote_write
+        .as_ref()
+        .and_then(|rw| rw.base_port)
+        .unwrap_or(9091);
+
+    let remote_write_path = config.streaming.remote_write
+        .as_ref()
+        .and_then(|rw| rw.path.as_deref())
+        .unwrap_or("/receive");
+
+    let parallelism = config.streaming.parallelism.unwrap_or(1);
+
+    // Construct remote_write_url
+    let remote_write_url = format!("http://{}:{}{}", remote_write_ip, remote_write_base_port, remote_write_path);
+
+    // Get metrics to remote write from experiment params
+    let metrics_to_remote_write = if let Some(ref experiment_params) = config.experiment_params {
+        util::get_metrics_to_remote_write(experiment_params)
+    } else {
+        Vec::new()
+    };
+    let metrics_to_remote_write_str = metrics_to_remote_write.join(",");
+
     let mut cmd = Command::new("uv");
     cmd.args([
         "run",
@@ -233,8 +275,10 @@ async fn generate_configs_and_compose_files(
             .unwrap(),
         "--num_nodes",
         &num_nodes.to_string(),
-        "--output_file",
-        output_file.to_str().unwrap(),
+        "--node-offset",
+        &node_offset.to_string(),
+        "--output_dir",
+        prometheus_output_dir.to_str().unwrap(),
         "--experiment_config_file",
         experiment_config_path.to_str().unwrap(),
         "--node-ip-prefix",
@@ -245,7 +289,19 @@ async fn generate_configs_and_compose_files(
         &scrape_interval,
         "--evaluation_interval",
         &evaluation_interval,
+        "--remote_write_url",
+        &remote_write_url,
+        "--remote_write_base_port",
+        &remote_write_base_port.to_string(),
+        "--parallelism",
+        &parallelism.to_string(),
     ]);
+
+    // Add remote_write_metric_names if not empty
+    if !metrics_to_remote_write_str.is_empty() {
+        cmd.arg("--remote_write_metric_names");
+        cmd.arg(&metrics_to_remote_write_str);
+    }
 
     let status = cmd.status().await?;
 
@@ -256,7 +312,9 @@ async fn generate_configs_and_compose_files(
     // Post-process Prometheus config to fix targets for Docker networking
     // The Python script generates targets like "localhost.2:50000" but for Docker
     // we need service names like "sketchdb-fake-exporter-50000-python:50000"
-    fix_prometheus_targets_for_docker(config, &output_file, &project_root).await?;
+    // The Python script generates prometheus.yml in the output_dir
+    let generated_config = prometheus_output_dir.join("prometheus.yml");
+    fix_prometheus_targets_for_docker(config, &generated_config, &project_root).await?;
 
     println!("All configuration and compose files generated successfully!");
     Ok(())
@@ -320,8 +378,6 @@ async fn configure_grafana(experiment_type: &str, experiment_name: Option<&str>)
     let experiments_dir = project_root.join("Utilities/experiments");
     let uv_project = project_root.join("Utilities/asap-cli/uv_configs/grafana_config");
 
-    // Wait for grafana server to be running within container
-    thread::sleep(Duration::from_secs(5));
     let experiment_type_arg: String = format!("experiment_type={}", experiment_type);
     let experiment_name_arg: String;
 
@@ -329,6 +385,35 @@ async fn configure_grafana(experiment_type: &str, experiment_name: Option<&str>)
         experiment_name_arg = format!("experiment.name={}", name);
     } else {
         experiment_name_arg = format!("experiment.name={}", DEFAULT_RUN_NAME);
+    }
+
+    // Wait for Grafana health endpoint to be ready
+    println!("Waiting for Grafana to be ready...");
+    let max_retries = 30;
+    let mut ready = false;
+
+    for i in 1..=max_retries {
+        let result = Command::new("curl")
+            .args(["-s", "http://localhost:3000/api/health"])
+            .output()
+            .await;
+
+        if let Ok(output) = result {
+            if output.status.success() {
+                println!("Grafana ready after {} attempts", i);
+                ready = true;
+                break;
+            }
+        }
+
+        if i < max_retries {
+            println!("Waiting for Grafana to be ready... ({}/{})", i, max_retries);
+            thread::sleep(Duration::from_secs(5));
+        }
+    }
+
+    if !ready {
+        return Err("Grafana failed to become ready after 30 attempts".into());
     }
 
     println!("Configuring Grafana...");
@@ -340,6 +425,9 @@ async fn configure_grafana(experiment_type: &str, experiment_name: Option<&str>)
             experiments_dir.join("grafana_config.py").to_str().unwrap(),
             &experiment_type_arg,
             &experiment_name_arg,
+            // Override server URLs to use Docker service discovery
+            "experiment_params.servers.0.url=http://prometheus:9090",
+            "experiment_params.servers.1.url=http://queryengine-rust:8088",
             "--configure",
         ])
         .status()
@@ -362,7 +450,7 @@ async fn check_container(container_name: &str) -> Result<bool, Box<dyn std::erro
        .arg(container_name);
 
     let output = cmd.output().await?;
-    
+
     if !output.status.success() {
         eprintln!("stderr: {}", String::from_utf8_lossy(&output.stderr));
         Err("Failed to inspect docker container".into())
@@ -445,8 +533,7 @@ async fn start(args: StartArgs) -> Result<(), Box<dyn std::error::Error>> {
     docker_util::asap_up().await?;
 
     println!("Waiting for containers to start...");
-
-    while !check_container("grafana").await? {
+    while !check_container("asap-grafana").await? {
         thread::sleep(Duration::from_secs(5));
     }
     // Configure Grafana after containers are running

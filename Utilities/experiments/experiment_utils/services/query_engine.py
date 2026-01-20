@@ -13,35 +13,52 @@ from experiment_utils.providers.base import InfrastructureProvider
 class BaseQueryEngineService(BaseService):
     """Base class for query engine services."""
 
-    def __init__(self, provider: InfrastructureProvider, use_container: bool):
+    def __init__(
+        self,
+        provider: InfrastructureProvider,
+        use_container: bool,
+        node_offset: int,
+    ):
         """
         Initialize base query engine service.
 
         Args:
             provider: Infrastructure provider for node communication and management
             use_container: Whether to use containerized deployment
+            node_offset: Starting node index offset
         """
         super().__init__(provider)
         self.use_container = use_container
+        self.node_offset = node_offset
         self.container_name = None
         self.compose_file = None
 
     def get_monitoring_keyword(self) -> str:
         pass
 
+    def get_http_port(self) -> int:
+        """Get the HTTP port for QueryEngine."""
+        return 8088
+
 
 class QueryEngineService(BaseQueryEngineService):
     """Service for managing the Python query engine process."""
 
-    def __init__(self, provider: InfrastructureProvider, use_container: bool):
+    def __init__(
+        self,
+        provider: InfrastructureProvider,
+        use_container: bool,
+        node_offset: int,
+    ):
         """
         Initialize Python Query Engine service.
 
         Args:
             provider: Infrastructure provider for node communication and management
             use_container: Whether to use containerized deployment
+            node_offset: Starting node index offset
         """
-        super().__init__(provider, use_container)
+        super().__init__(provider, use_container, node_offset)
         self.container_name = constants.QUERY_ENGINE_PY_CONTAINER_NAME
 
     def start(
@@ -80,9 +97,14 @@ class QueryEngineService(BaseQueryEngineService):
             raise ValueError(
                 "dump_precomputes is not supported by the Python query engine. Use the Rust query engine instead."
             )
+        use_read_count_policy = kwargs.get("use_read_count_policy", False)
+        if use_read_count_policy:
+            raise ValueError(
+                "use_read_count_policy is not supported by the Python query engine. Use the Rust query engine instead."
+            )
         if self.use_container:
             prometheus_host = kwargs.get(
-                "prometheus_host", self.provider.get_node_ip(0)
+                "prometheus_host", self.provider.get_node_ip(self.node_offset)
             )
             self._start_containerized(
                 experiment_output_dir,
@@ -163,7 +185,7 @@ class QueryEngineService(BaseQueryEngineService):
 
         cmd_dir = os.path.join(self.provider.get_home_dir(), "code", "QueryEngine")
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=cmd_dir,
             nohup=True,
@@ -220,7 +242,7 @@ class QueryEngineService(BaseQueryEngineService):
         generate_cmd += f" --prometheus-scrape-interval '{prometheus_scrape_interval}'"
         generate_cmd += f" --log-level '{log_level}'"
         generate_cmd += f" --streaming-engine '{streaming_engine}'"
-        generate_cmd += f" --kafka-host '{self.provider.get_node_ip(0)}'"
+        generate_cmd += f" --kafka-host '{self.provider.get_node_ip(self.node_offset)}'"
         generate_cmd += f" --prometheus-host '{prometheus_host}'"
 
         # Add optional flags
@@ -244,7 +266,7 @@ class QueryEngineService(BaseQueryEngineService):
         else:
             try:
                 self.provider.execute_command(
-                    node_idx=0,
+                    node_idx=self.node_offset,
                     cmd=cmd,
                     cmd_dir=queryengine_dir,
                     nohup=False,
@@ -271,7 +293,7 @@ class QueryEngineService(BaseQueryEngineService):
         """Stop QueryEngine using bare metal deployment (original implementation)."""
         cmd = "pkill -f main_query_engine.py"
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -286,7 +308,7 @@ class QueryEngineService(BaseQueryEngineService):
                 # Stop using docker compose command on remote node
                 cmd = f"docker compose -f {self.compose_file} down"
                 self.provider.execute_command(
-                    node_idx=0,
+                    node_idx=self.node_offset,
                     cmd=cmd,
                     cmd_dir=None,
                     nohup=False,
@@ -298,7 +320,7 @@ class QueryEngineService(BaseQueryEngineService):
                 # Fallback: stop by container name on remote node
                 cmd = f"docker stop {self.container_name}; docker rm {self.container_name}"
                 self.provider.execute_command(
-                    node_idx=0,
+                    node_idx=self.node_offset,
                     cmd=cmd,
                     cmd_dir=None,
                     nohup=False,
@@ -325,7 +347,7 @@ class QueryEngineService(BaseQueryEngineService):
         try:
             cmd = "pgrep -f main_query_engine.py"
             result = self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=None,
                 nohup=False,
@@ -371,15 +393,21 @@ class QueryEngineService(BaseQueryEngineService):
 class QueryEngineRustService(BaseQueryEngineService):
     """Service for managing the Rust query engine process."""
 
-    def __init__(self, provider: InfrastructureProvider, use_container: bool):
+    def __init__(
+        self,
+        provider: InfrastructureProvider,
+        use_container: bool,
+        node_offset: int,
+    ):
         """
         Initialize Rust Query Engine service.
 
         Args:
             provider: Infrastructure provider for node communication and management
             use_container: Whether to use containerized deployment
+            node_offset: Starting node index offset
         """
-        super().__init__(provider, use_container)
+        super().__init__(provider, use_container, node_offset)
         self.container_name = constants.QUERY_ENGINE_RS_CONTAINER_NAME
 
     def start(
@@ -395,6 +423,9 @@ class QueryEngineRustService(BaseQueryEngineService):
         controller_remote_output_dir: str,
         compress_json: bool,
         dump_precomputes: bool,
+        use_read_count_policy: bool,
+        lock_strategy: str,
+        query_language: str = "PROMQL",
         **kwargs,
     ) -> None:
         """
@@ -412,12 +443,19 @@ class QueryEngineRustService(BaseQueryEngineService):
             controller_remote_output_dir: Controller output directory
             compress_json: Whether JSON is compressed
             dump_precomputes: Whether to dump precomputed values
-            **kwargs: Additional configuration
+            use_read_count_policy: Use read-based cleanup policy instead of fixed-count policy
+            lock_strategy: Lock strategy for SimpleMapStore (global or per-key)
+            query_language: Query language (SQL or PROMQL), defaults to PROMQL
+            **kwargs: Additional configuration (requires prometheus_port, http_port)
         """
+        # Extract prometheus configuration
+        prometheus_host = kwargs.get(
+            "prometheus_host", self.provider.get_node_ip(self.node_offset)
+        )
+        prometheus_port = kwargs["prometheus_port"]  # Required, no default
+        http_port = kwargs["http_port"]  # Required, no default
+
         if self.use_container:
-            prometheus_host = kwargs.get(
-                "prometheus_host", self.provider.get_node_ip(0)
-            )
             self._start_containerized(
                 experiment_output_dir,
                 flink_output_format,
@@ -430,7 +468,12 @@ class QueryEngineRustService(BaseQueryEngineService):
                 controller_remote_output_dir,
                 compress_json,
                 prometheus_host,
+                prometheus_port,
+                http_port,
                 dump_precomputes,
+                query_language,
+                use_read_count_policy,
+                lock_strategy,
             )
         else:
             self._start_bare_metal(
@@ -444,7 +487,13 @@ class QueryEngineRustService(BaseQueryEngineService):
                 forward_unsupported_queries,
                 controller_remote_output_dir,
                 compress_json,
+                prometheus_host,
+                prometheus_port,
+                http_port,
                 dump_precomputes,
+                query_language,
+                use_read_count_policy,
+                lock_strategy,
             )
 
     def _start_bare_metal(
@@ -459,10 +508,17 @@ class QueryEngineRustService(BaseQueryEngineService):
         forward_unsupported_queries: bool,
         controller_remote_output_dir: str,
         compress_json: bool,
+        prometheus_host: str,
+        prometheus_port: int,
+        http_port: int,
         dump_precomputes: bool,
+        query_language: str,
+        use_read_count_policy: bool,
+        lock_strategy: str,
     ) -> None:
         """Start Rust QueryEngine using bare metal deployment."""
         output_dir = os.path.join(experiment_output_dir, "query_engine_output")
+        prometheus_server = f"http://{prometheus_host}:{prometheus_port}"
 
         cmd = (
             "mkdir -p {}; ./target/release/query_engine_rust "
@@ -471,11 +527,15 @@ class QueryEngineRustService(BaseQueryEngineService):
             "--config {}/inference_config.yaml "
             "--streaming-config {}/streaming_config.yaml "
             "--prometheus-scrape-interval {} "
+            "--prometheus-server {} "
+            "--http-port {} "
             "--delete-existing-db "
             "--log-level {} "
             "--output-dir {} "
             "{} "
             "--streaming-engine {} "
+            "--query-language {} "
+            "--lock-strategy {} "
         ).format(
             output_dir,
             constants.FLINK_OUTPUT_TOPIC,
@@ -483,10 +543,14 @@ class QueryEngineRustService(BaseQueryEngineService):
             controller_remote_output_dir,
             controller_remote_output_dir,
             prometheus_scrape_interval,
+            prometheus_server,
+            http_port,
             log_level,
             output_dir,
             "--decompress-json" if compress_json else "",
             streaming_engine,
+            query_language,
+            lock_strategy,
         )
 
         if profile_query_engine:
@@ -495,11 +559,13 @@ class QueryEngineRustService(BaseQueryEngineService):
             cmd += "--forward-unsupported-queries "
         if dump_precomputes:
             cmd += "--dump-precomputes "
+        if use_read_count_policy:
+            cmd += "--use-read-based-cleanup "
         cmd += "> {}/query_engine_rust.out 2>&1 &".format(output_dir)
 
         cmd_dir = os.path.join(self.provider.get_home_dir(), "code", "QueryEngineRust")
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=cmd_dir,
             nohup=True,
@@ -521,7 +587,12 @@ class QueryEngineRustService(BaseQueryEngineService):
         controller_remote_output_dir: str,
         compress_json: bool,
         prometheus_host: str,
+        prometheus_port: int,
+        http_port: int,
         dump_precomputes: bool,
+        query_language: str,
+        use_read_count_policy: bool,
+        lock_strategy: str,
     ) -> None:
         """Start Rust QueryEngine using containerized deployment with Jinja template."""
         output_dir = os.path.join(experiment_output_dir, "query_engine_output")
@@ -556,8 +627,12 @@ class QueryEngineRustService(BaseQueryEngineService):
         generate_cmd += f" --prometheus-scrape-interval '{prometheus_scrape_interval}'"
         generate_cmd += f" --log-level '{log_level}'"
         generate_cmd += f" --streaming-engine '{streaming_engine}'"
-        generate_cmd += f" --kafka-host '{self.provider.get_node_ip(0)}'"
+        generate_cmd += f" --query-language '{query_language}'"
+        generate_cmd += f" --lock-strategy '{lock_strategy}'"
+        generate_cmd += f" --kafka-host '{self.provider.get_node_ip(self.node_offset)}'"
         generate_cmd += f" --prometheus-host '{prometheus_host}'"
+        generate_cmd += f" --prometheus-port '{prometheus_port}'"
+        generate_cmd += f" --http-port '{http_port}'"
 
         # Add optional flags
         if compress_json:
@@ -568,6 +643,8 @@ class QueryEngineRustService(BaseQueryEngineService):
             generate_cmd += " --forward-unsupported-queries"
         if dump_precomputes:
             generate_cmd += " --dump-precomputes"
+        if use_read_count_policy:
+            generate_cmd += " --use-read-count-policy"
         if manual:
             generate_cmd += " --manual"
 
@@ -580,7 +657,7 @@ class QueryEngineRustService(BaseQueryEngineService):
         else:
             try:
                 self.provider.execute_command(
-                    node_idx=0,
+                    node_idx=self.node_offset,
                     cmd=cmd,
                     cmd_dir=queryengine_dir,
                     nohup=False,
@@ -607,7 +684,7 @@ class QueryEngineRustService(BaseQueryEngineService):
         """Stop Rust QueryEngine using bare metal deployment."""
         cmd = "pkill -f query_engine_rust"
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -622,7 +699,7 @@ class QueryEngineRustService(BaseQueryEngineService):
                 # Stop using docker compose command on remote node
                 cmd = f"docker compose -f {self.compose_file} down"
                 self.provider.execute_command(
-                    node_idx=0,
+                    node_idx=self.node_offset,
                     cmd=cmd,
                     cmd_dir=None,
                     nohup=False,
@@ -634,7 +711,7 @@ class QueryEngineRustService(BaseQueryEngineService):
                 # Fallback: stop by container name on remote node
                 cmd = f"docker stop {self.container_name}; docker rm {self.container_name}"
                 self.provider.execute_command(
-                    node_idx=0,
+                    node_idx=self.node_offset,
                     cmd=cmd,
                     cmd_dir=None,
                     nohup=False,
@@ -661,7 +738,7 @@ class QueryEngineRustService(BaseQueryEngineService):
         try:
             cmd = "pgrep -f query_engine_rust"
             result = self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=None,
                 nohup=False,
@@ -712,6 +789,7 @@ class QueryEngineServiceFactory:
         language: str,
         provider: InfrastructureProvider,
         use_container: bool,
+        node_offset: int,
     ) -> BaseQueryEngineService:
         """
         Create a query engine service based on language.
@@ -720,6 +798,7 @@ class QueryEngineServiceFactory:
             language: Programming language ("python" or "rust")
             provider: Infrastructure provider for node communication and management
             use_container: Whether to use containerized deployment
+            node_offset: Starting node index offset
 
         Returns:
             Appropriate query engine service instance
@@ -728,9 +807,9 @@ class QueryEngineServiceFactory:
             ValueError: If language is not supported
         """
         if language == "python":
-            return QueryEngineService(provider, use_container)
+            return QueryEngineService(provider, use_container, node_offset)
         elif language == "rust":
-            return QueryEngineRustService(provider, use_container)
+            return QueryEngineRustService(provider, use_container, node_offset)
         else:
             raise ValueError(
                 f"Invalid query engine language: {language}. Supported languages are 'python' and 'rust'"

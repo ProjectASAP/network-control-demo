@@ -207,6 +207,7 @@ impl MultipleSubpopulationAggregate for MultipleSumAccumulator {
         &self,
         statistic: Statistic,
         key: &KeyByLabelValues,
+        _query_kwargs: Option<&HashMap<String, String>>,
     ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
         match statistic {
             Statistic::Sum | Statistic::Count => self
@@ -244,7 +245,7 @@ impl MultipleSubpopulationAggregateFactory for MultipleSumAccumulatorFactory {
             // Get keys and merge values
             let keys = acc.get_keys().unwrap();
             for key in keys {
-                let value = acc.query(Statistic::Sum, &key)?;
+                let value = acc.query(Statistic::Sum, &key, None)?;
                 *merged_sums.entry(key).or_insert(0.0) += value;
             }
         }
@@ -315,12 +316,14 @@ mod tests {
 
         // Test total queries (querying with the specific key)
         assert_eq!(
-            crate::MultipleSubpopulationAggregate::query(&acc, Statistic::Sum, &key).unwrap(),
+            crate::MultipleSubpopulationAggregate::query(&acc, Statistic::Sum, &key, None).unwrap(),
             42.0
         );
 
         // Test error cases
-        assert!(crate::MultipleSubpopulationAggregate::query(&acc, Statistic::Min, &key).is_err());
+        assert!(
+            crate::MultipleSubpopulationAggregate::query(&acc, Statistic::Min, &key, None).is_err()
+        );
     }
 
     #[test]

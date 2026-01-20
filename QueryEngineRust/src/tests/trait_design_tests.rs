@@ -27,7 +27,7 @@ fn test_multiple_subpopulation_interface() {
     let acc: Box<dyn MultipleSubpopulationAggregate> = Box::new(multi_acc);
 
     // ✅ Query with key - this is the correct interface for Multiple accumulators
-    let result = acc.query(Statistic::Sum, &key).unwrap();
+    let result = acc.query(Statistic::Sum, &key, None).unwrap();
     assert_eq!(result, 100.0);
 
     // ✅ Get all keys
@@ -48,7 +48,7 @@ fn test_interface_prevents_misuse() {
     // ✅ These work - correct usage
     let _result1 = single_acc.query(Statistic::Sum, None);
     let key = KeyByLabelValues::new();
-    let _result2 = multi_acc.query(Statistic::Sum, &key);
+    let _result2 = multi_acc.query(Statistic::Sum, &key, None);
 
     // ❌ These would be compile-time errors (commented out):
     // let _result3 = single_acc.query(Statistic::Sum, &key);  // Too many args for Single
@@ -72,7 +72,10 @@ fn test_python_alignment() {
     let key = KeyByLabelValues::new();
     multi_acc.add_sum(key.clone(), 100.0);
     let multi_trait: Box<dyn MultipleSubpopulationAggregate> = Box::new(multi_acc);
-    assert_eq!(multi_trait.query(Statistic::Sum, &key).unwrap(), 100.0);
+    assert_eq!(
+        multi_trait.query(Statistic::Sum, &key, None).unwrap(),
+        100.0
+    );
 
     // Perfect alignment with Python behavior!
 }

@@ -7,6 +7,7 @@ use dsrs::KllDoubleSketch;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::time::Instant;
 use tracing::debug;
 
 use promql_utilities::query_logics::enums::Statistic;
@@ -30,7 +31,7 @@ impl DatasketchesKLLAccumulator {
         }
     }
 
-    fn _update(&mut self, value: f64) {
+    pub fn _update(&mut self, value: f64) {
         self.sketch.update(value);
     }
 
@@ -74,7 +75,6 @@ impl DatasketchesKLLAccumulator {
             "Deserializing DatasketchesKLLAccumulator from Arroyo MessagePack buffer of size {}",
             buffer.len()
         );
-        debug!("Buffer bytes: {:?}", buffer);
 
         let deserialized_sketch_data: KllSketchData = rmp_serde::from_slice(buffer)
             .map_err(|e| format!("Failed to deserialize KllSketchData from MessagePack: {e}"))?;
@@ -89,15 +89,66 @@ impl DatasketchesKLLAccumulator {
             KllDoubleSketch::deserialize(&deserialized_sketch_data.sketch_bytes)
                 .map_err(|e| format!("Failed to deserialize KLL sketch: {e}"))?;
 
-        debug!(
-            "Successfully deserialized KLL sketch with n={}",
-            sketch.get_n()
-        );
-
         Ok(Self {
             k: deserialized_sketch_data.k,
             sketch,
         })
+    }
+
+    /// Merge multiple accumulators efficiently without cloning all of them
+    /// This is a batch merge operation that creates one empty sketch and merges all others into it
+    ///
+    /// # Arguments
+    /// * `accumulators` - Slice of boxed AggregateCore trait objects to merge
+    ///
+    /// # Returns
+    /// * `Result<Self, Box<dyn std::error::Error + Send + Sync>>` - Merged accumulator or error
+    ///
+    /// # Performance
+    /// This method performs 0 clones (just creates 1 new empty sketch), compared to the
+    /// sequential merge approach which would perform N clones for N accumulators.
+    pub fn merge_multiple(
+        accumulators: &[Box<dyn crate::data_model::AggregateCore>],
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        if accumulators.is_empty() {
+            return Err("No accumulators to merge".into());
+        }
+
+        // Downcast and validate all accumulators first
+        let mut kll_accumulators = Vec::with_capacity(accumulators.len());
+        for acc in accumulators {
+            if acc.get_accumulator_type() != "DatasketchesKLLAccumulator" {
+                return Err(format!(
+                    "Cannot merge DatasketchesKLLAccumulator with {}",
+                    acc.get_accumulator_type()
+                )
+                .into());
+            }
+
+            let kll_acc = acc
+                .as_any()
+                .downcast_ref::<DatasketchesKLLAccumulator>()
+                .ok_or("Failed to downcast to DatasketchesKLLAccumulator")?;
+            kll_accumulators.push(kll_acc);
+        }
+
+        // Check k values are consistent
+        let k = kll_accumulators[0].k;
+        for acc in &kll_accumulators {
+            if acc.k != k {
+                return Err(
+                    "Cannot merge DatasketchesKLLAccumulator with different k values".into(),
+                );
+            }
+        }
+
+        // Create new sketch and merge all others into it WITHOUT cloning
+        let mut merged = DatasketchesKLLAccumulator::new(k);
+        for acc in kll_accumulators {
+            merged.sketch.merge(&acc.sketch);
+        }
+
+        Ok(merged)
     }
 }
 
@@ -177,25 +228,83 @@ impl AggregateCore for DatasketchesKLLAccumulator {
         &self,
         other: &dyn AggregateCore,
     ) -> Result<Box<dyn AggregateCore>, Box<dyn std::error::Error + Send + Sync>> {
+        #[cfg(feature = "extra_debugging")]
+        let merge_with_start = Instant::now();
+        #[cfg(feature = "extra_debugging")]
+        debug!(
+            "[PERF] DatasketchesKLLAccumulator::merge_with() started - self.k={}, self.n={}",
+            self.k,
+            self.sketch.get_n()
+        );
+
         // Check if other is also a DatasketchesKLLAccumulator
+        #[cfg(feature = "extra_debugging")]
+        let type_check_start = Instant::now();
         if other.get_accumulator_type() != self.get_accumulator_type() {
+            #[cfg(feature = "extra_debugging")]
+            debug!(
+                "[PERF] DatasketchesKLLAccumulator::merge_with() type check failed after {:?} - other type: {}",
+                type_check_start.elapsed(),
+                other.get_accumulator_type()
+            );
             return Err(format!(
                 "Cannot merge DatasketchesKLLAccumulator with {}",
                 other.get_accumulator_type()
             )
             .into());
         }
+        #[cfg(feature = "extra_debugging")]
+        debug!(
+            "[PERF] DatasketchesKLLAccumulator::merge_with() type check passed in {:?}",
+            type_check_start.elapsed()
+        );
 
         // Downcast to DatasketchesKLLAccumulator
+        #[cfg(feature = "extra_debugging")]
+        let downcast_start = Instant::now();
         let other_kll = other
             .as_any()
             .downcast_ref::<DatasketchesKLLAccumulator>()
             .ok_or("Failed to downcast to DatasketchesKLLAccumulator")?;
+        #[cfg(feature = "extra_debugging")]
+        debug!(
+            "[PERF] DatasketchesKLLAccumulator::merge_with() downcast completed in {:?} - other.k={}, other.n={}",
+            downcast_start.elapsed(),
+            other_kll.k,
+            other_kll.sketch.get_n()
+        );
 
-        // Use the existing merge_accumulators method
-        let merged = Self::merge_accumulators(vec![self.clone(), other_kll.clone()])?;
+        // Clone self ONCE, then merge other directly without cloning
+        // This reduces 2 serialize/deserialize operations to just 1
+        #[cfg(feature = "extra_debugging")]
+        let merge_accumulators_start = Instant::now();
+        let mut merged = self.clone();
+        merged.sketch.merge(&other_kll.sketch);
+        #[cfg(feature = "extra_debugging")]
+        debug!(
+            "[PERF] DatasketchesKLLAccumulator merge_accumulators completed in {:?} - merged.k={}, merged.n={}",
+            merge_accumulators_start.elapsed(),
+            merged.k,
+            merged.sketch.get_n()
+        );
 
-        Ok(Box::new(merged))
+        // Box the result
+        #[cfg(feature = "extra_debugging")]
+        let boxing_start = Instant::now();
+        let result = Box::new(merged);
+        #[cfg(feature = "extra_debugging")]
+        debug!(
+            "[PERF] DatasketchesKLLAccumulator::merge_with() boxing completed in {:?}",
+            boxing_start.elapsed()
+        );
+
+        #[cfg(feature = "extra_debugging")]
+        debug!(
+            "[PERF] DatasketchesKLLAccumulator::merge_with() TOTAL TIME: {:?}",
+            merge_with_start.elapsed()
+        );
+
+        Ok(result)
     }
 
     fn get_accumulator_type(&self) -> &'static str {
@@ -467,5 +576,59 @@ mod tests {
         // Test unsupported statistic
         query_kwargs.insert("quantile".to_string(), "0.5".to_string());
         assert!(kll.query(Statistic::Sum, Some(&query_kwargs)).is_err());
+    }
+
+    #[test]
+    fn test_datasketches_kll_merge_multiple() {
+        // Create 3 KLL accumulators with different data
+        let mut kll1 = DatasketchesKLLAccumulator::new(200);
+        let mut kll2 = DatasketchesKLLAccumulator::new(200);
+        let mut kll3 = DatasketchesKLLAccumulator::new(200);
+
+        // Add different values to each
+        for i in 1..=5 {
+            kll1._update(i as f64);
+        }
+        for i in 6..=10 {
+            kll2._update(i as f64);
+        }
+        for i in 11..=15 {
+            kll3._update(i as f64);
+        }
+
+        // Box them as AggregateCore trait objects
+        let boxed_accs: Vec<Box<dyn AggregateCore>> =
+            vec![Box::new(kll1), Box::new(kll2), Box::new(kll3)];
+
+        // Use merge_multiple
+        let merged = DatasketchesKLLAccumulator::merge_multiple(&boxed_accs).unwrap();
+
+        // Verify the merged result
+        assert_eq!(merged.sketch.get_n(), 15); // Total number of values
+        assert_eq!(merged.get_quantile(0.0), 1.0); // Min value
+        assert_eq!(merged.get_quantile(1.0), 15.0); // Max value
+        assert_eq!(merged.get_quantile(0.5), 8.0); // Median
+    }
+
+    #[test]
+    fn test_datasketches_kll_merge_multiple_error_cases() {
+        // Test empty slice
+        let empty: Vec<Box<dyn AggregateCore>> = vec![];
+        assert!(DatasketchesKLLAccumulator::merge_multiple(&empty).is_err());
+
+        // Test mismatched k values
+        let kll1 = DatasketchesKLLAccumulator::new(200);
+        let kll2 = DatasketchesKLLAccumulator::new(100); // Different k
+
+        let boxed_accs: Vec<Box<dyn AggregateCore>> = vec![Box::new(kll1), Box::new(kll2)];
+        assert!(DatasketchesKLLAccumulator::merge_multiple(&boxed_accs).is_err());
+
+        // Test wrong accumulator type
+        use crate::precompute_operators::sum_accumulator::SumAccumulator;
+        let kll = DatasketchesKLLAccumulator::new(200);
+        let sum = SumAccumulator::new();
+
+        let mixed_accs: Vec<Box<dyn AggregateCore>> = vec![Box::new(kll), Box::new(sum)];
+        assert!(DatasketchesKLLAccumulator::merge_multiple(&mixed_accs).is_err());
     }
 }

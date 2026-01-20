@@ -13,14 +13,16 @@ from experiment_utils.providers.base import InfrastructureProvider
 class PrometheusThroughputMonitor(BaseService):
     """Service for monitoring Prometheus throughput metrics."""
 
-    def __init__(self, provider: InfrastructureProvider):
+    def __init__(self, provider: InfrastructureProvider, node_offset: int):
         """
         Initialize Prometheus throughput monitor.
 
         Args:
             provider: Infrastructure provider for node communication and management
+            node_offset: Starting node index offset
         """
         super().__init__(provider)
+        self.node_offset = node_offset
         self.output_dir: Optional[str] = None
         self.monitor_script_path = None
         self.prometheus_url = "http://localhost:9090"
@@ -59,7 +61,7 @@ class PrometheusThroughputMonitor(BaseService):
         cmd += " > {}/prometheus_throughput_monitor.out 2>&1 &".format(self.output_dir)
 
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=f"mkdir -p {self.output_dir}; {cmd}",
             cmd_dir=None,
             nohup=False,
@@ -79,7 +81,7 @@ class PrometheusThroughputMonitor(BaseService):
         # Kill the monitoring script on the remote host
         cmd = "pkill -f 'prometheus_throughput_monitor.py'"
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -100,7 +102,7 @@ class PrometheusThroughputMonitor(BaseService):
         try:
             cmd = "pgrep -f 'prometheus_throughput_monitor.py'"
             result = self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=None,
                 nohup=False,

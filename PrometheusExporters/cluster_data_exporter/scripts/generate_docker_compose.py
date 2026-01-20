@@ -142,7 +142,11 @@ def generate_google_compose(
 
 
 def generate_alibaba_compose(
-    data_type: str, data_year: int, port: Optional[int], input_dir: Optional[str]
+    data_type: str,
+    data_year: int,
+    port: Optional[int],
+    input_dir: Optional[str],
+    speedup: Optional[int],
 ) -> None:
     """Generate docker-compose.yml for Alibaba provider."""
     frame_file = get_frame_file_path("alibaba", data_type, data_year)
@@ -165,6 +169,14 @@ def generate_alibaba_compose(
     if input_dir is not None:
         # Update volume mapping
         service["volumes"] = [f"{input_dir}:/data:ro"]
+
+    # Add speedup if specified
+    if speedup is not None:
+        if "--speedup" not in " ".join(command):
+            command.append(f"--speedup={speedup}")
+        else:
+            command = update_command_arg(command, "--speedup", str(speedup))
+        service["command"] = command
 
     # Save updated compose file
     save_yaml_file(output_file, compose_data)
@@ -208,6 +220,11 @@ Examples:
         choices=VALID_ALIBABA_DATA_YEARS,
         help="Year of the dataset",
     )
+    alibaba_group.add_argument(
+        "--speedup",
+        type=int,
+        help="Speedup factor for faster-than-realtime export (1=real-time, 10=10x faster)",
+    )
 
     args = parser.parse_args()
 
@@ -226,7 +243,7 @@ Examples:
             parser.error("Alibaba provider requires --data-year argument")
         validate_alibaba_args(args.data_type, args.data_year)
         generate_alibaba_compose(
-            args.data_type, args.data_year, args.port, args.input_dir
+            args.data_type, args.data_year, args.port, args.input_dir, args.speedup
         )
 
     print(f"Generated docker-compose.yml for {args.provider} provider")

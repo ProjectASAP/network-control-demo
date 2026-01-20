@@ -45,6 +45,7 @@ pub enum Statistic {
     Min,
     Max,
     Quantile,
+    Topk,
 }
 
 impl std::fmt::Display for Statistic {
@@ -59,6 +60,7 @@ impl std::fmt::Display for Statistic {
             Statistic::Min => write!(f, "min"),
             Statistic::Max => write!(f, "max"),
             Statistic::Quantile => write!(f, "quantile"),
+            Statistic::Topk => write!(f, "topk"),
         }
     }
 }
@@ -76,6 +78,7 @@ impl Statistic {
             "min" => Some(Statistic::Min),
             "max" => Some(Statistic::Max),
             "quantile" => Some(Statistic::Quantile),
+            "topk" => Some(Statistic::Topk),
             _ => None,
         }
     }

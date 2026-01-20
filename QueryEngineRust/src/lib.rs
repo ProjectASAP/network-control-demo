@@ -11,9 +11,9 @@ pub mod utils;
 // Re-export commonly used types to avoid glob import conflicts
 pub use data_model::{
     AccumulatorFactory, AggregateCore, AggregationConfig, InferenceConfig, KeyByLabelValues,
-    Measurement, MergeableAccumulator, MetricConfig, MultipleSubpopulationAggregate,
-    MultipleSubpopulationAggregateFactory, PrecomputedOutput, QueryConfig, SerializableToSink,
-    SingleSubpopulationAggregate, SingleSubpopulationAggregateFactory,
+    Measurement, MergeableAccumulator, MultipleSubpopulationAggregate,
+    MultipleSubpopulationAggregateFactory, PrecomputedOutput, PromQLSchema, QueryConfig,
+    SerializableToSink, SingleSubpopulationAggregate, SingleSubpopulationAggregateFactory,
 };
 
 pub use precompute_operators::{

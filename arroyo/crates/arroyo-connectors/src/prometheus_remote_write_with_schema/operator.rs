@@ -235,8 +235,20 @@ impl PrometheusRemoteWriteWithSchemaSourceFunc {
         // Convert ms to ns for internal timestamp field
         let timestamp_ns = timestamp_ms * 1_000_000;
 
-        // Debug: Log the actual labels received
-        debug!("Processing metric '{}' with labels: {:?}", metric.metric_name, metric.labels);
+        // Debug: Log the actual labels received and value status
+        debug!("Processing metric '{}' with labels: {:?}, timestamp={}, value={}, is_finite={}, is_nan={}",
+               metric.metric_name, metric.labels, metric.timestamp, metric.value,
+               metric.value.is_finite(), metric.value.is_nan());
+
+        // Warn about problematic values
+        if metric.value.is_nan() {
+            warn!("Metric '{}' has NaN value! timestamp={}, labels={:?}",
+                  metric.metric_name, metric.timestamp, metric.labels);
+        }
+        if metric.value.is_infinite() {
+            warn!("Metric '{}' has infinite value: {} timestamp={}, labels={:?}",
+                  metric.metric_name, metric.value, metric.timestamp, metric.labels);
+        }
 
         let json_value = serde_json::json!({
             "labels": metric.labels,
@@ -247,10 +259,17 @@ impl PrometheusRemoteWriteWithSchemaSourceFunc {
         });
 
         let json_str = serde_json::to_string(&json_value)?;
-        
+
         // Debug: Log the generated JSON
         debug!("Generated JSON: {}", json_str);
-        
+
+        // Check if NaN was serialized as null in the JSON (this causes deserialization errors!)
+        if metric.value.is_nan() && json_str.contains("\"value\":null") {
+            error!("CRITICAL: NaN value was serialized as null in JSON! This will cause deserialization to fail.");
+            error!("Metric: {}, timestamp: {}, labels: {:?}", metric.metric_name, metric.timestamp, metric.labels);
+            error!("JSON contains: {}", json_str);
+        }
+
         Ok(json_str)
     }
 
@@ -262,7 +281,7 @@ impl PrometheusRemoteWriteWithSchemaSourceFunc {
         // Calculate actual port based on task index
         let task_index = ctx.task_info.task_index as u16;
         let actual_port = self.base_port + task_index;
-        
+
         let addr: SocketAddr = match format!("{}:{}", self.bind_address, actual_port).parse() {
             Ok(addr) => addr,
             Err(e) => {
@@ -316,13 +335,13 @@ impl PrometheusRemoteWriteWithSchemaSourceFunc {
             self.bad_data.clone(),
             &[],
         );
-        
+
         // Debug: Log schema information from out_schema
         debug!("Prometheus source initialized with schema: {:?}", collector.out_schema.schema);
-        
+
         // Check if labels field is structured
         if let Ok(labels_field) = collector.out_schema.schema.field_with_name("labels") {
-            debug!("Labels field definition: name={}, type={:?}, nullable={}", 
+            debug!("Labels field definition: name={}, type={:?}, nullable={}",
                    labels_field.name(), labels_field.data_type(), labels_field.is_nullable());
         } else {
             debug!("No 'labels' field found in schema");
@@ -383,7 +402,7 @@ impl PrometheusRemoteWriteWithSchemaSourceFunc {
                                     Ok(json_str) => {
                                         // Debug: Log JSON before deserialization
                                         debug!("Deserializing metric {}/{}: {}", i+1, metrics.len(), json_str);
-                                        
+
                                         // Use deserializer like Kafka does
                                         match collector.deserialize_slice(
                                             json_str.as_bytes(),
@@ -394,23 +413,38 @@ impl PrometheusRemoteWriteWithSchemaSourceFunc {
                                                 debug!("Successfully deserialized metric {}/{}", i+1, metrics.len());
                                             }
                                             Err(e) => {
-                                                error!("Failed to deserialize metric {}/{} ({}): {:?}", 
-                                                       i+1, metrics.len(), metric.metric_name, e);
-                                                error!("Problematic JSON was: {}", json_str);
-                                                error!("Metric labels were: {:?}", metric.labels);
+                                                error!("===== DESERIALIZATION ERROR =====");
+                                                error!("Failed to deserialize metric {}/{}", i+1, metrics.len());
+                                                error!("Metric name: {}", metric.metric_name);
+                                                error!("Metric timestamp: {}", metric.timestamp);
+                                                error!("Metric value: {}", metric.value);
+                                                error!("Metric value is_nan: {}", metric.value.is_nan());
+                                                error!("Metric value is_infinite: {}", metric.value.is_infinite());
+                                                error!("Metric value is_finite: {}", metric.value.is_finite());
+                                                error!("Metric labels: {:?}", metric.labels);
+                                                error!("Generated JSON: {}", json_str);
+                                                error!("Deserialization error: {:?}", e);
+                                                error!("================================");
                                             }
                                         }
                                     }
                                     Err(e) => {
                                         error!("Failed to convert metric {} to JSON: {}", metric.metric_name, e);
+                                        error!("Metric details: timestamp={}, value={}, is_nan={}, labels={:?}",
+                                               metric.timestamp, metric.value, metric.value.is_nan(), metric.labels);
                                     }
                                 }
                             }
 
                             // Flush buffer if needed, like Kafka does
                             if collector.should_flush() {
+                                debug!("Flushing buffer for {} metrics", metrics.len());
                                 if let Err(e) = collector.flush_buffer().await {
-                                    error!("Failed to flush buffer: {:?}", e);
+                                    error!("Failed to flush buffer after processing {} metrics: {:?}", metrics.len(), e);
+                                    error!("Last batch metrics: {:?}", metrics.iter().map(|m| {
+                                        format!("name={}, value={}, is_nan={}, labels={:?}",
+                                                m.metric_name, m.value, m.value.is_nan(), m.labels)
+                                    }).collect::<Vec<_>>());
                                 }
                             }
 

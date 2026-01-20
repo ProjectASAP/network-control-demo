@@ -18,13 +18,14 @@ COPY QueryEngineRust/Cargo.toml QueryEngineRust/Cargo.lock ./QueryEngineRust/
 RUN mkdir -p QueryEngineRust/src && echo "fn main() {}" > QueryEngineRust/src/main.rs
 
 # Build dependencies (this layer will be cached)
-RUN cd QueryEngineRust && cargo build --release && rm -rf src/
+WORKDIR /code/QueryEngineRust
+RUN cargo build --release && rm -rf src/
 
 # Copy source code
-COPY QueryEngineRust/src ./QueryEngineRust/src
+COPY QueryEngineRust/src ./src
 
 # Build the actual application
-RUN cd QueryEngineRust && touch src/main.rs && cargo build --release
+RUN touch src/main.rs && cargo build --release
 
 # Runtime stage with Ubuntu 24.04 (has newer glibc/libstdc++)
 FROM ubuntu:24.04
@@ -32,7 +33,7 @@ FROM ubuntu:24.04
 WORKDIR /app
 
 # Install minimal runtime dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libssl3 \
     zlib1g \
@@ -41,14 +42,11 @@ RUN apt-get update && apt-get install -y \
 # Copy the built binary
 COPY --from=builder /code/QueryEngineRust/target/release/query_engine_rust /usr/local/bin/query_engine_rust
 
-# Create a non-root user
-RUN useradd -r -s /bin/false queryengine
-
 # Expose the HTTP server port
 EXPOSE 8088
 
-# Switch to non-root user
-USER queryengine
+# Note: Running as root to match Python QueryEngine behavior
+# This allows writing to mounted volumes without permission issues
 
 # Use ENTRYPOINT to allow passing command line arguments
 ENTRYPOINT ["query_engine_rust"]

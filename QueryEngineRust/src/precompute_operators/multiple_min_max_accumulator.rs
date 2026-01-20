@@ -250,6 +250,7 @@ impl MultipleSubpopulationAggregate for MultipleMinMaxAccumulator {
         &self,
         statistic: Statistic,
         key: &KeyByLabelValues,
+        _query_kwargs: Option<&HashMap<String, String>>,
     ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
         // Query specific key
         match statistic {
@@ -384,23 +385,28 @@ mod tests {
 
         // Test queries with the specific key
         assert_eq!(
-            crate::MultipleSubpopulationAggregate::query(&min_acc, Statistic::Min, &key).unwrap(),
+            crate::MultipleSubpopulationAggregate::query(&min_acc, Statistic::Min, &key, None)
+                .unwrap(),
             5.0
         );
         assert_eq!(
-            crate::MultipleSubpopulationAggregate::query(&max_acc, Statistic::Max, &key).unwrap(),
+            crate::MultipleSubpopulationAggregate::query(&max_acc, Statistic::Max, &key, None)
+                .unwrap(),
             15.0
         );
 
         // Test error cases
         assert!(
-            crate::MultipleSubpopulationAggregate::query(&min_acc, Statistic::Max, &key).is_err()
+            crate::MultipleSubpopulationAggregate::query(&min_acc, Statistic::Max, &key, None)
+                .is_err()
         );
         assert!(
-            crate::MultipleSubpopulationAggregate::query(&max_acc, Statistic::Min, &key).is_err()
+            crate::MultipleSubpopulationAggregate::query(&max_acc, Statistic::Min, &key, None)
+                .is_err()
         );
         assert!(
-            crate::MultipleSubpopulationAggregate::query(&min_acc, Statistic::Sum, &key).is_err()
+            crate::MultipleSubpopulationAggregate::query(&min_acc, Statistic::Sum, &key, None)
+                .is_err()
         );
     }
 

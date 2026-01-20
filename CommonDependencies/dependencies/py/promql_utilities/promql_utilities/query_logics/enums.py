@@ -21,6 +21,7 @@ class Statistic(Enum):
     MIN = auto()
     MAX = auto()
     QUANTILE = auto()
+    TOPK = auto()
 
 
 class QueryResultType(Enum):

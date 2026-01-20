@@ -13,20 +13,18 @@ use tracing::debug;
 pub struct PromQLPattern {
     /// AST pattern definition (JSON-like structure). None indicates a wildcard (match any).
     pub ast_pattern: Option<HashMap<String, Value>>,
-    /// Tokens to collect during matching
-    pub collect_tokens: Vec<String>,
+    ///// Tokens to collect during matching
+    //pub collect_tokens: Vec<String>,
 }
 
 impl PromQLPattern {
     /// Create a new pattern with AST pattern definition
-    pub fn new(ast_pattern: Option<HashMap<String, Value>>, collect_tokens: Vec<String>) -> Self {
-        debug!(
-            "Creating new PromQLPattern with {} collect tokens",
-            collect_tokens.len()
-        );
+    //pub fn new(ast_pattern: Option<HashMap<String, Value>>, collect_tokens: Vec<String>) -> Self {
+    pub fn new(ast_pattern: Option<HashMap<String, Value>>) -> Self {
+        debug!("Creating new PromQLPattern");
         Self {
             ast_pattern,
-            collect_tokens,
+            //collect_tokens,
         }
     }
 
@@ -332,7 +330,10 @@ impl PromQLPattern {
         // Check aggregation operation
         if let Some(Value::Array(expected_ops)) = pattern.get("op") {
             let agg_op = agg.op.to_string();
-            debug!("Checking aggregation op '{}' against pattern ops: {:?}", agg_op, expected_ops);
+            debug!(
+                "Checking aggregation op '{}' against pattern ops: {:?}",
+                agg_op, expected_ops
+            );
             let matches_op = expected_ops.iter().any(|op| {
                 if let Some(op_str) = op.as_str() {
                     op_str == agg_op
@@ -367,7 +368,10 @@ impl PromQLPattern {
             } else if expr_pattern_value.is_null() {
                 debug!("Expr pattern is null, skipping validation");
             } else {
-                debug!("Expr pattern is neither object nor null: {:?}", expr_pattern_value);
+                debug!(
+                    "Expr pattern is neither object nor null: {:?}",
+                    expr_pattern_value
+                );
             }
         } else {
             debug!("No expr pattern found, skipping inner expression check");
@@ -415,7 +419,10 @@ impl PromQLPattern {
                 debug!("Pattern requires specific modifier, validating...");
                 match pattern_modifier_value {
                     Value::String(expected_modifier) => {
-                        debug!("Expected modifier: '{}', actual: '{}'", expected_modifier, actual_modifier);
+                        debug!(
+                            "Expected modifier: '{}', actual: '{}'",
+                            expected_modifier, actual_modifier
+                        );
                         if actual_modifier != expected_modifier {
                             debug!("Modifier mismatch - FAILED");
                             return false;

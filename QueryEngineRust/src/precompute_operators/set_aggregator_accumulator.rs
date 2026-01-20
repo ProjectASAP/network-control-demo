@@ -4,7 +4,7 @@ use crate::data_model::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use promql_utilities::query_logics::enums::Statistic;
 
@@ -202,6 +202,7 @@ impl MultipleSubpopulationAggregate for SetAggregatorAccumulator {
         &self,
         _statistic: Statistic,
         _key: &KeyByLabelValues,
+        _query_kwargs: Option<&HashMap<String, String>>,
     ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
         Err("SetAggregatorAccumulator does not support query operation".into())
     }
@@ -302,7 +303,7 @@ mod tests {
         let key = create_test_key("test");
 
         // Query should return error as it's not supported
-        assert!(acc.query(Statistic::Sum, &key).is_err());
+        assert!(acc.query(Statistic::Sum, &key, None).is_err());
     }
 
     #[test]

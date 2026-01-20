@@ -1,3 +1,3 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 pip3 install --user prometheus_client

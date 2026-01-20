@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 THIS_DIR=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 

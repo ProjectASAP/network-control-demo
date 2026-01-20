@@ -1,3 +1,4 @@
+from typing import Any, Dict, Optional, Union
 from prometheus_client import start_http_server, Gauge
 from loguru import logger
 
@@ -5,7 +6,7 @@ from loguru import logger
 class QueryLatencyExporter:
 
     @staticmethod
-    def _IP_valid(addr):
+    def _IP_valid(addr: Optional[Union[str, object]]) -> None:
         """
         Verifies that a given ip address is of the correct type and is a "valid"
         IP address for running the exporter. At the moment, this function considers
@@ -24,10 +25,9 @@ class QueryLatencyExporter:
         for num_str in addr_nums:
             if int(num_str) < 0 or int(num_str) > 255:
                 raise ValueError("Improperly formatted IPv4 address")
-        return
 
     @staticmethod
-    def _port_valid(port):
+    def _port_valid(port: Optional[Union[int, object]]) -> None:
         """
         Verifies that a given ip address is of the correct type and is a "valid"
         IP address for running the exporter. At the moment, this function considers
@@ -40,15 +40,13 @@ class QueryLatencyExporter:
         elif port < 0 or port > 65535:
             raise ValueError("Improperly formatted port")
 
-        return
-
     def __init__(self, addr: str, port: int):
         self.logger = logger.bind(module="query_latency_exporter")
         self.port = port
         self.addr = addr
 
-        self.http_server = None
-        self.server_thread = None
+        self.http_server: Optional[Any] = None
+        self.server_thread: Optional[Any] = None
 
         try:
             QueryLatencyExporter._IP_valid(self.addr)
@@ -67,13 +65,13 @@ class QueryLatencyExporter:
         )
         self.logger.info("QueryLatencyExporter object created")
 
-    def __enter__(self):
+    def __enter__(self) -> "QueryLatencyExporter":
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.shutdown()
 
-    def launch(self):
+    def launch(self) -> None:
         """
         Launches the exporter's http_server and server thread for exporting metrics
         to be scraped by Prometheus
@@ -90,20 +88,19 @@ class QueryLatencyExporter:
         self.logger.info(f"Launching latency exporter at {self.addr}: {self.port}")
 
         try:
-            self.http_server, self.server_thread = start_http_server(
-                addr=self.addr, port=self.port
-            )
+            result = start_http_server(addr=self.addr, port=self.port)
+            assert result is not None
+            self.http_server, self.server_thread = result
         except Exception as e:
             self.logger.error(f"Failed to start http server due to exception: {str(e)}")
-            e.add_note("Latency exporter failed to launch")
+            # e.add_note is only available in Python 3.11+, commenting out for compatibility
+            # e.add_note("Latency exporter failed to launch")
             raise e
 
         self.logger.info(f"Exporter successfully started at {self.addr}: {self.port}")
         print(f"Exporter running at {self.addr}: {self.port}")
 
-        return
-
-    def shutdown(self):
+    def shutdown(self) -> None:
         """
         Cleans up all resources associated with the exporter, mainly the
         http_server and corresponding server thread
@@ -116,7 +113,8 @@ class QueryLatencyExporter:
                 self.http_server.shutdown()
             except Exception as e:
                 self.logger.error(f"Error shutting down http_server: {str(e)}")
-                e.add_note("Attempt to shutdown exporter http_server failed.")
+                # e.add_note is only available in Python 3.11+, commenting out for compatibility
+                # e.add_note("Attempt to shutdown exporter http_server failed.")
                 raise e
             self.logger.info("Shut down server successfully")
         else:
@@ -129,7 +127,8 @@ class QueryLatencyExporter:
                 self.server_thread.join()
             except Exception as e:
                 self.logger.error(f"Error joining server thread: {str(e)}")
-                e.add_note("Attempt to join exporter's server thread failed.")
+                # e.add_note is only available in Python 3.11+, commenting out for compatibility
+                # e.add_note("Attempt to join exporter's server thread failed.")
                 raise e
             self.logger.info("Joined server thread successfully")
         else:
@@ -137,9 +136,8 @@ class QueryLatencyExporter:
             raise RuntimeError("Exporter server thread is None")
 
         print("Exporter shut down successfully")
-        return
 
-    def export_repetition(self, repetition_idx: int, result):
+    def export_repetition(self, repetition_idx: int, result: Dict[str, Any]) -> None:
         """
         Exports a single repetition result for all queries
         """
@@ -171,5 +169,3 @@ class QueryLatencyExporter:
                     self.cumulative_latencies_metric.labels(
                         query_index=str(query_idx), server=server_name
                     ).set(cumulative_latency)
-
-        return

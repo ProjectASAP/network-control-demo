@@ -3,6 +3,9 @@ use std::sync::OnceLock;
 
 type BoxedErr = Box<dyn std::error::Error + Send + Sync + 'static>;
 
+// Speedup factor for faster-than-realtime export (set via CLI)
+pub static SPEEDUP_FACTOR: OnceLock<u64> = OnceLock::new();
+
 #[derive(Copy, Clone, Debug, ValueEnum)]
 pub enum MsDataType {
     // BM Node runtime information.
@@ -43,6 +46,7 @@ pub fn export_from_queue() {
 ///                       data in the Alibaba micro-services trace data
 /// @param[in] data_year  The year of the trace data. Supported values are
 ///                       2021 and 2022
+/// @param[in] speedup    Speedup factor for faster-than-realtime export
 ///
 /// @return The result returned by the reader thread.
 pub fn reader_thread_routine(
@@ -51,9 +55,11 @@ pub fn reader_thread_routine(
     part_index: Option<u16>,
     data_type: MsDataType,
     data_year: u32,
+    speedup: u64,
 ) -> Result<(), BoxedErr> {
     use crate::alibaba_metrics::node;
     let _ = EXPORTER_DATA_TYPE.set(data_type);
+    let _ = SPEEDUP_FACTOR.set(speedup);
     let result = match EXPORTER_DATA_TYPE.get().unwrap() {
         MsDataType::Node => node::read_and_queue(&input_dir, all_parts, part_index, data_year),
         MsDataType::MsResource => {

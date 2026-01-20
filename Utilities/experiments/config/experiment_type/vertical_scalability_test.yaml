@@ -7,13 +7,20 @@ experiment:
     query_prometheus_too: true
   #- mode: prometheus
 
-# Docker resource constraints for vertical scalability testing
-#docker_resources:
-#  cpu_limit: 2.0           # vCPUs to allocate (e.g., 1.0, 2.0, 4.0, 8.0)
-#  memory_limit: 2g         # Memory limit (e.g., 1g, 2g, 4g, 8g)
-#  tool: prometheus         # prometheus | victoriametrics
+# Monitoring tool configuration
+# For vertical scalability testing with resource constraints:
+monitoring:
+  tool: prometheus              # prometheus | victoriametrics
+  deployment_mode: containerized
+  resource_limits:
+    cpu_limit: 2.0             # vCPUs to allocate (e.g., 1.0, 2.0, 4.0, 8.0)
+    memory_limit: 2g           # Memory limit (e.g., 1g, 2g, 4g, 8g)
+  # For containerized without resource limits:
+  # deployment_mode: containerized
+  # For bare-metal deployment:
+  # deployment_mode: bare_metal
 
-# Server configurations - URLs will be auto-selected based on tool
+# Server configurations
 servers:
 - name: prometheus
   url: http://localhost:9090    # Used when tool=prometheus

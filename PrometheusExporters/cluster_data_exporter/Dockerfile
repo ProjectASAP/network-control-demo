@@ -24,8 +24,8 @@ RUN apt-get update && apt-get install -y \
 # Create a non-root user
 RUN useradd -r -s /bin/false exporter
 
-# Create the data directory that will be mounted as a volume
-RUN mkdir -p /data && chown exporter:exporter /data
+# Create the data and output directories that will be mounted as volumes
+RUN mkdir -p /data /output && chown exporter:exporter /data /output
 
 # Copy the binary from the builder stage
 COPY --from=builder /usr/src/app/target/release/cluster_data_exporter /usr/local/bin/cluster_data_exporter

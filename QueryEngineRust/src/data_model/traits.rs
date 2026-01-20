@@ -58,6 +58,7 @@ pub trait MultipleSubpopulationAggregate: AggregateCore {
         &self,
         statistic: Statistic,
         key: &KeyByLabelValues,
+        query_kwargs: Option<&HashMap<String, String>>,
     ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>>;
 
     /// Clone this accumulator into a boxed trait object

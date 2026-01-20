@@ -22,6 +22,7 @@ class BaseExporterService(BaseService):
         provider: InfrastructureProvider,
         num_nodes: int,
         use_container: bool,
+        node_offset: int,
     ):
         """
         Initialize base exporter service.
@@ -30,10 +31,12 @@ class BaseExporterService(BaseService):
             provider: Infrastructure provider for node communication and management
             num_nodes: Number of nodes to run exporters on
             use_container: Whether to use containerized deployment
+            node_offset: Starting node index offset
         """
         super().__init__(provider)
         self.num_nodes: int = num_nodes
         self.use_container: bool = use_container
+        self.node_offset: int = node_offset
         self.container_names: List[str] = []
         self.compose_files: List[str] = []
 
@@ -115,8 +118,7 @@ class PythonExporterService(BaseExporterService):
             local_experiment_dir: Local experiment directory for config dumps
             **kwargs: Additional configuration
         """
-        output_dir = os.path.join(
-            experiment_output_dir, "fake_exporter_output")
+        output_dir = os.path.join(experiment_output_dir, "fake_exporter_output")
         num_ports = config["num_ports_per_server"]
         dataset = config["dataset"]
 
@@ -146,15 +148,16 @@ class PythonExporterService(BaseExporterService):
             os.path.join(local_experiment_dir, "fake_exporter_config"), exist_ok=True
         )
         with open(
-            os.path.join(local_experiment_dir,
-                         "fake_exporter_config", "cmds.sh"), "w"
+            os.path.join(local_experiment_dir, "fake_exporter_config", "cmds.sh"), "w"
         ) as f:
             f.write("\n".join(cmds))
 
         # Run commands in parallel across nodes
         for cmd in cmds:
             self.provider.execute_command_parallel(
-                node_idxs=list(range(1, self.num_nodes + 1)),
+                node_idxs=list(
+                    range(self.node_offset + 1, self.node_offset + self.num_nodes + 1)
+                ),
                 cmd=cmd,
                 cmd_dir=cmd_dir,
                 nohup=False,
@@ -170,81 +173,84 @@ class PythonExporterService(BaseExporterService):
         local_experiment_dir: str,
         **kwargs,
     ) -> None:
-        output_dir = os.path.join(
-            experiment_output_dir, "fake_exporter_output")
+        output_dir = os.path.join(experiment_output_dir, "fake_exporter_output")
         num_ports = config["num_ports_per_server"]
         dataset = config["dataset"]
-        fake_exporter_dir = os.path.join(
-            constants.CLOUDLAB_HOME_DIR,
-            "code",
-            "PrometheusExporters",
-            "fake_exporter",
-            "fake_exporter_python",
-        )
-        template_file = os.path.join(
-            fake_exporter_dir, "docker-compose.yml.j2")
 
-        generate_cmds: List[str] = []
-        compose_files: List[str] = []
+        # Build docker run commands for each port
+        docker_run_cmds: List[str] = []
         container_names: List[str] = []
 
         for port in range(num_ports):
-            # Save list of container names and compose file names for starting/stopping multiple exporters on one machine
-            compose_name, container_name = (
-                BaseExporterService.get_compose_and_container_names(
-                    port + config["start_port"], language="python"
-                )
-            )
-            remote_compose_file = os.path.join(output_dir, compose_name)
+            actual_port = port + config["start_port"]
+            container_name = f"{BaseExporterService.FAKE_EXPORTER_BASE_CONTAINER_NAME}-{actual_port}-python"
 
-            cmd = "python3 generate_fake_exporter_compose.py --fake-exporter-dir {} --port {} --valuescale {} --dataset {} --num-labels {} --num-values-per-label {} --metric-type {} --template-path {} --container-name {} --exporter-output-dir {} --experiment-output-dir {} --compose-output-path {}".format(
-                fake_exporter_dir,
-                port + config["start_port"],
-                config["synthetic_data_value_scale"],
-                dataset,
-                config["num_labels"],
-                config["num_values_per_label"],
-                config["metric_type"],
-                template_file,
-                container_name,
-                output_dir,
-                experiment_output_dir,
-                remote_compose_file,
+            # Build docker run command with volume mounts for Python exporter
+            docker_cmd = (
+                f"docker run -d "
+                f"--name {container_name} "
+                f"-p {actual_port}:{actual_port} "
+                f"-v {experiment_output_dir}:/app/output "
+                f"-v {output_dir}:/app/exporter_output_dir "
+                f"--restart unless-stopped "
+                f"sketchdb-fake-exporter-python:latest "
+                f"--output_dir /app/exporter_output_dir "
+                f"--port {actual_port} "
+                f"--valuescale {config['synthetic_data_value_scale']} "
+                f"--dataset {dataset} "
+                f"--num_labels {config['num_labels']} "
+                f"--num_values_per_label {config['num_values_per_label']} "
+                f"--metric_type {config['metric_type']}"
             )
+
             container_names.append(container_name)
-            compose_files.append(remote_compose_file)
-            generate_cmds.append(cmd)
+            docker_run_cmds.append(docker_cmd)
 
-        assert len(container_names) == len(compose_files)
-        assert len(generate_cmds) == len(container_names)
-
-        self.compose_files = compose_files
         self.container_names = container_names
 
-        # Dump workload configuration to a file
+        # Dump commands to a file for reference
         os.makedirs(
             os.path.join(local_experiment_dir, "fake_exporter_config"), exist_ok=True
         )
         with open(
-            os.path.join(local_experiment_dir,
-                         "fake_exporter_config", "cmds.sh"), "w"
+            os.path.join(
+                local_experiment_dir, "fake_exporter_config", "docker_run_cmds.sh"
+            ),
+            "w",
         ) as f:
-            f.write("\n".join(generate_cmds))
+            f.write("\n".join(docker_run_cmds))
 
-        cmd_dir = f"{constants.CLOUDLAB_HOME_DIR}/code/Utilities/experiments/"
+        # Create output directory first
+        mkdir_cmd = f"mkdir -p {output_dir}"
+        self.provider.execute_command_parallel(
+            node_idxs=list(
+                range(self.node_offset + 1, self.node_offset + self.num_nodes + 1)
+            ),
+            cmd=mkdir_cmd,
+            cmd_dir="",
+            nohup=False,
+            popen=True,
+            redirect=True,
+            wait=True,
+        )
 
-        # Build base image on all nodes, create the output directory, generate the docker compose, then run container
-        for generate_cmd, remote_compose_file in zip(generate_cmds, compose_files):
-            cmd = f"mkdir -p {output_dir}; cd {cmd_dir}; {generate_cmd} && docker compose -f {remote_compose_file} up --no-build -d"
+        # Start containers in batches to avoid overwhelming Docker daemon
+        BATCH_SIZE = 5
+        for i in range(0, len(docker_run_cmds), BATCH_SIZE):
+            batch = docker_run_cmds[i : i + BATCH_SIZE]
+            # Combine docker run commands in batch into single SSH command
+            batch_cmd = "; ".join(batch)
 
             self.provider.execute_command_parallel(
-                node_idxs=list(range(1, self.num_nodes + 1)),
-                cmd=cmd,
-                cmd_dir=cmd_dir,
+                node_idxs=list(
+                    range(self.node_offset + 1, self.node_offset + self.num_nodes + 1)
+                ),
+                cmd=batch_cmd,
+                cmd_dir="",
                 nohup=False,
                 popen=True,
                 redirect=True,
-                wait=False,
+                wait=True,  # Wait for batch to complete
             )
 
         return
@@ -270,7 +276,9 @@ class PythonExporterService(BaseExporterService):
         """
         cmd = "pkill -f fake_exporter.py"
         self.provider.execute_command_parallel(
-            node_idxs=list(range(1, self.num_nodes + 1)),
+            node_idxs=list(
+                range(self.node_offset + 1, self.node_offset + self.num_nodes + 1)
+            ),
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -281,13 +289,22 @@ class PythonExporterService(BaseExporterService):
     def _stop_containerized(self, **kwargs) -> None:
         """Stop fake exporters using containerized deployment."""
         try:
-            if self.compose_files is not None and len(self.compose_files) > 0:
-                # Stop using docker compose command on remote node
-                while len(self.compose_files) > 0:
-                    compose_file = self.compose_files.pop()
-                    cmd = f"docker compose -f {compose_file} down"
+            if self.container_names is not None and len(self.container_names) > 0:
+                # Stop and remove containers by name
+                # Batch container names to avoid command line length issues
+                BATCH_SIZE = 10
+                for i in range(0, len(self.container_names), BATCH_SIZE):
+                    batch = self.container_names[i : i + BATCH_SIZE]
+                    container_list = " ".join(batch)
+                    cmd = f"docker stop {container_list} 2>/dev/null || true; docker rm {container_list} 2>/dev/null || true"
+
                     self.provider.execute_command_parallel(
-                        node_idxs=list(range(1, self.num_nodes + 1)),
+                        node_idxs=list(
+                            range(
+                                self.node_offset + 1,
+                                self.node_offset + self.num_nodes + 1,
+                            )
+                        ),
                         cmd=cmd,
                         cmd_dir=None,
                         nohup=False,
@@ -295,31 +312,21 @@ class PythonExporterService(BaseExporterService):
                         wait=True,
                     )
             else:
-                # Fallback: stop by container name on remote node
-                if self.container_names is not None and len(self.container_names) > 0:
-                    for container_name in self.container_names:
-                        cmd = (
-                            f"docker stop {container_name}; docker rm {container_name}"
+                # Fallback: stop all containers matching the base name pattern
+                cmd = f"docker ps -a --filter name={BaseExporterService.FAKE_EXPORTER_BASE_CONTAINER_NAME} --format '{{{{.Names}}}}' | xargs -r docker stop; docker ps -a --filter name={BaseExporterService.FAKE_EXPORTER_BASE_CONTAINER_NAME} --format '{{{{.Names}}}}' | xargs -r docker rm"
+                self.provider.execute_command_parallel(
+                    node_idxs=list(
+                        range(
+                            self.node_offset + 1,
+                            self.node_offset + self.num_nodes + 1,
                         )
-                        self.provider.execute_command_parallel(
-                            node_idxs=list(range(1, self.num_nodes + 1)),
-                            cmd=cmd,
-                            cmd_dir=None,
-                            nohup=False,
-                            popen=True,
-                            wait=True,
-                        )
-                else:
-                    cmd = f"docker stop {BaseExporterService.FAKE_EXPORTER_BASE_CONTAINER_NAME}*; docker rm {BaseExporterService.FAKE_EXPORTER_BASE_CONTAINER_NAME}*"
-                    self.provider.execute_command_parallel(
-                        node_idxs=list(range(1, self.num_nodes + 1)),
-                        cmd=cmd,
-                        cmd_dir=None,
-                        nohup=False,
-                        popen=True,
-                        wait=True,
-                    )
-
+                    ),
+                    cmd=cmd,
+                    cmd_dir=None,
+                    nohup=False,
+                    popen=True,
+                    wait=True,
+                )
         except Exception as e:
             print(f"Error stopping fake exporter containers: {e}")
 
@@ -394,15 +401,16 @@ class RustExporterService(BaseExporterService):
             os.path.join(local_experiment_dir, "fake_exporter_config"), exist_ok=True
         )
         with open(
-            os.path.join(local_experiment_dir,
-                         "fake_exporter_config", "cmds.sh"), "w"
+            os.path.join(local_experiment_dir, "fake_exporter_config", "cmds.sh"), "w"
         ) as f:
             f.write("\n".join(cmds))
 
         # Run commands in parallel across nodes
         for cmd in cmds:
             self.provider.execute_command_parallel(
-                node_idxs=list(range(1, self.num_nodes + 1)),
+                node_idxs=list(
+                    range(self.node_offset + 1, self.node_offset + self.num_nodes + 1)
+                ),
                 cmd=cmd,
                 cmd_dir=cmd_dir,
                 nohup=False,
@@ -420,77 +428,66 @@ class RustExporterService(BaseExporterService):
         local_experiment_dir: str,
         **kwargs,
     ) -> None:
-        output_dir = os.path.join(
-            experiment_output_dir, "fake_exporter_output")
         num_ports = config["num_ports_per_server"]
         dataset = config["dataset"]
-        fake_exporter_dir = os.path.join(
-            constants.CLOUDLAB_HOME_DIR,
-            "code",
-            "PrometheusExporters",
-            "fake_exporter",
-            "fake_exporter_rust",
-            "fake_exporter",
-        )
-        template_file = os.path.join(
-            fake_exporter_dir, "docker-compose.yml.j2")
 
-        generate_cmds: List[str] = []
-        compose_files: List[str] = []
+        # Build docker run commands for each port
+        docker_run_cmds: List[str] = []
         container_names: List[str] = []
+
         for port in range(num_ports):
-            compose_name, container_name = (
-                BaseExporterService.get_compose_and_container_names(
-                    port + config["start_port"], language="rust"
-                )
-            )
-            remote_compose_file = os.path.join(output_dir, compose_name)
+            actual_port = port + config["start_port"]
+            container_name = f"{BaseExporterService.FAKE_EXPORTER_BASE_CONTAINER_NAME}-{actual_port}-rust"
 
-            cmd = "python3 generate_fake_exporter_compose.py --fake-exporter-dir {} --port {} --valuescale {} --dataset {} --num-labels {} --num-values-per-label {} --metric-type {} --template-path {} --container-name {} --compose-output-path {}".format(
-                fake_exporter_dir,
-                port + config["start_port"],
-                config["synthetic_data_value_scale"],
-                dataset,
-                config["num_labels"],
-                config["num_values_per_label"],
-                config["metric_type"],
-                template_file,
-                container_name,
-                remote_compose_file,
+            # Build docker run command
+            docker_cmd = (
+                f"docker run -d "
+                f"--name {container_name} "
+                f"-p {actual_port}:{actual_port} "
+                f"--restart unless-stopped "
+                f"sketchdb-fake-exporter-rust:latest "
+                f"--port {actual_port} "
+                f"--valuescale {config['synthetic_data_value_scale']} "
+                f"--dataset {dataset} "
+                f"--num-labels {config['num_labels']} "
+                f"--num-values-per-label {config['num_values_per_label']} "
+                f"--metric-type {config['metric_type']}"
             )
+
             container_names.append(container_name)
-            compose_files.append(remote_compose_file)
-            generate_cmds.append(cmd)
+            docker_run_cmds.append(docker_cmd)
 
-        assert len(container_names) == len(compose_files)
-        assert len(generate_cmds) == len(container_names)
-        self.compose_files = compose_files
         self.container_names = container_names
 
-        # Dump workload configuration to a file
+        # Dump commands to a file for reference
         os.makedirs(
             os.path.join(local_experiment_dir, "fake_exporter_config"), exist_ok=True
         )
         with open(
-            os.path.join(local_experiment_dir,
-                         "fake_exporter_config", "cmds.sh"), "w"
+            os.path.join(
+                local_experiment_dir, "fake_exporter_config", "docker_run_cmds.sh"
+            ),
+            "w",
         ) as f:
-            f.write("\n".join(generate_cmds))
+            f.write("\n".join(docker_run_cmds))
 
-        cmd_dir = f"{constants.CLOUDLAB_HOME_DIR}/code/Utilities/experiments/"
-
-        # Build base image on all nodes, create the output directory, generate the docker compose, then run container
-        for generate_cmd, remote_compose_file in zip(generate_cmds, compose_files):
-            cmd = f"mkdir -p {output_dir}; cd {cmd_dir}; {generate_cmd}; docker compose -f {remote_compose_file} up --no-build -d"
+        # Start containers in batches to avoid overwhelming Docker daemon
+        BATCH_SIZE = 5
+        for i in range(0, len(docker_run_cmds), BATCH_SIZE):
+            batch = docker_run_cmds[i : i + BATCH_SIZE]
+            # Combine docker run commands in batch into single SSH command
+            batch_cmd = "; ".join(batch)
 
             self.provider.execute_command_parallel(
-                node_idxs=list(range(1, self.num_nodes + 1)),
-                cmd=cmd,
-                cmd_dir=cmd_dir,
+                node_idxs=list(
+                    range(self.node_offset + 1, self.node_offset + self.num_nodes + 1)
+                ),
+                cmd=batch_cmd,
+                cmd_dir="",
                 nohup=False,
                 popen=True,
                 redirect=True,
-                wait=False,
+                wait=True,  # Wait for batch to complete
             )
 
         return
@@ -516,7 +513,9 @@ class RustExporterService(BaseExporterService):
         """
         cmd = "pkill -f fake_exporter"
         self.provider.execute_command_parallel(
-            node_idxs=list(range(1, self.num_nodes + 1)),
+            node_idxs=list(
+                range(self.node_offset + 1, self.node_offset + self.num_nodes + 1)
+            ),
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -527,14 +526,22 @@ class RustExporterService(BaseExporterService):
     def _stop_containerized(self, **kwargs) -> None:
         """Stop fake exporters using containerized deployment."""
         try:
-            if self.compose_files is not None and len(self.compose_files) > 0:
-                # Stop using docker compose command on remote node
-                while len(self.compose_files) > 0:
-                    compose_file = self.compose_files.pop()
-                    # Stop using docker compose command on remote node
-                    cmd = f"docker compose -f {compose_file} down"
+            if self.container_names is not None and len(self.container_names) > 0:
+                # Stop and remove containers by name
+                # Batch container names to avoid command line length issues
+                BATCH_SIZE = 10
+                for i in range(0, len(self.container_names), BATCH_SIZE):
+                    batch = self.container_names[i : i + BATCH_SIZE]
+                    container_list = " ".join(batch)
+                    cmd = f"docker stop {container_list} 2>/dev/null || true; docker rm {container_list} 2>/dev/null || true"
+
                     self.provider.execute_command_parallel(
-                        node_idxs=list(range(1, self.num_nodes + 1)),
+                        node_idxs=list(
+                            range(
+                                self.node_offset + 1,
+                                self.node_offset + self.num_nodes + 1,
+                            )
+                        ),
                         cmd=cmd,
                         cmd_dir=None,
                         nohup=False,
@@ -542,30 +549,21 @@ class RustExporterService(BaseExporterService):
                         wait=True,
                     )
             else:
-                # Fallback: stop by container name on remote node
-                if self.container_names is not None and len(self.container_names) > 0:
-                    for container_name in self.container_names:
-                        cmd = (
-                            f"docker stop {container_name}; docker rm {container_name}"
+                # Fallback: stop all containers matching the base name pattern
+                cmd = f"docker ps -a --filter name={BaseExporterService.FAKE_EXPORTER_BASE_CONTAINER_NAME} --format '{{{{.Names}}}}' | xargs -r docker stop; docker ps -a --filter name={BaseExporterService.FAKE_EXPORTER_BASE_CONTAINER_NAME} --format '{{{{.Names}}}}' | xargs -r docker rm"
+                self.provider.execute_command_parallel(
+                    node_idxs=list(
+                        range(
+                            self.node_offset + 1,
+                            self.node_offset + self.num_nodes + 1,
                         )
-                        self.provider.execute_command_parallel(
-                            node_idxs=list(range(1, self.num_nodes + 1)),
-                            cmd=cmd,
-                            cmd_dir=None,
-                            nohup=False,
-                            popen=True,
-                            wait=True,
-                        )
-                else:
-                    cmd = f"docker stop {BaseExporterService.FAKE_EXPORTER_BASE_CONTAINER_NAME}*; docker rm {BaseExporterService.FAKE_EXPORTER_BASE_CONTAINER_NAME}*"
-                    self.provider.execute_command_parallel(
-                        node_idxs=list(range(1, self.num_nodes + 1)),
-                        cmd=cmd,
-                        cmd_dir=None,
-                        nohup=False,
-                        popen=True,
-                        wait=True,
-                    )
+                    ),
+                    cmd=cmd,
+                    cmd_dir=None,
+                    nohup=False,
+                    popen=True,
+                    wait=True,
+                )
         except Exception as e:
             print(f"Error stopping fake exporter containers: {e}")
 
@@ -630,7 +628,7 @@ class AvalancheExporterService(BaseExporterService):
 
         # Run on the first node (avalanche generates enough load from single instance)
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=docker_cmd,
             cmd_dir=None,
             nohup=False,
@@ -647,7 +645,7 @@ class AvalancheExporterService(BaseExporterService):
         # Stop avalanche containers (common naming pattern)
         cmd = "docker ps --filter name=avalanche-exporter --format '{{.Names}}' | xargs -r docker stop"
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -657,7 +655,7 @@ class AvalancheExporterService(BaseExporterService):
         # Remove containers
         cmd = "docker ps -a --filter name=avalanche-exporter --format '{{.Names}}' | xargs -r docker rm"
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -688,6 +686,7 @@ class ExporterServiceFactory:
         provider: "InfrastructureProvider",
         num_nodes: int,
         use_container: bool,
+        node_offset: int,
     ) -> BaseExporterService:
         """
         Create an exporter service based on language.
@@ -697,6 +696,7 @@ class ExporterServiceFactory:
             provider: Infrastructure provider for node communication and management
             num_nodes: Number of nodes
             use_container: Whether to use containerized deployment
+            node_offset: Starting node index offset
 
         Returns:
             Appropriate exporter service instance
@@ -705,9 +705,11 @@ class ExporterServiceFactory:
             ValueError: If language is not supported
         """
         if language == "python":
-            return PythonExporterService(provider, num_nodes, use_container)
+            return PythonExporterService(
+                provider, num_nodes, use_container, node_offset
+            )
         elif language == "rust":
-            return RustExporterService(provider, num_nodes, use_container)
+            return RustExporterService(provider, num_nodes, use_container, node_offset)
         else:
             raise ValueError(
                 f"Invalid fake exporter language: {language}. Supported languages are 'python' and 'rust'"

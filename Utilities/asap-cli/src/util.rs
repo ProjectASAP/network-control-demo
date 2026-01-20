@@ -28,6 +28,10 @@ pub struct HydraConfig {
     pub experiment_variants: ExperimentVariants,
     #[serde(default)]
     pub fake_exporter_language: Option<String>,
+    #[serde(default)]
+    pub query_engine: QueryEngineConfig,
+    #[serde(default)]
+    pub aggregate_cleanup: AggregateCleanupConfig,
 
     /// The experiment parameters from the experiment_type config group
     #[serde(default)]
@@ -69,6 +73,14 @@ pub struct RecordingRulesConfig {
     pub interval: String,
 }
 
+/// Remote write configuration for Prometheus
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct RemoteWriteConfig {
+    pub ip: Option<String>,
+    pub base_port: Option<u16>,
+    pub path: Option<String>,
+}
+
 /// Streaming engine configuration
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct StreamingConfig {
@@ -78,6 +90,8 @@ pub struct StreamingConfig {
     pub enable_object_reuse: Option<bool>,
     pub do_local_flink: Option<bool>,
     pub forward_unsupported_queries: Option<bool>,
+    pub parallelism: Option<u32>,            // Pipeline parallelism
+    pub remote_write: Option<RemoteWriteConfig>, // Prometheus remote write config
 }
 
 /// Logging configuration
@@ -107,6 +121,20 @@ pub struct ManualConfig {
 pub struct FlowConfig {
     pub no_teardown: Option<bool>,
     pub steady_state_wait: Option<u32>,
+}
+
+/// Query engine configuration
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct QueryEngineConfig {
+    pub dump_precomputes: Option<bool>,
+    pub lock_strategy: Option<String>,  // "global" or "per-key"
+}
+
+/// Aggregate cleanup configuration
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct AggregateCleanupConfig {
+    pub enabled: Option<bool>,
+    pub use_read_count_policy: Option<bool>,
 }
 
 /// Experiment metadata
@@ -289,13 +317,45 @@ pub async fn generate_controller_client_config(
         serde_yaml::to_writer(file, &controller_config)?;
     }
 
-    // Temporary:
     // NOTE: An experiment configuration may have multiple modes resulting
-    // in multiple runs, but the CLI should only run a single mode for now,
-    // so instead of starting and stopping the whole deployment for each mode,
-    // just do first mode.
-    // 
+    // in multiple runs, but the CLI should only run a single mode for now.
+    // The CLI is hardcoded to use "sketchdb" mode only (matching experiment_run_grafana_demo.py).
     // In the future we should probably have yaml configurations strictly for
-    // configuring a single run of ProjectASAP
+    // configuring a single run of ProjectASAP.
     Ok(output_dir.join("sketchdb.yaml"))
+}
+
+/// Get list of metrics that should be written to remote write based on experiment configuration.
+/// This matches the Python implementation in experiment_utils/core.py
+pub fn get_metrics_to_remote_write(experiment_params: &ExperimentConfig) -> Vec<String> {
+    // Check if only_start_if_queries_exist flag is set
+    let only_if_queries_exist = experiment_params.exporters.only_start_if_queries_exist;
+
+    if !only_if_queries_exist {
+        // Return all metrics
+        return experiment_params
+            .metrics
+            .iter()
+            .map(|m| m.metric.clone())
+            .collect();
+    }
+
+    // Get all queries from all query groups
+    let mut all_queries = Vec::new();
+    for group in &experiment_params.query_groups {
+        all_queries.extend(group.queries.clone());
+    }
+
+    // Filter metrics that appear in queries
+    let mut metrics_to_remote_write = Vec::new();
+    for metric_config in &experiment_params.metrics {
+        for query in &all_queries {
+            if query.contains(&metric_config.metric) {
+                metrics_to_remote_write.push(metric_config.metric.clone());
+                break;
+            }
+        }
+    }
+
+    metrics_to_remote_write
 }

@@ -184,7 +184,10 @@ def main(args, experiment_config=None):
                     {
                         "targets": [
                             f"{args.node_ip_prefix}.{i + 1}:{port}"
-                            for i in range(1, args.num_nodes + 1)
+                            for i in range(
+                                args.node_offset + 1,
+                                args.node_offset + args.num_nodes + 1,
+                            )
                         ]
                     }
                 ],
@@ -214,7 +217,9 @@ def main(args, experiment_config=None):
         ]
         for exporter, ports in fake_exporters:
             targets = []
-            for target_ip in range(1, args.num_nodes + 1):
+            for target_ip in range(
+                args.node_offset + 1, args.node_offset + args.num_nodes + 1
+            ):
                 for port in ports:
                     targets.append(f"{args.node_ip_prefix}.{target_ip + 1}:{port}")
 
@@ -256,6 +261,37 @@ def main(args, experiment_config=None):
 
         # Add metric_relabel_configs to only keep required metrics
         add_metric_relabel_configs(scrape_config, "avalanche", experiment_config)
+
+        config["scrape_configs"].append(scrape_config)
+
+    if "cluster_data_exporter" in exporter_config[
+        "exporter_list"
+    ] and check_queries_exist_for_prometheus_config(
+        "cluster_data_exporter", experiment_config
+    ):
+        # cluster_data_exporter runs on node after coordinator (node_offset + 1)
+        cde_config = exporter_config["exporter_list"]["cluster_data_exporter"]
+        port = cde_config.get("port", 40000)
+
+        # Target is on the node after coordinator
+        # Node indexing: node_offset + 1 = coordinator, node_offset + 2 = cluster data exporter node
+        target_node_idx = args.node_offset + 2
+        target = f"{args.node_ip_prefix}.{target_node_idx}:{port}"
+
+        scrape_config = {
+            "job_name": "cluster_data_exporter",
+            "scrape_interval": "10s",  # Fast scrape interval for high-resolution cluster data
+            "static_configs": [
+                {
+                    "targets": [target],
+                }
+            ],
+        }
+
+        # Add metric_relabel_configs to only keep required metrics
+        add_metric_relabel_configs(
+            scrape_config, "cluster_data_exporter", experiment_config
+        )
 
         config["scrape_configs"].append(scrape_config)
 
@@ -338,6 +374,14 @@ def main(args, experiment_config=None):
 
             remote_write_config = {"url": new_url}
 
+            # Add queue_config with batch_send_deadline set to scrape_interval
+            scrape_interval = config["global"]["scrape_interval"]
+            remote_write_config["queue_config"] = {
+                "batch_send_deadline": scrape_interval,
+                # "max_samples_per_send": 5000,
+                # "capacity": 100000,
+            }
+
             # Add metric filtering and sharding logic for multiple destinations
             if parallelism > 1:
                 remote_write_config["write_relabel_configs"] = []
@@ -387,13 +431,21 @@ def main(args, experiment_config=None):
 
             config["remote_write"].append(remote_write_config)
 
-    with open(args.output_file, "w") as f:
+    # Write prometheus config to output_dir
+    import constants
+
+    output_file = os.path.join(args.output_dir, constants.PROMETHEUS_CONFIG_FILE)
+    os.makedirs(args.output_dir, exist_ok=True)
+    with open(output_file, "w") as f:
         yaml.dump(config, f)
 
     if args.copy_to_dir:
         os.makedirs(args.copy_to_dir, exist_ok=True)
         # copy output_file and rule_files to copy_to_dir
-        shutil.copy(args.output_file, args.copy_to_dir)
+        shutil.copy(
+            os.path.join(args.output_dir, constants.PROMETHEUS_CONFIG_FILE),
+            args.copy_to_dir,
+        )
         if args.rule_files:
             for rule_file in args.rule_files:
                 dst_path = os.path.join(args.copy_to_dir, os.path.dirname(rule_file))
@@ -428,7 +480,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--input_file", type=str, required=False
     )  # Made optional for Hydra mode
-    parser.add_argument("--output_file", type=str, required=True)
+    parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--query_log_file", type=str, required=False)
     parser.add_argument("--rule_files", nargs="+", required=False)
     parser.add_argument("--remote_write_url", type=str, required=False)
@@ -477,6 +529,13 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Node IP prefix (e.g., 10.10.1 for CloudLab)",
+    )
+    parser.add_argument(
+        "--node-offset",
+        type=int,
+        required=False,
+        default=0,
+        help="Node offset for CloudLab deployments (default: 0)",
     )
 
     args = parser.parse_args()

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 setup_nodes() {
     local num_nodes=$1
@@ -7,8 +7,9 @@ setup_nodes() {
     local hostname_suffix=$4
     local setup_command=$5
     local do_wait=$6
+    local node_offset=${7:-0}
 
-    for i in $(seq 0 $((num_nodes-1))); do
+    for i in $(seq $node_offset $((node_offset + num_nodes - 1))); do
         local hostname="${hostname_prefix}${i}.${hostname_suffix}"
         echo "Setting up ${hostname}"
         ${setup_command} ${username} ${hostname} < /dev/null &

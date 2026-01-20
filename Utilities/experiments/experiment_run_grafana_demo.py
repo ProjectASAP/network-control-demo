@@ -23,6 +23,7 @@ from experiment_utils.services import (
     create_prometheus_service,
     PrometheusService,
     DockerPrometheusService,
+    DockerVictoriaMetricsService,
     SystemExportersService,
     GrafanaService,
 )
@@ -39,6 +40,11 @@ KAFKA_NUM_TRIES = 5
 # Register custom resolver for LOCAL_EXPERIMENT_DIR before Hydra processes config
 OmegaConf.register_new_resolver(
     "local_experiment_dir", lambda: constants.LOCAL_EXPERIMENT_DIR
+)
+
+# Register custom resolver for remote write IP based on node_offset
+OmegaConf.register_new_resolver(
+    "remote_write_ip", lambda node_offset: f"10.10.1.{node_offset + 1}"
 )
 
 
@@ -83,7 +89,7 @@ def main(cfg: DictConfig):
     )
 
     provider.execute_command(
-        node_idx=0,
+        node_idx=args.get_coordinator_node(),
         cmd="mkdir -p {} {}".format(
             os.path.dirname(constants.CLOUDLAB_QUERY_LOG_FILE),
             experiment_root_output_dir,
@@ -113,23 +119,32 @@ def main(cfg: DictConfig):
     prometheus_throughput_monitor = None
 
     # Initialize services
-    kafka_service = KafkaService(provider, num_tries=KAFKA_NUM_TRIES)
+    kafka_service = KafkaService(provider, args.node_offset, num_tries=KAFKA_NUM_TRIES)
     # Initialize query engine service based on language
     query_engine_service = QueryEngineServiceFactory.create_query_engine_service(
         args.query_engine_language,
         provider,
         use_container=args.use_container_query_engine,
+        node_offset=args.node_offset,
     )
-    system_exporters_service = SystemExportersService(provider, args.num_nodes)
-    prometheus_service = create_prometheus_service(cfg, provider, args.num_nodes)
+    system_exporters_service = SystemExportersService(
+        provider, args.num_nodes, args.node_offset
+    )
+    prometheus_service = create_prometheus_service(
+        cfg, provider, args.num_nodes, args.node_offset
+    )
     arroyo_service = ArroyoService(
         provider,
         use_container=args.use_container_arroyo,
+        node_offset=args.node_offset,
     )
-    deathstar_service = DeathstarService(provider, num_nodes_in_experiment)
+    deathstar_service = DeathstarService(
+        provider, num_nodes_in_experiment, args.node_offset
+    )
     controller_service = ControllerService(
         provider,
         use_container=args.use_container_controller,
+        node_offset=args.node_offset,
     )
     # TODO: QueryLatencyExporter is part of PrometheusClientService. How do we export latencies if we don't use PrometheusClientService?
     # prometheus_client_service = PrometheusClientService(
@@ -137,12 +152,15 @@ def main(cfg: DictConfig):
     #     args.hostname_suffix,
     #     use_container=args.use_container_prometheus_client,
     # )
-    remote_monitor_service = RemoteMonitorService(provider)
-    grafana_service = GrafanaService(provider, num_nodes_in_experiment)
+    remote_monitor_service = RemoteMonitorService(provider, args.node_offset)
+    grafana_service = GrafanaService(
+        provider, num_nodes_in_experiment, args.node_offset
+    )
     avalanche_service = AvalancheExporterService(
         provider,
         num_nodes_in_experiment,
         use_container=False,
+        node_offset=args.node_offset,
     )
 
     # Initialize exporter service based on language
@@ -151,18 +169,23 @@ def main(cfg: DictConfig):
         provider,
         num_nodes_in_experiment,
         use_container=args.use_container_fake_exporter,
+        node_offset=args.node_offset,
     )
 
     sync.copy_experiment_config(cfg.experiment_params, local_experiment_root_dir)
     experiment_modes, metrics_to_remote_write = (
         config.generate_controller_client_configs(
-            cfg.experiment_params, local_experiment_root_dir
+            cfg.experiment_params,
+            local_experiment_root_dir,
+            cfg.aggregate_cleanup,
+            cfg.get("sketch_parameters", None),
         )
     )
     sync.rsync_controller_client_configs(
         provider,
         experiment_root_output_dir,
         local_experiment_root_dir,
+        node_offset=args.node_offset,
     )
     minimum_experiment_running_time = config.get_minimum_experiment_running_time(
         cfg.experiment_params
@@ -182,7 +205,7 @@ def main(cfg: DictConfig):
     )
     local_experiment_dir = os.path.join(local_experiment_root_dir, experiment_mode)
     provider.execute_command_parallel(
-        node_idxs=list(range(args.num_nodes + 1)),
+        node_idxs=args.get_node_range(include_coordinator=True),
         cmd=f"mkdir -p {experiment_output_dir}",
         cmd_dir="",
         nohup=False,
@@ -240,25 +263,27 @@ def main(cfg: DictConfig):
     if config.check_exporter_and_queries_exist("avalanche", cfg.experiment_params):
         avalanche_service.stop()
 
-    prometheus_config_output_file = os.path.join(
-        local_experiment_dir, "prometheus_config", "prometheus.yml"
+    prometheus_config_output_dir = os.path.join(
+        local_experiment_dir, constants.PROMETHEUS_CONFIG_DIR
     )
-    os.makedirs(os.path.dirname(prometheus_config_output_file), exist_ok=True)
+    os.makedirs(prometheus_config_output_dir, exist_ok=True)
 
     config.generate_and_copy_prometheus_config(
         num_nodes_in_experiment,
         local_experiment_dir,
-        prometheus_config_output_file,
+        prometheus_config_output_dir,
         experiment_mode,
         cfg,
         cfg.prometheus,
+        args.node_offset,
         constants.SKETCHDB_EXPERIMENT_NAME,
         provider,
     )
     sync.rsync_prometheus_config(
         provider,
         experiment_output_dir,
-        prometheus_config_output_file,
+        prometheus_config_output_dir,
+        node_offset=args.node_offset,
     )
     prometheus_scrape_interval = config.get_prometheus_scrape_interval(cfg.prometheus)
 
@@ -269,11 +294,13 @@ def main(cfg: DictConfig):
             prometheus_scrape_interval=prometheus_scrape_interval,
             streaming_engine=args.streaming_engine,
             controller_remote_output_dir=CONTROLLER_REMOTE_OUTPUT_DIR,
+            punting=args.controller_punting,
         )
         sync.rsync_controller_config_remote_to_local(
             provider,
             CONTROLLER_REMOTE_OUTPUT_DIR,
             CONTROLLER_LOCAL_OUTPUT_DIR,
+            node_offset=args.node_offset,
         )
         kafka_service.start()
         kafka_service.wait_until_ready()
@@ -341,6 +368,8 @@ def main(cfg: DictConfig):
                 remote_write_path=args.remote_write_path,
                 parallelism=args.parallelism,
                 use_kafka_ingest=args.use_kafka_ingest,
+                enable_optimized_remote_write=cfg.streaming.remote_write.enable_optimized_source,
+                avoid_long_ssh=constants.AVOID_RUN_ARROYOSKETCH_LONG_SSH,
             )
             print("ArroyoSketch pipeline ID: {}".format(arroyosketch_pipeline_id))
 
@@ -355,7 +384,8 @@ def main(cfg: DictConfig):
             # Start throughput monitoring if enabled
             if args.throughput_arroyo:
                 arroyo_throughput_monitor = ArroyoThroughputMonitor(
-                    args.cloudlab_username, args.hostname_suffix
+                    provider,
+                    node_offset=args.node_offset,
                 )
                 arroyo_throughput_monitor.start(
                     pipeline_id=arroyosketch_pipeline_id,
@@ -371,13 +401,17 @@ def main(cfg: DictConfig):
         # Start Prometheus throughput monitoring if enabled
         if args.throughput_prometheus:
             prometheus_throughput_monitor = PrometheusThroughputMonitor(
-                args.cloudlab_username, args.hostname_suffix
+                provider,
+                node_offset=args.node_offset,
             )
             prometheus_throughput_monitor.start(
                 experiment_output_dir=experiment_output_dir
             )
         # in case we want to run query engine manually
         if not cfg.flow.replace_query_engine_with_dumb_consumer:
+            # Get prometheus port from prometheus service
+            prometheus_port = prometheus_service.get_query_endpoint_port()
+
             query_engine_service.start(
                 experiment_output_dir=experiment_output_dir,
                 flink_output_format=args.flink_output_format,
@@ -390,28 +424,45 @@ def main(cfg: DictConfig):
                 controller_remote_output_dir=CONTROLLER_REMOTE_OUTPUT_DIR,
                 compress_json=COMPRESS_JSON,
                 dump_precomputes=args.dump_precomputes,
+                use_read_count_policy=args.use_read_count_policy,
+                lock_strategy=args.lock_strategy,
+                query_language=args.query_language,
+                prometheus_port=prometheus_port,
             )
 
     # Start system exporters (node_exporter, blackbox_exporter, cadvisor)
     system_exporters_service.start(cfg.experiment_params)
 
-    # Start Prometheus service (Docker-based or regular based on configuration)
-    if hasattr(cfg.experiment_params, "docker_resources"):
-        # Docker-based service was created, use Docker-specific parameters
-        docker_resources = cfg.experiment_params.docker_resources
+    # Start Prometheus service based on deployment mode
+    monitoring = cfg.experiment_params.monitoring
+
+    if monitoring.deployment_mode == "containerized":
+        # Containerized deployment (DockerPrometheusService or DockerVictoriaMetricsService)
         assert isinstance(
-            prometheus_service, DockerPrometheusService
-        ), "Prometheus service is not initialized correctly"
-        prometheus_service.start(
-            cpu_limit=docker_resources.cpu_limit,
-            memory_limit=docker_resources.memory_limit,
-            experiment_output_dir=experiment_output_dir,
-        )
-    else:
-        # Regular Prometheus service
+            prometheus_service, (DockerPrometheusService, DockerVictoriaMetricsService)
+        ), f"Expected Docker-based service but got {type(prometheus_service).__name__}"
+
+        # Check if resource limits are specified
+        if hasattr(monitoring, "resource_limits"):
+            prometheus_service.start(
+                experiment_output_dir=experiment_output_dir,
+                local_experiment_dir=local_experiment_dir,
+                experiment_mode=experiment_mode,
+                cpu_limit=monitoring.resource_limits.cpu_limit,
+                memory_limit=monitoring.resource_limits.memory_limit,
+            )
+        else:
+            # Containerized without resource limits
+            prometheus_service.start(
+                experiment_output_dir=experiment_output_dir,
+                local_experiment_dir=local_experiment_dir,
+                experiment_mode=experiment_mode,
+            )
+    else:  # bare_metal
+        # Bare-metal deployment (PrometheusService)
         assert isinstance(
             prometheus_service, PrometheusService
-        ), "Prometheus service is not initialized correctly"
+        ), f"Expected PrometheusService but got {type(prometheus_service).__name__}"
         prometheus_service.start(experiment_output_dir)
     # this DOES NOT block
     if (
@@ -483,6 +534,8 @@ def main(cfg: DictConfig):
     #     controller_remote_output_dir=CONTROLLER_REMOTE_OUTPUT_DIR,
     #     use_container_prometheus_client=args.use_container_prometheus_client,
     #     prometheus_client_parallel=args.prometheus_client_parallel,
+    #     monitoring_tool=cfg.experiment_params.monitoring.tool,
+    #     timed_duration=None,
     # )
 
     # if not args.manual_remote_monitor and constants.AVOID_REMOTE_MONITOR_LONG_SSH:
@@ -496,7 +549,7 @@ def main(cfg: DictConfig):
     #     dumb_consumer_service.stop()
 
     # sync.copy_prometheus_data(
-    #     args.cloudlab_username, args.hostname_suffix, local_experiment_dir
+    #     args.cloudlab_username, args.hostname_suffix, local_experiment_dir, args.node_offset
     # )
 
     # # Skip teardown if the no_teardown flag is set
@@ -556,6 +609,7 @@ def main(cfg: DictConfig):
     #     args.hostname_suffix,
     #     experiment_output_dir,
     #     local_experiment_dir,
+    #     node_offset=args.node_offset,
     # )
 
 

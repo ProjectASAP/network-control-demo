@@ -6,10 +6,21 @@ import subprocess
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
+import constants
 from classes import process_monitor
 
 BINARY_PATH = "/scratch/sketch_db_for_prometheus/code/SketchDBOfflinePOCRust/target/release/SketchDBOfflinePOCRust"
 RESOURCES = ["cpu_percent", "memory_info"]
+
+# Register custom resolver for LOCAL_EXPERIMENT_DIR before Hydra processes config
+OmegaConf.register_new_resolver(
+    "local_experiment_dir", lambda: constants.LOCAL_EXPERIMENT_DIR
+)
+
+# Register custom resolver for remote write IP based on node_offset
+OmegaConf.register_new_resolver(
+    "remote_write_ip", lambda node_offset: f"10.10.1.{node_offset + 1}"
+)
 
 
 def run_sketchdboffline(args, output_dir) -> subprocess.Popen:

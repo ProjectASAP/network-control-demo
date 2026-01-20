@@ -14,16 +14,20 @@ from experiment_utils.providers.base import InfrastructureProvider
 class DeathstarService(BaseService):
     """Service for managing DeathStar benchmark."""
 
-    def __init__(self, provider: InfrastructureProvider, num_nodes: int):
+    def __init__(
+        self, provider: InfrastructureProvider, num_nodes: int, node_offset: int
+    ):
         """
         Initialize DeathStar service.
 
         Args:
             provider: Infrastructure provider for node communication and management
             num_nodes: Number of nodes to run DeathStar on
+            node_offset: Starting node index offset
         """
         super().__init__(provider)
         self.num_nodes = num_nodes
+        self.node_offset = node_offset
 
     def start(self, **kwargs) -> None:
         """
@@ -37,7 +41,9 @@ class DeathstarService(BaseService):
             f"{self.provider.get_home_dir()}/benchmarks/DeathStarBench/socialNetwork"
         )
         self.provider.execute_command_parallel(
-            node_idxs=list(range(1, self.num_nodes + 1)),
+            node_idxs=list(
+                range(self.node_offset + 1, self.node_offset + self.num_nodes + 1)
+            ),
             cmd=cmd,
             cmd_dir=cmd_dir,
             nohup=False,
@@ -58,7 +64,9 @@ class DeathstarService(BaseService):
             f"{self.provider.get_home_dir()}/benchmarks/DeathStarBench/socialNetwork"
         )
         self.provider.execute_command_parallel(
-            node_idxs=list(range(1, self.num_nodes + 1)),
+            node_idxs=list(
+                range(self.node_offset + 1, self.node_offset + self.num_nodes + 1)
+            ),
             cmd=cmd,
             cmd_dir=cmd_dir,
             nohup=False,
@@ -97,7 +105,7 @@ class DeathstarService(BaseService):
 
         ips = []
         output_files = []
-        for i in range(1, self.num_nodes + 1):
+        for i in range(self.node_offset + 1, self.node_offset + self.num_nodes + 1):
             ips.append(self.provider.get_node_ip(i))
             output_files.append(
                 output_file_template.format(
@@ -152,7 +160,7 @@ class DeathstarService(BaseService):
         cmds.insert(0, "mkdir -p {};".format(os.path.dirname(output_files[0])))
         final_cmd = " ".join(cmds)
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=final_cmd,
             cmd_dir=cmd_dir,
             nohup=True,
@@ -163,15 +171,23 @@ class DeathstarService(BaseService):
 class ControllerService(BaseService):
     """Service for managing the controller."""
 
-    def __init__(self, provider: InfrastructureProvider, use_container: bool):
+    def __init__(
+        self,
+        provider: InfrastructureProvider,
+        use_container: bool,
+        node_offset: int,
+    ):
         """
         Initialize Controller service.
 
         Args:
             provider: Infrastructure provider for node communication and management
+            use_container: Whether to use containerized deployment
+            node_offset: Starting node index offset
         """
         super().__init__(provider)
         self.use_container = use_container
+        self.node_offset = node_offset
         self.compose_file = None
         self.container_name = "sketchdb-controller"
 
@@ -181,6 +197,7 @@ class ControllerService(BaseService):
         prometheus_scrape_interval: int,
         streaming_engine: str,
         controller_remote_output_dir: str,
+        punting: bool,
         **kwargs,
     ) -> None:
         """
@@ -191,6 +208,7 @@ class ControllerService(BaseService):
             prometheus_scrape_interval: Prometheus scraping interval
             streaming_engine: Type of streaming engine
             controller_remote_output_dir: Controller output directory
+            punting: Enable query punting based on performance heuristics
             **kwargs: Additional configuration
         """
         if self.use_container:
@@ -199,6 +217,7 @@ class ControllerService(BaseService):
                 prometheus_scrape_interval,
                 streaming_engine,
                 controller_remote_output_dir,
+                punting,
             )
         else:
             return self._start_bare_metal(
@@ -206,6 +225,7 @@ class ControllerService(BaseService):
                 prometheus_scrape_interval,
                 streaming_engine,
                 controller_remote_output_dir,
+                punting,
             )
 
     def _start_bare_metal(
@@ -214,6 +234,7 @@ class ControllerService(BaseService):
         prometheus_scrape_interval: int,
         streaming_engine: str,
         controller_remote_output_dir: str,
+        punting: bool,
     ) -> None:
         cmd = "python3 main_controller.py --input_config {} --prometheus_scrape_interval {} --output_dir {} --streaming_engine {}".format(
             controller_input_file,
@@ -221,9 +242,11 @@ class ControllerService(BaseService):
             controller_remote_output_dir,
             streaming_engine,
         )
+        if punting:
+            cmd += " --enable-punting"
         cmd_dir = os.path.join(self.provider.get_home_dir(), "code", "Controller")
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=cmd_dir,
             nohup=False,
@@ -237,6 +260,7 @@ class ControllerService(BaseService):
         prometheus_scrape_interval: int,
         streaming_engine: str,
         controller_remote_output_dir: str,
+        punting: bool,
     ):
         controller_dir = os.path.join(
             self.provider.get_home_dir(), "code", "Controller"
@@ -264,11 +288,13 @@ class ControllerService(BaseService):
         generate_cmd += f" --controller-output-dir {controller_remote_output_dir}"
         generate_cmd += f" --prometheus-scrape-interval {prometheus_scrape_interval}"
         generate_cmd += f" --streaming-engine {streaming_engine}"
+        if punting:
+            generate_cmd += " --punting"
 
         cmd = f"mkdir -p {controller_remote_output_dir}; {generate_cmd}; docker compose -f {remote_compose_file} up --no-build -d"
         try:
             self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=controller_dir,
                 nohup=False,
@@ -300,7 +326,7 @@ class ControllerService(BaseService):
                 # Stop using docker compose command on remote node
                 cmd = f"docker compose -f {self.compose_file} down"
                 self.provider.execute_command(
-                    node_idx=0,
+                    node_idx=self.node_offset,
                     cmd=cmd,
                     cmd_dir=None,
                     nohup=False,
@@ -312,7 +338,7 @@ class ControllerService(BaseService):
                 # Fallback: stop by container name on remote node
                 cmd = f"docker stop {self.container_name}; docker rm {self.container_name}"
                 self.provider.execute_command(
-                    node_idx=0,
+                    node_idx=self.node_offset,
                     cmd=cmd,
                     cmd_dir=None,
                     nohup=False,
@@ -330,14 +356,16 @@ class ControllerService(BaseService):
 class DumbKafkaConsumerService(BaseService):
     """Service for managing simple Kafka consumer."""
 
-    def __init__(self, provider: InfrastructureProvider):
+    def __init__(self, provider: InfrastructureProvider, node_offset: int):
         """
         Initialize Dumb Kafka Consumer service.
 
         Args:
             provider: Infrastructure provider for node communication and management
+            node_offset: Starting node index offset
         """
         super().__init__(provider)
+        self.node_offset = node_offset
 
     def start(self, experiment_output_dir: str, **kwargs) -> None:
         """
@@ -355,7 +383,7 @@ class DumbKafkaConsumerService(BaseService):
             self.provider.get_home_dir(), "code", "Utilities", "experiments"
         )
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=cmd_dir,
             nohup=True,
@@ -372,7 +400,7 @@ class DumbKafkaConsumerService(BaseService):
         """
         cmd = "pkill -f dumb_kafka_consumer.py"
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -390,7 +418,7 @@ class DumbKafkaConsumerService(BaseService):
         try:
             cmd = "pgrep -f dumb_kafka_consumer.py"
             result = self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=None,
                 nohup=False,

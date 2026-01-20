@@ -43,6 +43,14 @@ pub struct Cli {
     #[arg(required = true)]
     pub port: u16,
 
+    /// Log level (DEBUG, INFO, WARN, ERROR)
+    #[arg(long, default_value = "INFO")]
+    pub log_level: String,
+
+    /// Output directory for log files (optional, defaults to stdout only)
+    #[arg(long)]
+    pub log_dir: Option<String>,
+
     #[command(subcommand)]
     pub provider: ProviderCmd,
 }
@@ -91,9 +99,15 @@ pub enum ProviderCmd {
         all_parts: bool,
 
         /// Specify a single csv file to use as trace data.
-        /// This option is mutually exclusive with --all-parts  
+        /// This option is mutually exclusive with --all-parts
         #[arg(long, group = "csv-parts", aliases = ["part", "index"])]
         #[arg(require_equals = true)]
         part_index: Option<u16>,
+
+        /// Speedup factor for faster-than-realtime export
+        /// 1 = real-time, 10 = 10x faster, 100 = 100x faster
+        #[arg(long, require_equals = true)]
+        #[arg(value_parser = clap::value_parser!(u64).range(1..))]
+        speedup: u64,
     },
 }

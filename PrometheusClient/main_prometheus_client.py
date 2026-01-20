@@ -4,41 +4,58 @@ import time
 import requests
 import argparse
 import datetime
-import numpy as np
 import logging
 
 # import urllib3
 from loguru import logger
-from typing import Dict
+from typing import Dict, Set, Optional, List, Any
+from type_aliases import (
+    ServerDict,
+    Query,
+    QueryIndex,
+    RepetitionIndex,
+    UnixTimestamp,
+    ResultDict,
+    QueryStartTimes,
+    QueryEngineConfig,
+)
 import threading
 import subprocess
 import concurrent.futures
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-import similarity_scores
-from prometheus_api_client import PrometheusConnect
 from classes.config import Config
 from classes.QueryLatencyExporter import QueryLatencyExporter
+from classes.query_client import QueryClient
+from classes.query_client_factory import QueryClientFactory
+from classes.query_template import QueryTemplate
 from promql_utilities.query_results.classes import QueryResult, QueryResultAcrossTime
 from promql_utilities.query_results.serializers import SerializerFactory
 
 
 class PrometheusDebugRetry(Retry):
-    def __init__(self, server_name, *args, **kwargs):
-        self.server_name = server_name
+    def __init__(self, *args: Any, server_name: str = "", **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        self.server_name = server_name
+
+    def new(self, **kw: Any) -> "PrometheusDebugRetry":
+        """Override new() to preserve server_name when creating new instances."""
+        new_retry = super().new(**kw)
+        new_retry.server_name = self.server_name
+        return new_retry
 
     def increment(
         self,
-        method=None,
-        url=None,
-        response=None,
-        error=None,
-        _pool=None,
-        _stacktrace=None,
-    ):
+        method: Optional[str] = None,
+        url: Optional[str] = None,
+        response: Optional[Any] = None,
+        error: Optional[Exception] = None,
+        _pool: Optional[Any] = None,
+        _stacktrace: Optional[Any] = None,
+    ) -> "PrometheusDebugRetry":
         # Calculate current attempt number
+        assert self.total is not None
         current_retries = self.total - (
             self.total if hasattr(self, "history") and self.history else 0
         )
@@ -56,15 +73,17 @@ class PrometheusDebugRetry(Retry):
                 f"{method} {url} -> ERROR: {type(error).__name__}: {error}"
             )
 
-        return super().increment(method, url, response, error, _pool, _stacktrace)
+        result = super().increment(method, url, response, error, _pool, _stacktrace)
+        assert isinstance(result, PrometheusDebugRetry)
+        return result
 
 
 class PrometheusDebugHTTPAdapter(HTTPAdapter):
-    def __init__(self, server_name, *args, **kwargs):
+    def __init__(self, server_name: str, *args: Any, **kwargs: Any) -> None:
         self.server_name = server_name
         super().__init__(*args, **kwargs)
 
-    def send(self, request, *args, **kwargs):
+    def send(self, request: Any, *args: Any, **kwargs: Any) -> Any:
         logger.bind(module="http_debug").debug(
             f"HTTP REQUEST START for {self.server_name}: "
             f"{request.method} {request.url}"
@@ -91,7 +110,7 @@ class PrometheusDebugHTTPAdapter(HTTPAdapter):
             raise
 
 
-def create_loggers(logging_dir, log_level):
+def create_loggers(logging_dir: str, log_level: str) -> None:
     logger.remove(None)  # remove default loggers
 
     logger.add("{}/prometheus_client.log".format(logging_dir), filter="__main__")
@@ -119,133 +138,74 @@ def create_loggers(logging_dir, log_level):
     urllib3_logger.addHandler(urllib3_handler)
 
 
-def compare_results(results_across_servers: Dict[str, QueryResult], fout):
-    # each result is a list of dictionaries
-    # each dictionary has the following keys: metric, value
-    # metric is a dictionary representing metadata about the metric
-    # value is a list, where the first element is the timestamp and the second element is the value
-    # for each unique metadata, we need to compare the values
-
-    server_names = list(results_across_servers.keys())
-    assert sorted(server_names) == ["prometheus", "sketchdb"]
-
-    # prom_dict = {
-    #     frozenset(prom["metric"].items()): prom["value"][1] for prom in results_prom
-    # }
-    # sketch_dict = {
-    #     frozenset(sketch["metric"].items()): sketch["value"][1]
-    #     for sketch in results_sketchdb
-    # }
-    prom_dict = results_across_servers["prometheus"].result
-    sketch_dict = results_across_servers["sketchdb"].result
-    assert prom_dict is not None
-    assert sketch_dict is not None
-
-    for metric in prom_dict:
-        if metric not in sketch_dict:
-            print(
-                f"Metric {dict(metric)} found in Prometheus but not in SketchDB",
-                file=fout,
-            )
-            continue
-        prom_value = float(prom_dict[metric])
-        sketch_value = float(sketch_dict[metric])
-        if prom_value != sketch_value:
-            if prom_value == 0:
-                error = np.inf
-            else:
-                error = (prom_value - sketch_value) / prom_value * 100
-            print(
-                f"Error found for metric {dict(metric)}: Error = {error}% Prometheus value = {prom_value}, SketchDB value = {sketch_value}",
-                file=fout,
-            )
-        else:
-            pass
-            # print(f"Values match for metric {dict(metric)}: {prom_value}", file=fout)
-
-    for metric in sketch_dict:
-        if metric not in prom_dict:
-            print(
-                f"Metric {dict(metric)} found in SketchDB but not in Prometheus",
-                file=fout,
-            )
-
-
-def get_timeseries_similarity_scores(
-    results_across_servers, query_group, similarity_functions
-):
-    similarity_scores = {
-        f.__name__: {q: 0 for q in query_group.queries} for f in similarity_functions
-    }
-
-    for f in similarity_functions:
-        for query_idx, query in enumerate(query_group.queries):
-            prom_results = results_across_servers["prometheus"][
-                query_idx
-            ].get_all_timeseries()
-            sketchdb_results = results_across_servers["sketchdb"][
-                query_idx
-            ].get_all_timeseries()
-
-            scores_per_key = {}
-
-            for timeseries_key in prom_results:
-                if timeseries_key not in sketchdb_results:
-                    print(
-                        f"Skipping timeseries {timeseries_key} because it is not present in SketchDB"
-                    )
-                    continue
-
-                prom_timeseries = prom_results[timeseries_key].values
-                sketchdb_timeseries = sketchdb_results[timeseries_key].values
-
-                score = f(prom_timeseries, sketchdb_timeseries)
-                scores_per_key[timeseries_key] = score
-                similarity_scores[f.__name__][query] += score / len(prom_results)
-
-    return similarity_scores
-
-
-def get_query_unix_time(query, query_unix_time, query_start_times, repetition_delay):
+def get_query_unix_time(
+    query: Query,
+    query_unix_time: UnixTimestamp,
+    query_start_times: Optional[QueryStartTimes],
+    repetition_delay: int,
+) -> UnixTimestamp:
     if query_start_times is None or query not in query_start_times:
         return query_unix_time
 
     query_alignment_time = query_start_times[query]
     # we want the latest timestamp that is query_aligment_time + N * repetition_delay
-    query_unix_time = (
+    query_unix_time = int(
         query_unix_time - (query_unix_time - query_alignment_time) % repetition_delay
     )
     return query_unix_time
 
 
 def execute_single_query(
-    server_name,
-    server_object,
-    query,
-    query_idx,
-    repetition_idx,
-    query_unix_time,
-    dry_run,
+    server_name: str,
+    server_object: QueryClient,
+    query: Query,
+    query_idx: QueryIndex,
+    repetition_idx: RepetitionIndex,
+    query_unix_time: Optional[UnixTimestamp],
+    dry_run: bool,
+    query_group_idx: int,
+    time_window_seconds: Optional[int],
 ) -> QueryResult:
     """Execute a single query and return the result with latency information."""
     logger.debug(
         f"Running query {query} on server {server_name} at time {query_unix_time}"
     )
 
+    # Handle template substitution for queries with time variables
+    template = QueryTemplate(query)
+    if template.has_time_variables:
+        if time_window_seconds is None:
+            raise ValueError(
+                f"Query contains time template variables but time_window_seconds is not set: {query[:100]}"
+            )
+        if query_unix_time is None:
+            raise ValueError(
+                f"Query contains time template variables but query_unix_time is not set: {query[:100]}"
+            )
+        time_range = QueryTemplate.calculate_time_range(
+            current_time=query_unix_time,
+            window_seconds=time_window_seconds,
+        )
+        rendered_query = template.render(time_range)
+        logger.debug(f"Rendered query template: {rendered_query}")
+    else:
+        rendered_query = query
+
     # Enhanced HTTP debug logging for query start
     logger.bind(module="http_debug").info(
-        f"QUERY START - Server: {server_name}, Query: {query[:100]}{'...' if len(query) > 100 else ''}, "
-        f"QueryIdx: {query_idx}, Rep: {repetition_idx}, Time: {query_unix_time}"
+        f"QUERY START - Server: {server_name}, Query: {rendered_query[:100]}{'...' if len(rendered_query) > 100 else ''}, "
+        f"QueryIdx: {query_idx}, QueryGroupIdx: {query_group_idx}, Rep: {repetition_idx}, Time: {query_unix_time}"
     )
 
     empty_query_result = QueryResult(
         server_name,
-        query,
+        query,  # Store original query template, not rendered
         query_idx,
         repetition_idx,
         result=None,
         latency=None,
         cumulative_latency=None,
+        query_group_idx=query_group_idx,
     )
 
     if dry_run:
@@ -256,21 +216,41 @@ def execute_single_query(
 
     try:
         query_start_time = time.time()
-        # The actual HTTP request happens here - will be logged by our adapter
-        if query_unix_time:
-            query_result = server_object.custom_query(
-                query=query, params={"time": query_unix_time}
-            )
-        else:
-            query_result = server_object.custom_query(query=query)
+        # Use the QueryClient abstraction
+        response = server_object.execute_query(
+            query=rendered_query,
+            query_time=query_unix_time,
+        )
         query_end_time = time.time()
 
         latency = query_end_time - query_start_time
         logger.debug("Latency: {}", latency)
 
+        if not response.success:
+            logger.error(f"Query failed: {response.error_message}")
+            logger.bind(module="http_debug").error(
+                f"QUERY ERROR - Server: {server_name}, Error: {response.error_message}"
+            )
+            return empty_query_result
+
+        # Determine result type based on response format
+        if isinstance(response.raw_response, str):
+            # ClickHouse/SQL - raw text result
+            query_result_data = None
+            raw_text_result = response.raw_response
+            result_count = (
+                len(response.raw_response.strip().split("\n"))
+                if response.raw_response
+                else 0
+            )
+        else:
+            # Prometheus - list of dicts
+            query_result_data = response.raw_response
+            raw_text_result = None
+            result_count = len(response.raw_response) if response.raw_response else 0
+
         # Enhanced HTTP debug logging for query success
-        logger.debug("Query result: {}", query_result)
-        result_count = len(query_result) if query_result else 0
+        logger.debug("Query result: {}", response.raw_response)
         logger.bind(module="http_debug").info(
             f"QUERY SUCCESS - Server: {server_name}, Total latency: {latency:.3f}s, "
             f"Results: {result_count} data points"
@@ -287,24 +267,27 @@ def execute_single_query(
 
     return QueryResult(
         server_name,
-        query,
+        query,  # Store original query template
         query_idx,
         repetition_idx,
-        result=query_result,
+        result=query_result_data,
         latency=latency,
         cumulative_latency=None,
+        query_group_idx=query_group_idx,
+        raw_text_result=raw_text_result,
     )
 
 
 def handle_query_group(
-    servers,
-    query_group,
-    query_start_times,
-    dry_run,
-    parallel=False,
-    latency_exporter=None,
-    streaming_serializer=None,
-):
+    servers: ServerDict,
+    query_group: Any,
+    query_group_idx: int,
+    query_start_times: Optional[QueryStartTimes],
+    dry_run: bool,
+    parallel: bool = False,
+    latency_exporter: Optional[Any] = None,
+    streaming_serializer: Optional[Any] = None,
+) -> ResultDict:
     logger.debug(f"Starting query group {query_group.id}")
     if query_group.starting_delay:
         logger.debug(
@@ -317,12 +300,19 @@ def handle_query_group(
     current_time = None
     query_unix_time = None
 
+    # Calculate global query indices (combining group offset with local index)
+    global_query_idx_start: int = query_group._global_query_idx_start
+
     result = {
         server_name: {
-            query_idx: QueryResultAcrossTime(
-                server_name, query, query_idx, query_group.repetitions
+            global_query_idx_start
+            + local_query_idx: QueryResultAcrossTime(
+                server_name,
+                query,
+                global_query_idx_start + local_query_idx,
+                query_group.repetitions,
             )
-            for query_idx, query in enumerate(query_group.queries)
+            for local_query_idx, query in enumerate(query_group.queries)
         }
         for server_name in servers
     }
@@ -346,7 +336,8 @@ def handle_query_group(
             # Execute queries in parallel
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 futures = []
-                for query_idx, query in enumerate(query_group.queries):
+                for local_query_idx, query in enumerate(query_group.queries):
+                    global_query_idx = global_query_idx_start + local_query_idx
                     current_query_unix_time = get_query_unix_time(
                         query,
                         query_unix_time,
@@ -361,10 +352,12 @@ def handle_query_group(
                                 server_name,
                                 server_object,
                                 query,
-                                query_idx,
+                                global_query_idx,
                                 repetition_idx,
                                 current_query_unix_time,
                                 dry_run,
+                                query_group_idx,
+                                query_group.time_window_seconds,
                             )
                         )
 
@@ -386,7 +379,8 @@ def handle_query_group(
             cumulative_latency = {server_name: 0.0 for server_name in servers}
 
             # Serial execution - use the same execute_single_query function
-            for query_idx, query in enumerate(query_group.queries):
+            for local_query_idx, query in enumerate(query_group.queries):
+                global_query_idx = global_query_idx_start + local_query_idx
                 current_query_unix_time = get_query_unix_time(
                     query,
                     query_unix_time,
@@ -401,10 +395,12 @@ def handle_query_group(
                         server_name,
                         server_object,
                         query,
-                        query_idx,
+                        global_query_idx,
                         repetition_idx,
                         current_query_unix_time,
                         dry_run,
+                        query_group_idx,
+                        query_group.time_window_seconds,
                     )
 
                     # Update cumulative latency for this repetition
@@ -413,7 +409,18 @@ def handle_query_group(
 
                     query_result.cumulative_latency = cumulative_latency[server_name]
 
-                    result[server_name][query_idx].add_result(query_result)
+                    try:
+                        result[server_name][global_query_idx].add_result(query_result)
+                    except Exception as e:
+                        logger.error(
+                            f"{type(e).__name__} accessing result dict: {e}, "
+                            f"server_name={server_name}, "
+                            f"global_query_idx={global_query_idx}, "
+                            f"local_query_idx={local_query_idx}, "
+                            f"query_group_idx={query_group_idx}, "
+                            f"available_keys={list(result[server_name].keys())}"
+                        )
+                        raise
 
                     # Stream result immediately if streaming serializer is provided
                     if streaming_serializer is not None and not dry_run:
@@ -431,12 +438,14 @@ def handle_query_group(
     return result
 
 
-def get_query_start_times(server_url, query_engine_config):
+def get_query_start_times(
+    server_url: str, query_engine_config: QueryEngineConfig
+) -> QueryStartTimes:
     aggregation_id_start_time_map = {}
     query_aggregation_id_map = {}
     query_start_time_map = {}
 
-    required_aggregation_ids = set()
+    required_aggregation_ids: Set[int] = set()
     for query_yaml in query_engine_config["queries"]:
         # add all aggregation IDs from the query YAML to the required_aggregation_ids set
         required_aggregation_ids.update(
@@ -502,14 +511,16 @@ def get_query_start_times(server_url, query_engine_config):
     return query_start_time_map
 
 
-def check_args(args):
+def check_args(args: Any) -> None:
     if args.align_query_time and args.query_engine_config_file is None:
         raise ValueError(
             "If align_query_time is set, query_engine_config_file must be provided"
         )
 
 
-def start_query_engine_profiler(pid, output_dir, starting_delay, duration):
+def start_query_engine_profiler(
+    pid: int, output_dir: str, starting_delay: int, duration: int
+) -> None:
     """
     Create and start a subprocess to run py-spy on the specified process.
 
@@ -538,7 +549,9 @@ def start_query_engine_profiler(pid, output_dir, starting_delay, duration):
         raise e
 
 
-def start_prometheus_profiler(output_dir, starting_delay, duration):
+def start_prometheus_profiler(
+    output_dir: str, starting_delay: int, duration: int
+) -> None:
     output_file = os.path.join(output_dir, "prometheus_profile.pprof")
     logger.debug(f"Waiting for {starting_delay} seconds before starting profiler")
     time.sleep(starting_delay)
@@ -557,7 +570,7 @@ def start_prometheus_profiler(output_dir, starting_delay, duration):
         logger.error(f"Error starting profiler: {str(e)}")
 
 
-def main(args):
+def main(args: Any) -> None:
     check_args(args)
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -581,36 +594,61 @@ def main(args):
 
     logger.debug("Read config")
 
-    # can spawn one thread per query group, if we need to support multiple query groups
-    if len(config.query_groups) != 1:
-        raise ValueError("Only one query group is supported for now")
+    # Calculate global query indices for each query group
+    global_query_idx = 0
+    for query_group in config.query_groups:
+        query_group._global_query_idx_start = global_query_idx  # type: ignore[attr-defined]
+        global_query_idx += len(query_group.queries)
 
     server_url_for_alignment = None
 
-    servers = {}
+    servers: Dict[str, QueryClient] = {}
     for server in config.servers:
-        # Create custom retry adapter with debug logging
-        debug_retry = PrometheusDebugRetry(
-            server_name=server.name,
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[408, 429, 500, 502, 503, 504],
-        )
+        # Determine protocol (default to prometheus for backward compatibility)
+        protocol = server.protocol if server.protocol else "prometheus"
 
-        prom_connect = PrometheusConnect(
-            url=server.url,
-            disable_ssl=True,
-            retry=debug_retry,
-        )
+        if protocol == "prometheus":
+            # Create custom retry adapter with debug logging
+            debug_retry = PrometheusDebugRetry(
+                server_name=server.name,
+                total=3,
+                backoff_factor=1,
+                status_forcelist=[408, 429, 500, 502, 503, 504],
+            )
 
-        # Still need to replace adapters for the send() method logging
-        debug_adapter = PrometheusDebugHTTPAdapter(server.name)
-        prom_connect._session.mount("http://", debug_adapter)
-        prom_connect._session.mount("https://", debug_adapter)
+            client = QueryClientFactory.create(
+                protocol=protocol,
+                server_url=server.url,
+                server_name=server.name,
+                disable_ssl=True,
+                retry=debug_retry,
+            )
 
-        servers[server.name] = prom_connect
+            # Mount debug adapter for HTTP request logging
+            debug_adapter = PrometheusDebugHTTPAdapter(server.name)
+            client.session.mount("http://", debug_adapter)
+            client.session.mount("https://", debug_adapter)
+        else:
+            # ClickHouse or other protocols
+            client = QueryClientFactory.create(
+                protocol=protocol,
+                server_url=server.url,
+                server_name=server.name,
+                database=server.database if server.database else "default",
+                user=server.user if server.user else "default",
+                password=server.password if server.password else "",
+            )
+
+            # Mount debug adapter for HTTP request logging
+            debug_adapter = PrometheusDebugHTTPAdapter(server.name)
+            client.session.mount("http://", debug_adapter)
+            client.session.mount("https://", debug_adapter)
+
+        servers[server.name] = client
         logger.debug(
-            "Connected to server {} with HTTP debug logging enabled", server.name
+            "Connected to server {} ({}) with HTTP debug logging enabled",
+            server.name,
+            protocol,
         )
 
         if args.align_query_time and server.name == args.server_for_alignment:
@@ -618,11 +656,25 @@ def main(args):
 
     query_start_times = None
     if args.align_query_time:
+        assert server_url_for_alignment is not None
+        assert query_engine_config is not None
         query_start_times = get_query_start_times(
             server_url_for_alignment, query_engine_config
         )
         logger.debug("Got query start times")
-    query_group = config.query_groups[0]
+
+    # Calculate profiler timing based on all query groups
+    min_starting_delay = min(qg.starting_delay for qg in config.query_groups)
+    max_duration = 0
+    for query_group in config.query_groups:
+        assert query_group.repetitions is not None
+        assert query_group.repetition_delay is not None
+        duration = (
+            query_group.repetition_delay * query_group.repetitions
+            + query_group.starting_delay
+            - min_starting_delay
+        )
+        max_duration = max(max_duration, duration)
 
     query_engine_profiler_thread = None
     if args.profile_query_engine_pid:
@@ -631,8 +683,8 @@ def main(args):
             args=(
                 args.profile_query_engine_pid,
                 args.output_dir,
-                query_group.starting_delay,
-                query_group.repetition_delay * query_group.repetitions,
+                min_starting_delay,
+                max_duration,
             ),
         )
         if query_engine_profiler_thread:
@@ -646,7 +698,7 @@ def main(args):
             target=start_prometheus_profiler,
             args=(
                 args.output_dir,
-                query_group.starting_delay,
+                min_starting_delay,
                 args.profile_prometheus_time,
             ),
         )
@@ -673,67 +725,82 @@ def main(args):
             args.serialization_format, args.output_dir
         )
 
-        # Prepare metadata for streaming
+        # Prepare metadata for streaming - include per-group information
+        query_groups_metadata = []
+        for query_group_idx, query_group in enumerate(config.query_groups):
+            query_groups_metadata.append(
+                {
+                    "query_group_idx": query_group_idx,
+                    "query_group_id": query_group.id,
+                    "queries": query_group.queries,
+                    "repetitions": query_group.repetitions,
+                }
+            )
+
         metadata = {
-            "queries": query_group.queries,
+            "query_groups": query_groups_metadata,
             "servers": list(servers.keys()),
-            "repetitions": query_group.repetitions,
-            "total_queries": len(query_group.queries),
         }
         streaming_serializer.streaming_write_start(metadata)
 
-    results_across_servers = handle_query_group(
-        servers,
-        query_group,
-        query_start_times,
-        args.dry_run,
-        args.parallel,
-        latency_exporter,
-        streaming_serializer,
-    )
+    # Spawn threads for each query group
+    query_group_threads = []
+    results_per_group: List[Optional[ResultDict]] = [None] * len(config.query_groups)
 
-    if not args.dry_run:
+    def run_query_group(query_group_idx: int, query_group: Any) -> None:
+        """Wrapper function to run a query group and store results."""
+        try:
+            results = handle_query_group(
+                servers,
+                query_group,
+                query_group_idx,
+                query_start_times,
+                args.dry_run,
+                args.parallel,
+                latency_exporter,
+                streaming_serializer,
+            )
+            results_per_group[query_group_idx] = results
+        except Exception as e:
+            logger.error(
+                f"Query group {query_group_idx} (id={query_group.id}) failed with "
+                f"{type(e).__name__}: {e}",
+                exc_info=True,
+            )
+            results_per_group[query_group_idx] = None
+            raise  # Re-raise to ensure it's logged but thread still terminates
+
+    for query_group_idx, query_group in enumerate(config.query_groups):
+        thread = threading.Thread(
+            target=run_query_group,
+            args=(query_group_idx, query_group),
+        )
+        query_group_threads.append(thread)
+        thread.start()
+        logger.debug(f"Started thread for query group {query_group_idx}")
+
+    # Wait for all query group threads to complete
+    for idx, thread in enumerate(query_group_threads):
+        thread.join()
+        logger.debug(f"Query group {idx} thread completed")
+
+    # Merge results from all query groups into single structure
+    results_across_servers: Dict[str, Dict[int, Any]] = {}
+    for server_name in servers.keys():
+        results_across_servers[server_name] = {}
+
+    for group_results in results_per_group:
+        if group_results:
+            for server_name, server_results in group_results.items():
+                results_across_servers[server_name].update(server_results)
+
+    if not args.dry_run and streaming_serializer is not None:
         # Finalize streaming write
         streaming_serializer.streaming_write_end()
 
         # deprecated: save results in a pickle file
         # with open(os.path.join(args.output_dir, args.result_output_file), "wb") as fout:
         #    pickle.dump(results_across_servers, fout)
-
-    if not args.dry_run and args.compare_results:
-        timeseries_similarity_scores = get_timeseries_similarity_scores(
-            results_across_servers,
-            query_group,
-            [
-                similarity_scores.correlation,
-                similarity_scores.l1_norm,
-                similarity_scores.l2_norm,
-            ],
-        )
-
-        with open(os.path.join(args.output_dir, args.output_file), "w") as fout:
-            for f in timeseries_similarity_scores:
-                for query in timeseries_similarity_scores[f]:
-                    print(
-                        f"{f}: {query} = {timeseries_similarity_scores[f][query]}",
-                        file=fout,
-                    )
-
-            assert query_group.repetitions is not None
-            for query_idx in range(len(query_group.queries)):
-                for repetition_idx in range(query_group.repetitions):
-                    print(f"Query {query_idx}, Repetition {repetition_idx}", file=fout)
-                    compare_results(
-                        {
-                            "prometheus": results_across_servers["prometheus"][
-                                query_idx
-                            ].query_results[repetition_idx],
-                            "sketchdb": results_across_servers["sketchdb"][
-                                query_idx
-                            ].query_results[repetition_idx],
-                        },
-                        fout,
-                    )
 
 
 if __name__ == "__main__":
@@ -749,7 +816,6 @@ if __name__ == "__main__":
     parser.add_argument("--server_for_alignment", type=str, default="sketchdb")
 
     parser.add_argument("--dry_run", action="store_true", required=False)
-    parser.add_argument("--compare_results", action="store_true", required=False)
     parser.add_argument(
         "--parallel",
         action="store_true",

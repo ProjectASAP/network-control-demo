@@ -1,13 +1,14 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-if [ "$#" -ne 3 ]; then
-    echo "Usage: $0 <num_nodes> <cloudlab_username> <hostname_suffix>"
+if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
+    echo "Usage: $0 <num_nodes> <cloudlab_username> <hostname_suffix> [<node_offset>]"
     exit 1
 fi
 
 NUM_NODES=$1
 USERNAME=$2
 HOSTNAME_SUFFIX=$3
+NODE_OFFSET=${4:-0}
 
 THIS_DIR=$(dirname "$(readlink -f "$0")")
 
@@ -17,7 +18,7 @@ EXTERNAL_CMD="./install_external_components.sh /scratch/sketch_db_for_prometheus
 INTERNAL_CMD="./setup_internal_components.sh all;"
 
 echo "Running command: $EXTERNAL_CMD"
-for i in $(seq 0 $(($NUM_NODES-1))); do
+for i in $(seq $NODE_OFFSET $(($NODE_OFFSET + $NUM_NODES - 1))); do
     ssh $OPTIONS $USERNAME@node"$i".$HOSTNAME_SUFFIX "$CD_CMD $EXTERNAL_CMD" &
 done
 wait
@@ -25,7 +26,7 @@ wait
 echo "External components installed on all nodes."
 
 echo "Running command: $INTERNAL_CMD"
-for i in $(seq 0 $(($NUM_NODES-1))); do
+for i in $(seq $NODE_OFFSET $(($NODE_OFFSET + $NUM_NODES - 1))); do
     ssh $OPTIONS $USERNAME@node"$i".$HOSTNAME_SUFFIX "$CD_CMD $INTERNAL_CMD" &
 done
 wait

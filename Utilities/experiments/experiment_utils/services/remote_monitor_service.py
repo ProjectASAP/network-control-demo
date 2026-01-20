@@ -17,14 +17,16 @@ from .arroyo import ArroyoService
 class RemoteMonitorService(BaseService):
     """Service for managing remote monitor processes."""
 
-    def __init__(self, provider: InfrastructureProvider):
+    def __init__(self, provider: InfrastructureProvider, node_offset: int):
         """
         Initialize Remote Monitor service.
 
         Args:
             provider: Infrastructure provider for node communication and management
+            node_offset: Starting node index offset
         """
         super().__init__(provider)
+        self.node_offset = node_offset
 
     def start(
         self,
@@ -45,16 +47,106 @@ class RemoteMonitorService(BaseService):
         controller_remote_output_dir: str,
         use_container_prometheus_client: bool,
         prometheus_client_parallel: bool,
+        monitoring_tool: str,
+        timed_duration: Optional[int] = None,
     ) -> None:
         """
         Start remote monitor processes.
 
         Args:
             **kwargs: Additional configuration (currently unused)
+            timed_duration: If provided, use timed mode instead of prometheus_client mode
+            monitoring_tool: Monitoring tool being used ("prometheus" or "victoriametrics")
         """
+        # Determine execution mode
+        use_timed_mode = timed_duration is not None
+
+        # Determine which config file to look for based on monitoring tool
+        if monitoring_tool == "victoriametrics":
+            # first one is for vmagent
+            # second one is for vmsingle
+            # TODO: remove this hardcoding and instead query the service to get this
+            config_keywords = [
+                constants.VMAGENT_SCRAPE_CONFIG_FILE,
+                "victoriametrics-single",
+            ]
+        else:
+            config_keywords = [constants.PROMETHEUS_CONFIG_FILE]
+
+        if use_timed_mode:
+            # Build command for timed mode (skip_querying)
+            keywords = config_keywords
+
+            if experiment_mode == constants.SKETCHDB_EXPERIMENT_NAME:
+                if query_engine_service is not None:
+                    keywords.append(query_engine_service.get_monitoring_keyword())
+                else:
+                    keywords.append(constants.QUERY_ENGINE_PROCESS_KEYWORD)
+
+                if streaming_engine == "flink":
+                    keywords.append("sketch-0.1.jar")
+                    if not do_local_flink:
+                        keywords.append(
+                            "org.apache.flink.runtime.taskexecutor.TaskManagerRunner"
+                        )
+                elif streaming_engine == "arroyo":
+                    if arroyo_service is not None:
+                        keywords.append(arroyo_service.get_monitoring_keyword())
+                    else:
+                        keywords.append("arroyo.*worker")
+
+            cmd = (
+                "python3 -u remote_monitor.py "
+                "--execution_mode timed "
+                "--experiment_mode {} "
+                r"--keywords \"{}\" "
+                "--config_file {} "
+                "--experiment_output_dir {} "
+                "--monitor_output_file {} "
+                "--time_to_run {} "
+                "--node_offset {} "
+            ).format(
+                experiment_mode,
+                ",".join(keywords),
+                os.path.join(
+                    os.path.dirname(experiment_output_dir),
+                    "controller_client_configs",
+                    os.path.basename(controller_client_config),
+                ),
+                experiment_output_dir,
+                "monitor_output.json",
+                timed_duration,
+                self.node_offset,
+            )
+
+            cmd_dir = os.path.join(
+                self.provider.get_home_dir(), "code", "Utilities", "experiments"
+            )
+            cmd += " > {}/remote_monitor.out 2>&1".format(experiment_output_dir)
+
+            if manual_mode:
+                input(
+                    "In manual mode. Remote monitor is not going to be started. Press Enter to continue"
+                )
+                print(cmd_dir)
+                print(cmd)
+                input("In manual mode. Press Enter to teardown the experiment")
+            else:
+                # Timed mode always runs in background
+                cmd += " < /dev/null &"
+                self.provider.execute_command(
+                    node_idx=self.node_offset,
+                    cmd=cmd,
+                    cmd_dir=cmd_dir,
+                    nohup=True,
+                    popen=False,
+                )
+            return
+
+        # Original prometheus_client mode logic
         assert controller_remote_output_dir is not None
 
-        keywords = ["prometheus.yml"]
+        keywords = config_keywords
 
         if experiment_mode == constants.SKETCHDB_EXPERIMENT_NAME:
             if query_engine_service is not None:
@@ -83,6 +175,7 @@ class RemoteMonitorService(BaseService):
             "--experiment_output_dir {} "
             "--monitor_output_file {} "
             "--prometheus_client_output_file {} "
+            "--node_offset {} "
         ).format(
             experiment_mode,
             ",".join(keywords),
@@ -94,6 +187,7 @@ class RemoteMonitorService(BaseService):
             experiment_output_dir,
             "monitor_output.json",
             "prometheus_client_output.txt",
+            self.node_offset,
         )
 
         # Add container flag if enabled
@@ -140,7 +234,7 @@ class RemoteMonitorService(BaseService):
             if constants.AVOID_REMOTE_MONITOR_LONG_SSH:
                 cmd += " < /dev/null &"
                 self.provider.execute_command(
-                    node_idx=0,
+                    node_idx=self.node_offset,
                     cmd=cmd,
                     cmd_dir=cmd_dir,
                     nohup=True,
@@ -148,7 +242,7 @@ class RemoteMonitorService(BaseService):
                 )
             else:
                 self.provider.execute_command(
-                    node_idx=0,
+                    node_idx=self.node_offset,
                     cmd=cmd,
                     cmd_dir=cmd_dir,
                     nohup=False,
@@ -168,7 +262,7 @@ class RemoteMonitorService(BaseService):
         """Kill remote monitor processes."""
         cmd = "pkill -f remote_monitor.py"
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -199,7 +293,7 @@ class RemoteMonitorService(BaseService):
         while True:
             cmd = "pgrep -f remote_monitor.py"
             result = self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=None,
                 nohup=False,

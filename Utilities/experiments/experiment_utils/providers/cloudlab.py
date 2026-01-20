@@ -41,7 +41,7 @@ class CloudLabProvider(InfrastructureProvider):
         popen: bool = False,
         ignore_errors: bool = False,
         manual: bool = False,
-    ) -> Union[subprocess.Popen, subprocess.CompletedProcess]:
+    ) -> Union[subprocess.Popen, subprocess.CompletedProcess, None]:
         """
         Execute a command on the specified CloudLab node via SSH.
 

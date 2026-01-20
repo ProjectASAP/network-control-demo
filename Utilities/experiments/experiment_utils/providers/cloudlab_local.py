@@ -136,9 +136,10 @@ class CloudLabLocalProvider(InfrastructureProvider):
         if redirect:
             cmd += " > /dev/null 2>&1"
 
-        # Execute once locally (ignore node_idxs since it's all local)
+        # Execute once locally (use first node_idx if provided, otherwise 0)
+        node_idx = node_idxs[0] if node_idxs else 0
         process = self.execute_command(
-            node_idx=0,
+            node_idx=node_idx,
             cmd=cmd,
             cmd_dir=cmd_dir,
             nohup=nohup,

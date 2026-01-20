@@ -10,3 +10,11 @@ experiments/prometheus_config/prometheus.yml
 
 experiments/experiment_configs
 experiments/experiment_outputs
+
+experiments/config/*
+!experiments/config/README.md
+!experiments/config/config.yaml
+
+experiments/post_experiment/**/*.png
+
+asap-cli/target

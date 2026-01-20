@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 load_components_config() {
     local components_conf_file="$1"

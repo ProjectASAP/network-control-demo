@@ -51,6 +51,11 @@ def get_spatial_aggregation_output_labels(
 ) -> KeyByLabelNames:
     aggregation_modifier = query_pattern_match.tokens["aggregation"]["modifier"]
     aggregation_modifier_labels = None
+
+    # Fixing issue https://github.com/ProjectASAP/asap-internal/issues/24
+    if aggregation_modifier is None:
+        return KeyByLabelNames([])
+    
     if aggregation_modifier.type == aggregation_modifier.type.By:
         aggregation_modifier_labels = KeyByLabelNames(aggregation_modifier.labels)
     elif aggregation_modifier.type == aggregation_modifier.type.Without:

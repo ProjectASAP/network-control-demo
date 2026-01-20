@@ -1,3 +1,3 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 HOSTNAME_PREFIX="node"

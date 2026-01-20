@@ -1,10 +1,12 @@
 use clap::Parser;
+use query_engine_rust::data_model::QueryLanguage;
 use std::fs;
 use std::sync::Arc;
 use tokio::signal;
 use tracing::{error, info};
 
-use query_engine_rust::data_model::enums::{InputFormat, StreamingEngine};
+use query_engine_rust::data_model::enums::{InputFormat, LockStrategy, StreamingEngine};
+use query_engine_rust::drivers::AdapterConfig;
 use query_engine_rust::utils::file_io::{read_inference_config, read_streaming_config};
 use query_engine_rust::{
     HttpServer, HttpServerConfig, KafkaConsumer, KafkaConsumerConfig, Result, SimpleEngine,
@@ -81,6 +83,18 @@ struct Args {
     /// Enable dumping received precomputes to files for debugging
     #[arg(long)]
     dump_precomputes: bool,
+
+    /// Differentiate between query languages of input query
+    #[arg(long, value_enum)]
+    query_language: QueryLanguage,
+
+    /// Use read-based cleanup policy instead of fixed-count policy
+    #[arg(long)]
+    use_read_based_cleanup: bool,
+
+    /// Lock strategy for SimpleMapStore: "global" for single mutex, "per-key" for fine-grained locking
+    #[arg(long, value_enum)]
+    lock_strategy: LockStrategy,
 }
 
 #[tokio::main]
@@ -91,14 +105,15 @@ async fn main() -> Result<()> {
     fs::create_dir_all(&args.output_dir)?;
 
     // Initialize logging similar to Python's create_loggers function
-    setup_logging(&args.output_dir, &args.log_level)?;
+    // Keep the guard alive for the entire lifetime of the application
+    let _log_guard = setup_logging(&args.output_dir, &args.log_level)?;
 
     info!("Starting Query Engine Rust");
     info!("Config file: {}", args.config);
     info!("Output directory: {}", args.output_dir);
 
     // Read config (equivalent to utils.file_io.read_inference_config)
-    let inference_config = read_inference_config(&args.config)?;
+    let inference_config = read_inference_config(&args.config, args.query_language)?;
     info!(
         "Loaded inference config with {} query configs",
         inference_config.query_configs.len()
@@ -116,7 +131,11 @@ async fn main() -> Result<()> {
     info!("Streaming config: {:?}", streaming_config);
 
     // Setup store (equivalent to Python's SimpleMapStore())
-    let store = Arc::new(SimpleMapStore::new(streaming_config.clone()));
+    let store = Arc::new(SimpleMapStore::new_with_strategy(
+        streaming_config.clone(),
+        args.use_read_based_cleanup,
+        args.lock_strategy,
+    ));
 
     // Setup query engine
     let engine = Arc::new(SimpleEngine::new(
@@ -124,6 +143,7 @@ async fn main() -> Result<()> {
         inference_config,
         streaming_config.clone(),
         args.prometheus_scrape_interval,
+        args.query_language,
     ));
 
     // Setup Kafka consumer (equivalent to Python's kafka_thread)
@@ -164,12 +184,26 @@ async fn main() -> Result<()> {
         }
     };
 
-    // Setup HTTP server (equivalent to Python's server_thread)
+    //info!("=== TEMPORARY: Using ClickHouse HTTP adapter ===");
+    //info!("ClickHouse endpoint will be available at: /clickhouse/query");
+    //info!("ClickHouse fallback URL: http://localhost:8123/?database=default");
+
+    //let adapter_config = AdapterConfig::clickhouse_sql(
+    //    "http://localhost:8123".to_string(), // ClickHouse server URL
+    //    "default".to_string(),               // Database name
+    //    true,                                // Always forward (fallback for every query)
+    //);
+
+    // Original Prometheus config (commented out temporarily):
+    let adapter_config = AdapterConfig::prometheus_promql(
+        args.prometheus_server.clone(),
+        args.forward_unsupported_queries,
+    );
+
     let http_config = HttpServerConfig {
         port: args.http_port,
         handle_http_requests: true,
-        prometheus_server_url: args.prometheus_server.clone(),
-        forward_unsupported_queries: args.forward_unsupported_queries,
+        adapter_config,
     };
 
     let server = HttpServer::new(http_config, engine, store);
@@ -198,7 +232,10 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn setup_logging(_output_dir: &str, log_level: &str) -> Result<()> {
+fn setup_logging(
+    output_dir: &str,
+    log_level: &str,
+) -> Result<tracing_appender::non_blocking::WorkerGuard> {
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
     // Create env filter that respects RUST_LOG, with fallback to command line arg
@@ -206,16 +243,32 @@ fn setup_logging(_output_dir: &str, log_level: &str) -> Result<()> {
         .or_else(|_| EnvFilter::try_new(log_level))
         .unwrap_or_else(|_| EnvFilter::new("info"));
 
+    // Create file appender for logging to file
+    let file_appender = tracing_appender::rolling::never(output_dir, "query_engine.log");
+    let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
+
+    // Create console layer for stdout
+    let console_layer = tracing_subscriber::fmt::layer()
+        .with_file(true)
+        .with_line_number(true)
+        .with_target(true)
+        .with_writer(std::io::stdout);
+
+    // Create file layer for file output
+    let file_layer = tracing_subscriber::fmt::layer()
+        .with_file(true)
+        .with_line_number(true)
+        .with_target(true)
+        .with_ansi(false) // Disable ANSI color codes in log file
+        .with_writer(non_blocking_file);
+
     tracing_subscriber::registry()
         .with(env_filter)
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_file(true)
-                .with_line_number(true)
-                .with_target(true),
-        )
+        .with(console_layer)
+        .with(file_layer)
         .init();
 
     info!("Logging initialized (respects RUST_LOG environment variable)");
-    Ok(())
+    info!("Logs will be written to: {}/query_engine.log", output_dir);
+    Ok(guard)
 }

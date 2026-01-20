@@ -230,8 +230,23 @@ impl AggregateCore for MultipleIncreaseAccumulator {
             .downcast_ref::<MultipleIncreaseAccumulator>()
             .ok_or("Failed to downcast to MultipleIncreaseAccumulator")?;
 
-        // Use the existing merge_accumulators method
-        let merged = Self::merge_accumulators(vec![self.clone(), other_multiple_increase.clone()])?;
+        // Clone self once, then merge other's data in-place
+        let mut merged = self.clone();
+        for (key, data) in &other_multiple_increase.increases {
+            if let Some(existing_data) = merged.increases.get_mut(key) {
+                // Merge in-place: take earliest start, latest end
+                if data.starting_timestamp < existing_data.starting_timestamp {
+                    existing_data.starting_measurement = data.starting_measurement.clone();
+                    existing_data.starting_timestamp = data.starting_timestamp;
+                }
+                if data.last_seen_timestamp > existing_data.last_seen_timestamp {
+                    existing_data.last_seen_measurement = data.last_seen_measurement.clone();
+                    existing_data.last_seen_timestamp = data.last_seen_timestamp;
+                }
+            } else {
+                merged.increases.insert(key.clone(), data.clone());
+            }
+        }
 
         Ok(Box::new(merged))
     }
@@ -250,6 +265,7 @@ impl MultipleSubpopulationAggregate for MultipleIncreaseAccumulator {
         &self,
         statistic: Statistic,
         key: &KeyByLabelValues,
+        _query_kwargs: Option<&HashMap<String, String>>,
     ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
         let data = self
             .increases
@@ -277,10 +293,16 @@ impl MergeableAccumulator<MultipleIncreaseAccumulator> for MultipleIncreaseAccum
         for accumulator in accumulators {
             for (key, data) in accumulator.increases {
                 if let Some(existing_data) = result.increases.get_mut(&key) {
-                    // Merge the IncreaseAccumulators
-                    let merged =
-                        IncreaseAccumulator::merge_accumulators(vec![existing_data.clone(), data])?;
-                    result.increases.insert(key, merged);
+                    // Merge in-place without cloning existing_data
+                    // Take the earliest start time and latest end time
+                    if data.starting_timestamp < existing_data.starting_timestamp {
+                        existing_data.starting_measurement = data.starting_measurement;
+                        existing_data.starting_timestamp = data.starting_timestamp;
+                    }
+                    if data.last_seen_timestamp > existing_data.last_seen_timestamp {
+                        existing_data.last_seen_measurement = data.last_seen_measurement;
+                        existing_data.last_seen_timestamp = data.last_seen_timestamp;
+                    }
                 } else {
                     result.increases.insert(key, data);
                 }
@@ -354,16 +376,16 @@ mod tests {
         acc.update(key.clone(), increase_acc);
 
         // Test increase query
-        assert_eq!(acc.query(Statistic::Increase, &key).unwrap(), 15.0);
+        assert_eq!(acc.query(Statistic::Increase, &key, None).unwrap(), 15.0);
 
         // Test rate query (15.0 increase over 1 second = 15.0 per second)
-        assert_eq!(acc.query(Statistic::Rate, &key).unwrap(), 15.0);
+        assert_eq!(acc.query(Statistic::Rate, &key, None).unwrap(), 15.0);
 
         // Test error cases
-        assert!(acc.query(Statistic::Sum, &key).is_err());
+        assert!(acc.query(Statistic::Sum, &key, None).is_err());
 
         let unknown_key = KeyByLabelValues::new();
-        assert!(acc.query(Statistic::Increase, &unknown_key).is_err());
+        assert!(acc.query(Statistic::Increase, &unknown_key, None).is_err());
     }
 
     #[test]
@@ -448,7 +470,10 @@ mod tests {
         acc.update(key.clone(), create_test_increase_accumulator(10.0, 25.0));
 
         let trait_obj: Box<dyn MultipleSubpopulationAggregate> = Box::new(acc);
-        assert_eq!(trait_obj.query(Statistic::Increase, &key).unwrap(), 15.0);
+        assert_eq!(
+            trait_obj.query(Statistic::Increase, &key, None).unwrap(),
+            15.0
+        );
 
         let keys = trait_obj.get_keys().unwrap();
         assert_eq!(keys.len(), 1);

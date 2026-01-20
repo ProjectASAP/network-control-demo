@@ -4,7 +4,7 @@ use crate::data_model::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use promql_utilities::query_logics::enums::Statistic;
 
@@ -37,6 +37,10 @@ impl DeltaSetAggregatorAccumulator {
 
     pub fn remove_key(&mut self, key: KeyByLabelValues) {
         self.removed.insert(key);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.added.is_empty() && self.removed.is_empty()
     }
 
     pub fn deserialize_from_json(data: &Value) -> Result<Self, Box<dyn std::error::Error>> {
@@ -311,6 +315,7 @@ impl MultipleSubpopulationAggregate for DeltaSetAggregatorAccumulator {
         &self,
         _statistic: Statistic,
         _key: &KeyByLabelValues,
+        _query_kwargs: Option<&HashMap<String, String>>,
     ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
         Err("DeltaSetAggregatorAccumulator does not support query operation".into())
     }
@@ -455,7 +460,7 @@ mod tests {
 
         // Query should return error as it's not supported
         let key = create_test_key("test");
-        assert!(acc.query(Statistic::Sum, &key).is_err());
+        assert!(acc.query(Statistic::Sum, &key, None).is_err());
     }
 
     // #[test]

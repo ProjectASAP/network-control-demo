@@ -1,228 +1,45 @@
 import os
 import json
-import subprocess
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
-import utils
 import constants
 import experiment_utils
+from experiment_utils import sync, config
+from experiment_utils.providers.factory import create_provider
 from experiment_utils.services import (
-    DeathstarService,
-    MonitoringService,
+    ExporterServiceFactory,
+    SystemExportersService,
+    create_prometheus_service,
     PrometheusService,
+    DockerPrometheusService,
+    DockerVictoriaMetricsService,
+)
+
+# Register custom resolver for LOCAL_EXPERIMENT_DIR before Hydra processes config
+OmegaConf.register_new_resolver(
+    "local_experiment_dir", lambda: constants.LOCAL_EXPERIMENT_DIR
+)
+
+# Register custom resolver for remote write IP based on node_offset
+OmegaConf.register_new_resolver(
+    "remote_write_ip", lambda node_offset: f"10.10.1.{node_offset + 1}"
 )
 
 
-def generate_and_copy_config(
-    num_nodes_in_experiment, local_experiment_dir, streaming_config
-):
-    args = experiment_utils.GeneratePrometheusArgs(
-        num_nodes_in_experiment,
-        local_experiment_dir,
-        "prometheus_config",
-    )
-    args.remote_write_metric_names = ["node_cpu_seconds_total"]
-
-    # Build remote_write_url from streaming config
-    remote_write_config = streaming_config["remote_write"]
-    ip = remote_write_config["ip"]
-    base_port = remote_write_config["base_port"]
-    path = remote_write_config["path"]
-    args.remote_write_url = f"http://{ip}:{base_port}{path}"
-
-    # Use empty experiment config since this is a simple setup
-    experiment_utils.call_generate_prometheus_config(args, {})
-
-
-def rsync_config(username, hostname_suffix):
-    hostname = f"node0.{hostname_suffix}"
-    cmd = 'rsync -azh -e "ssh -o StrictHostKeyChecking=no" ./prometheus_config {}@{}:{}'.format(
-        username,
-        hostname,
-        os.path.join(constants.CLOUDLAB_HOME_DIR, "cloudlab_scripts"),
-    )
-    subprocess.run(cmd, shell=True, check=True)
-
-
-def export_prometheus_data(username, hostname_suffix, experiment_output_dir):
-    cmd = "python3 export_prometheus_data.py --output_dir {}".format(
-        os.path.join(experiment_output_dir, "exported_prometheus_data")
-    )
-    cmd_dir = f"{constants.CLOUDLAB_HOME_DIR}/cloudlab_scripts"
-    utils.run_on_cloudlab_node(
-        0,
-        username,
-        hostname_suffix,
-        cmd,
-        cmd_dir,
-        nohup=False,
-        popen=False,
-        manual=False,
-    )
-
-
-def copy_prometheus_data(username, hostname_suffix, experiment_name):
-    cmd = "python3 copy_prometheus_data.py --cloudlab_username {} --hostname_suffix {} --output_dir {}".format(
-        username,
-        hostname_suffix,
-        os.path.join(
-            constants.LOCAL_EXPERIMENT_DIR, experiment_name, "raw_prometheus_data"
-        ),
-    )
-    subprocess.run(cmd, shell=True, check=True)
-
-
-def rsync_experiment_data(username, hostname_suffix, experiment_name):
-    cmd = f'rsync -azh -e "ssh {constants.SSH_OPTIONS}" {username}@node0.{hostname_suffix}:{constants.CLOUDLAB_HOME_DIR}/experiments/{experiment_name} {constants.LOCAL_EXPERIMENT_DIR}/'
-    print(cmd)
-    subprocess.run(cmd, shell=True, check=True)
-
-
-def validate_config(cfg: DictConfig):
-    """
-    Validate configuration parameters for exporters and prometheus experiment.
-    """
-    # Check for required parameters that must be provided via command line
-    # Note: This experiment only needs basic CloudLab params, no config files
-    required_params = [
-        ("experiment.name", "Human-readable experiment name"),
-        ("cloudlab.num_nodes", "Number of CloudLab nodes to use"),
-        ("cloudlab.username", "Your CloudLab username"),
-        ("cloudlab.hostname_suffix", "CloudLab experiment hostname suffix"),
-    ]
-
-    missing_params = []
-    for param_path, description in required_params:
-        try:
-            value = OmegaConf.select(cfg, param_path)
-            if value is None or (isinstance(value, str) and value == "???"):
-                missing_params.append((param_path, description))
-        except Exception:
-            missing_params.append((param_path, description))
-
-    if missing_params:
-        error_msg = "Required parameters must be provided via command line:\n\n"
-        for param_path, description in missing_params:
-            error_msg += f"  {param_path}: {description}\n"
-
-        error_msg += "\nExample usage:\n"
-        error_msg += "python experiment_run_exporters_and_prometheus.py \\\n"
-        error_msg += "  experiment.name=monitoring_test \\\n"
-        error_msg += "  cloudlab.num_nodes=4 \\\n"
-        error_msg += "  cloudlab.username=myuser \\\n"
-        error_msg += "  cloudlab.hostname_suffix=myexp.cloudlab.us\n"
-
-        raise ValueError(error_msg)
-
-
-class Args:
-    """Helper class to convert Hydra config to argparse-like namespace"""
-
-    def __init__(self, cfg: DictConfig):
-        # Experiment configuration
-        self.experiment_name = cfg.experiment.name
-
-        # CloudLab configuration
-        self.num_nodes = cfg.cloudlab.num_nodes
-        self.cloudlab_username = cfg.cloudlab.username
-        self.hostname_suffix = cfg.cloudlab.hostname_suffix
-
-
-def main(args, streaming_config):
-    local_experiment_dir = os.path.join(
-        constants.LOCAL_EXPERIMENT_DIR, args.experiment_name
-    )
-    os.makedirs(local_experiment_dir, exist_ok=True)
-
-    # Initialize services
-    monitoring_service = MonitoringService(
-        args.cloudlab_username, args.hostname_suffix, args.num_nodes
-    )
-    deathstar_service = DeathstarService(
-        args.cloudlab_username, args.hostname_suffix, args.num_nodes
-    )
-    prometheus_service = PrometheusService(
-        args.cloudlab_username, args.hostname_suffix, args.num_nodes
-    )
-
-    # Stop any existing services
-    monitoring_service.stop()
-    deathstar_service.stop()
-    prometheus_service.reset()
-
-    experiment_output_dir = (
-        f"{constants.CLOUDLAB_HOME_DIR}/experiments/{args.experiment_name}"
-    )
-    utils.run_on_cloudlab_nodes_in_parallel(
-        range(args.num_nodes + 1),
-        args.cloudlab_username,
-        args.hostname_suffix,
-        f"mkdir -p {experiment_output_dir}",
-        "",
-        nohup=False,
-        popen=True,
-    )
-    utils.run_on_cloudlab_node(
-        0,
-        args.cloudlab_username,
-        args.hostname_suffix,
-        "mkdir -p {}".format(os.path.dirname(constants.CLOUDLAB_QUERY_LOG_FILE)),
-        "",
-        nohup=False,
-        popen=False,
-    )
-
-    num_nodes_in_experiment = args.num_nodes
-
-    generate_and_copy_config(
-        num_nodes_in_experiment, local_experiment_dir, streaming_config
-    )
-    rsync_config(args.cloudlab_username, args.hostname_suffix)
-
-    # Start services
-    deathstar_service.start()
-
-    # Start monitoring with minimal config
-    minimal_config = {
-        "exporters": {
-            "exporter_list": {"node_exporter": {"port": 9100, "extra_flags": ""}}
-        }
-    }
-    monitoring_service.start(
-        experiment_params=minimal_config, experiment_output_dir=experiment_output_dir
-    )
-
-    # Run workload - this blocks until the workload is done
-    DURATION = 30  # Duration for this simple experiment
-    deathstar_service.run_workload(
-        experiment_output_dir=experiment_output_dir,
-        local_experiment_dir=local_experiment_dir,
-        minimum_experiment_running_time=DURATION,
-        random_params=False,
-    )
-    # prometheus returns zero metrics if we don't wait
-    input("Press enter to stop")
-    # copy_prometheus_data(args.cloudlab_username, args.hostname_suffix, args.experiment_name)
-    # export_prometheus_data(args.cloudlab_username, args.hostname_suffix, experiment_output_dir)
-
-    # Stop services
-    monitoring_service.stop()
-    deathstar_service.stop()
-    prometheus_service.reset()
-    # rsync_experiment_data(args.hostname_suffix, args.experiment_name)
-
-
 @hydra.main(version_base=None, config_path="config", config_name="config")
-def hydra_main(cfg: DictConfig):
+def main(cfg: DictConfig):
     # Validate configuration
-    validate_config(cfg)
-
+    config.validate_config(cfg)
+    # Validate experiment configuration
+    config.validate_experiment_config(cfg.experiment_params)
     # Convert config to args-like object for backward compatibility
-    args = Args(cfg)
+    args = config.Args(cfg)
 
-    # Create experiment output directory structure
+    # Create infrastructure provider
+    provider = create_provider(cfg)
+
     local_experiment_root_dir = os.path.join(
         constants.LOCAL_EXPERIMENT_DIR, args.experiment_name
     )
@@ -236,9 +53,175 @@ def hydra_main(cfg: DictConfig):
     with open(os.path.join(local_experiment_root_dir, "cmdline_args.txt"), "w") as f:
         json.dump(vars(args), f)
 
-    print(f"Running exporters and prometheus experiment: {args.experiment_name}")
-    main(args, cfg.streaming)
+    experiment_root_output_dir = (
+        f"{constants.CLOUDLAB_HOME_DIR}/experiment_outputs/{args.experiment_name}"
+    )
+
+    # Create output directory on coordinator node
+    provider.execute_command(
+        node_idx=args.get_coordinator_node(),
+        cmd=f"mkdir -p {experiment_root_output_dir}",
+        cmd_dir="",
+        nohup=False,
+        popen=False,
+    )
+
+    num_nodes_in_experiment = args.num_nodes
+
+    # Read exporter configuration
+    exporter_config, rejection_reason = experiment_utils.read_exporter_config(
+        cfg.experiment_params
+    )
+    if exporter_config is None:
+        raise ValueError("Invalid exporter config: {}".format(rejection_reason))
+
+    # Initialize services
+    system_exporters_service = SystemExportersService(
+        provider, args.num_nodes, args.node_offset
+    )
+    prometheus_service = create_prometheus_service(
+        cfg, provider, args.num_nodes, args.node_offset
+    )
+
+    # Initialize exporter service based on language
+    exporter_service = ExporterServiceFactory.create_exporter_service(
+        args.fake_exporter_language,
+        provider,
+        num_nodes_in_experiment,
+        use_container=args.use_container_fake_exporter,
+        node_offset=args.node_offset,
+    )
+
+    # Stop any existing services to ensure clean state
+    system_exporters_service.stop()
+    prometheus_service.stop()
+    exporter_service.stop()
+    prometheus_service.reset()
+
+    # Create local and remote experiment directories
+    experiment_output_dir = experiment_root_output_dir
+    local_experiment_dir = local_experiment_root_dir
+
+    provider.execute_command_parallel(
+        node_idxs=args.get_node_range(include_coordinator=True),
+        cmd=f"mkdir -p {experiment_output_dir}",
+        cmd_dir="",
+        nohup=False,
+        popen=True,
+        wait=True,
+    )
+
+    # Generate and copy Prometheus configuration
+    prometheus_config_output_dir = os.path.join(
+        local_experiment_dir, constants.PROMETHEUS_CONFIG_DIR
+    )
+    os.makedirs(prometheus_config_output_dir, exist_ok=True)
+
+    experiment_mode = (
+        constants.BASELINE_EXPERIMENT_NAME
+    )  # This script runs in prometheus mode
+    config.generate_and_copy_prometheus_config(
+        num_nodes_in_experiment,
+        local_experiment_dir,
+        prometheus_config_output_dir,
+        experiment_mode,
+        cfg,
+        cfg.prometheus,
+        args.node_offset,
+        constants.SKETCHDB_EXPERIMENT_NAME,
+        provider,
+    )
+    sync.rsync_prometheus_config(
+        provider,
+        experiment_output_dir,
+        prometheus_config_output_dir,
+        node_offset=args.node_offset,
+    )
+
+    # Start fake exporter if configured
+    if config.check_exporter_and_queries_exist("fake_exporter", cfg.experiment_params):
+        print("Starting fake exporter...")
+        exporter_service.start(
+            config=exporter_config["exporter_list"]["fake_exporter"],
+            experiment_output_dir=experiment_output_dir,
+            local_experiment_dir=local_experiment_dir,
+        )
+
+    # Start system exporters (node_exporter, blackbox_exporter, cadvisor)
+    print("Starting system exporters...")
+    system_exporters_service.start(cfg.experiment_params)
+
+    # Start Prometheus service based on deployment mode
+    print("Starting Prometheus...")
+    monitoring = cfg.experiment_params.monitoring
+
+    if monitoring.deployment_mode == "containerized":
+        # Containerized deployment (DockerPrometheusService or DockerVictoriaMetricsService)
+        assert isinstance(
+            prometheus_service, (DockerPrometheusService, DockerVictoriaMetricsService)
+        ), f"Expected Docker-based service but got {type(prometheus_service).__name__}"
+
+        # Check if resource limits are specified
+        if hasattr(monitoring, "resource_limits"):
+            prometheus_service.start(
+                experiment_output_dir=experiment_output_dir,
+                local_experiment_dir=local_experiment_dir,
+                experiment_mode=experiment_mode,
+                cpu_limit=monitoring.resource_limits.cpu_limit,
+                memory_limit=monitoring.resource_limits.memory_limit,
+            )
+        else:
+            # Containerized without resource limits
+            prometheus_service.start(
+                experiment_output_dir=experiment_output_dir,
+                local_experiment_dir=local_experiment_dir,
+                experiment_mode=experiment_mode,
+            )
+    else:  # bare_metal
+        # Bare-metal deployment (PrometheusService)
+        assert isinstance(
+            prometheus_service, PrometheusService
+        ), f"Expected PrometheusService but got {type(prometheus_service).__name__}"
+        prometheus_service.start(experiment_output_dir)
+
+    print("-" * 60)
+    print("Services started successfully!")
+    print(f"Experiment: {args.experiment_name}")
+    print(f"Output directory: {experiment_output_dir}")
+    print("-" * 60)
+
+    # Check no_teardown flag
+    no_teardown = getattr(args, "no_teardown", False)
+
+    if no_teardown:
+        print("No teardown mode: Services will keep running.")
+        print("To stop services manually, use the appropriate stop commands.")
+    else:
+        print("Press Enter to stop services and teardown...")
+        input()
+
+        print("\nStopping services...")
+        system_exporters_service.stop()
+        prometheus_service.stop()
+        exporter_service.stop()
+        prometheus_service.reset()
+
+        # print("Syncing Prometheus data...")
+        # sync.copy_prometheus_data(provider, local_experiment_dir, args.node_offset)
+
+        # print("Syncing experiment data...")
+        # sync.rsync_experiment_data(
+        #     provider,
+        #     experiment_output_dir,
+        #     local_experiment_dir,
+        #     node_offset=args.node_offset,
+        # )
+
+        print("-" * 60)
+        print("Experiment completed successfully!")
+        print(f"Local output: {local_experiment_dir}")
+        print("-" * 60)
 
 
 if __name__ == "__main__":
-    hydra_main()
+    main()

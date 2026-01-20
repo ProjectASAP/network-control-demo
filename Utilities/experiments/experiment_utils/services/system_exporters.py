@@ -12,16 +12,20 @@ from experiment_utils.providers.base import InfrastructureProvider
 class SystemExportersService(BaseService):
     """Service for managing system exporters (node_exporter, blackbox_exporter, cadvisor)."""
 
-    def __init__(self, provider: InfrastructureProvider, num_nodes: int):
+    def __init__(
+        self, provider: InfrastructureProvider, num_nodes: int, node_offset: int
+    ):
         """
         Initialize System Exporters service.
 
         Args:
             provider: Infrastructure provider for node communication and management
             num_nodes: Number of nodes to manage
+            node_offset: Starting node index offset
         """
         super().__init__(provider)
         self.num_nodes = num_nodes
+        self.node_offset = node_offset
 
     def start(self, experiment_params: DictConfig, **kwargs) -> None:
         """
@@ -31,8 +35,10 @@ class SystemExportersService(BaseService):
             experiment_params: Experiment configuration parameters (OmegaConf DictConfig)
             **kwargs: Additional configuration
         """
-        # Start exporters on nodes 1 to n
-        for node_idx in range(1, self.num_nodes + 1):
+        # Start exporters on worker nodes
+        for node_idx in range(
+            self.node_offset + 1, self.node_offset + self.num_nodes + 1
+        ):
             local_ip = self.provider.get_node_ip(node_idx)
 
             # Start node_exporter
@@ -60,12 +66,13 @@ class SystemExportersService(BaseService):
                 popen=False,
             )
 
-        # Start blackbox_exporter on controller node (node 0)
+        # Start blackbox_exporter on controller node
+        coordinator_node = self.node_offset
         cmd, cmd_dir = self._get_blackbox_exporter_cmd(
-            local_ip=self.provider.get_node_ip(0)
+            local_ip=self.provider.get_node_ip(coordinator_node)
         )
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=coordinator_node,
             cmd=cmd,
             cmd_dir=cmd_dir,
             nohup=True,
@@ -81,7 +88,9 @@ class SystemExportersService(BaseService):
         """
         cmd = "killall node_exporter; killall blackbox_exporter; docker stop cadvisor; docker rm cadvisor"
         self.provider.execute_command_parallel(
-            node_idxs=list(range(1, self.num_nodes + 1)),
+            node_idxs=list(
+                range(self.node_offset + 1, self.node_offset + self.num_nodes + 1)
+            ),
             cmd=cmd,
             cmd_dir=None,
             nohup=False,

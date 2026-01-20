@@ -136,6 +136,23 @@ def get_timeseries_similarity_scores(
                 exact_timeseries = exact_timeseries_per_key[timeseries_key].values
                 estimate_timeseries = estimate_timeseries_per_key[timeseries_key].values
 
+                if len(exact_timeseries) == 0 or len(estimate_timeseries) == 0:
+                    print(
+                        f"Skipping timeseries {timeseries_key} because exact has {len(exact_timeseries)} data points and estimate has {len(estimate_timeseries)} data points"
+                    )
+                    continue
+
+                if any([v is None for v in exact_timeseries]):
+                    print(
+                        f"Skipping timeseries {timeseries_key} because exact_timeseries has None value"
+                    )
+                    continue
+                if any([v is None for v in estimate_timeseries]):
+                    print(
+                        f"Skipping timeseries {timeseries_key} because estimate_timeseries has None value"
+                    )
+                    continue
+
                 if verbose:
                     print("Key: {}".format(timeseries_key))
                     print("Exact: {}".format(exact_timeseries))
@@ -195,13 +212,10 @@ def main(args):
         config = yaml.safe_load(f)
         query_group_config = config["query_groups"]
 
-    if len(query_group_config) != 1:
-        raise ValueError(
-            f"Expected exactly one query group in {experiment_dir}, but found {len(query_group_config)}"
-        )
-
-    query_group = query_group_config[0]
-    all_queries = query_group["queries"]
+    # Flatten queries from all query groups
+    all_queries = []
+    for query_group in query_group_config:
+        all_queries.extend(query_group["queries"])
     # timeseries_similarity_scores = get_timeseries_similarity_scores(results_across_modes, all_queries, [
     timeseries_similarity_scores = get_timeseries_similarity_scores(
         exact_results,

@@ -2,6 +2,7 @@ import os
 import json
 import yaml
 import argparse
+from loguru import logger
 from jinja2 import Template
 from typing import Tuple, List
 
@@ -125,14 +126,23 @@ def create_source_connection_table(
     profile_id,
     metric_labels: List[str],
     template_dir,
+    metrics_dict=None,
 ):
-    """Create a connection table JSON (source) based on template"""
+    """Create a connection table JSON (source) based on template
+
+    Args:
+        metrics_dict: For optimized source only. Dictionary mapping metric names to their label lists.
+                     e.g., {"cpu_usage": ["instance", "job"], "memory_usage": ["instance", "node"]}
+    """
 
     # Select template based on source type
     if args.source_type == "kafka":
         template_name = "connection_table_kafka.j2"
     elif args.source_type == "prometheus_remote_write":
-        template_name = "connection_table_prometheus_remote_write.j2"
+        if args.prometheus_remote_write_source == "optimized":
+            template_name = "connection_table_prometheus_remote_write_optimized.j2"
+        else:
+            template_name = "connection_table_prometheus_remote_write.j2"
     elif args.source_type == "file":
         template_name = "connection_table_file.j2"
     else:
@@ -208,6 +218,33 @@ def create_source_connection_table(
         template_vars["parallelism"] = args.parallelism
         template_vars["path"] = args.prometheus_path
         template_vars["bind_ip"] = args.prometheus_bind_ip
+
+        # For optimized source, build metrics array from metrics_dict
+        if args.prometheus_remote_write_source == "optimized":
+            if metrics_dict is None:
+                raise ValueError("metrics_dict is required for optimized source")
+
+            # Build metrics array: [{"name": "cpu_usage", "labels": ["instance", "job"]}, ...]
+            metrics_array = [
+                {"name": metric_name, "labels": labels}
+                for metric_name, labels in metrics_dict.items()
+            ]
+            template_vars["metrics_json"] = json.dumps(metrics_array)
+            del template_vars["label_fields"]
+        #    # Create a minimal JSON schema (won't be used by connector but required by API)
+        #    minimal_schema = {
+        #        "type": "object",
+        #        "properties": {
+        #            "metric_name": {"type": "string"},
+        #            "timestamp": {"type": "integer"},
+        #            "value": {"type": "number"},
+        #        },
+        #    }
+        #    template_vars["json_schema"] = (
+        #        json.dumps(minimal_schema, indent=2)
+        #        .replace("\n", "\\n")
+        #        .replace('"', '\\"')
+        #    )
     elif args.source_type == "file":
         template_vars["file_path"] = args.input_file_path
 
@@ -383,7 +420,7 @@ def create_pipeline(
                 missing_params = required_params - set(params.keys())
                 if missing_params:
                     raise ValueError(
-                        f"UDF {udf_name} requires parameters {missing_params} but they were not provided in the configuration"
+                        f"UDF {udf_name} requires parameters {missing_params} but they were not in the configuration"
                     )
 
                 udf_body = udf_template.render(**params)
@@ -413,7 +450,7 @@ def create_pipeline(
     with open(output_path, "w") as f:
         f.write(rendered)
 
-    print(f"Created pipeline at: {output_path}")
+    print(f"Creating pipeline at: {output_path}")
 
     if args.dry_run:
         pipeline_id = "dry_run_pipeline_id"
@@ -431,6 +468,14 @@ def create_pipeline(
     response = json.loads(response)
     pipeline_id = response["id"]
     print(f"Pipeline created with ID: {pipeline_id}")
+
+    # Write pipeline ID to file for retrieval when running with avoid_long_ssh
+    pipeline_id_file = os.path.join(args.output_dir, "pipeline_id.txt")
+    with open(pipeline_id_file, "w") as f:
+        f.write(pipeline_id)
+        f.flush()
+        os.fsync(f.fileno())  # Ensure it's written to disk
+    print(f"Pipeline ID written to: {pipeline_id_file}")
 
 
 def delete_pipelines(args):
@@ -485,14 +530,26 @@ def delete_pipelines(args):
 
 def get_sql_query(
     streaming_aggregation_config: StreamingAggregationConfig,
+    metric_config: MetricConfig,
     sql_template: Template,
     source_table: str,
     sink_table: str,
     source_type: str,
+    use_nested_labels: bool,
+    filter_metric_name: str = None,
 ) -> Tuple[str, str, dict]:
 
+    # NEW: Support both tumbling and sliding windows (Issue #236)
+    window_type = streaming_aggregation_config.windowType
     window_interval = "{} seconds".format(
         streaming_aggregation_config.tumblingWindowSize
+    )
+    window_size = "{} seconds".format(streaming_aggregation_config.windowSize)
+    slide_interval = "{} seconds".format(streaming_aggregation_config.slideInterval)
+
+    logger.info(
+        f"Preparing SQL query for aggregation {streaming_aggregation_config.aggregationId}: "
+        f"windowType={window_type}, windowSize={window_size}, slideInterval={slide_interval}"
     )
 
     agg_function = "{}_{}".format(
@@ -500,13 +557,20 @@ def get_sql_query(
         streaming_aggregation_config.aggregationSubType,
     )
 
+    # Conditionally add "labels." prefix based on source schema
+    label_prefix = "labels." if use_nested_labels else ""
+
     fully_qualified_group_by_columns = [
-        "{}.{}".format("labels", label)
+        "{}{}".format(label_prefix, label)
         for label in streaming_aggregation_config.labels["grouping"].keys
     ]
     fully_qualified_agg_columns = [
-        "{}.{}".format("labels", label)
+        "{}{}".format(label_prefix, label)
         for label in streaming_aggregation_config.labels["aggregated"].keys
+    ]
+    all_labels_agg_columns = [
+        "{}{}".format(label_prefix, label)
+        for label in metric_config.config[streaming_aggregation_config.metric].keys
     ]
 
     # Determine if timestamps should be included as argument
@@ -514,16 +578,27 @@ def get_sql_query(
         streaming_aggregation_config.aggregationType == "multipleincrease"
     )
 
+    # This is just a patch for topk query.
+    if streaming_aggregation_config.aggregationSubType == "topk":
+        key_list = all_labels_agg_columns
+    else:
+        key_list = fully_qualified_agg_columns
+    agg_columns = ", ".join(key_list)
+
     sql_query = sql_template.render(
         aggregation_id=streaming_aggregation_config.aggregationId,
         sink_table=sink_table,
         agg_function=agg_function,
-        agg_columns=", ".join(fully_qualified_agg_columns),
+        agg_columns=agg_columns,
         source_table=source_table,
         group_by_columns=", ".join(fully_qualified_group_by_columns),
         window_interval=window_interval,
+        window_type=window_type,  # NEW: for sliding/tumbling selection
+        window_size=window_size,  # NEW: for HOP window size
+        slide_interval=slide_interval,  # NEW: for HOP slide interval
         include_timestamps_as_argument=include_timestamps_as_argument,
         source_type=source_type,
+        filter_metric_name=filter_metric_name,  # NEW: for multi-metric filtering
     )
 
     return sql_query, agg_function, streaming_aggregation_config.parameters
@@ -578,21 +653,47 @@ def main(args):
     delete_connection_profile(args)
     profile_id = create_connection_profile(args, json_template_dir)
 
-    for metric_name, metric_labels in metric_config.config.items():
-        source_table = get_source_table_name(args, metric_name)
+    # For prometheus_remote_write optimized source, create ONE source for ALL metrics
+    if (
+        args.source_type == "prometheus_remote_write"
+        and args.prometheus_remote_write_source == "optimized"
+    ):
+        # Create single source table for all metrics
+        source_table = f"prometheus_{args.prometheus_base_port}_all_metrics"
         delete_connection_table(args, source_table)
 
-        # Set topic_name based on source type (only needed for Kafka)
-        topic_name = args.input_kafka_topic if args.source_type == "kafka" else None
+        # Build metrics dict: {metric_name: [label1, label2, ...]}
+        metrics_dict = {
+            metric_name: list(metric_labels.keys)
+            for metric_name, metric_labels in metric_config.config.items()
+        }
 
         create_source_connection_table(
             args,
-            topic_name,
+            None,  # topic_name not needed
             source_table,
             profile_id,
-            metric_labels.keys,
+            [],  # metric_labels not used for multi-metric
             json_template_dir,
+            metrics_dict=metrics_dict,
         )
+    else:
+        # For other sources (Kafka, non-optimized prometheus, file), create one source per metric
+        for metric_name, metric_labels in metric_config.config.items():
+            source_table = get_source_table_name(args, metric_name)
+            delete_connection_table(args, source_table)
+
+            # Set topic_name based on source type (only needed for Kafka)
+            topic_name = args.input_kafka_topic if args.source_type == "kafka" else None
+
+            create_source_connection_table(
+                args,
+                topic_name,
+                source_table,
+                profile_id,
+                metric_labels.keys,
+                json_template_dir,
+            )
 
     delete_connection_table(args, sink_table)
     create_sink_connection_table(
@@ -608,16 +709,36 @@ def main(args):
     deltasetaggregator_sql_template = jinja_utils.load_template(
         sql_template_dir, "distinct_windowed_labels_deltasetaggregator.j2"
     )
+    value_only_sql_template = jinja_utils.load_template(
+        sql_template_dir, "single_arg_value_aggregation.j2"
+    )
 
     sql_queries = []
     agg_functions_with_params = []
 
+    # Determine if using single unified source table
+    use_unified_source_table = (
+        args.source_type == "prometheus_remote_write"
+        and args.prometheus_remote_write_source == "optimized"
+    )
+
     for streaming_aggregation_config in streaming_aggregation_configs:
-        source_table = get_source_table_name(args, streaming_aggregation_config.metric)
+        if use_unified_source_table:
+            # Use the unified table for all metrics
+            source_table = f"prometheus_{args.prometheus_base_port}_all_metrics"
+        else:
+            source_table = get_source_table_name(
+                args, streaming_aggregation_config.metric
+            )
 
         is_labels_accumulator: bool = (
             streaming_aggregation_config.aggregationType == "setaggregator"
             or streaming_aggregation_config.aggregationType == "deltasetaggregator"
+        )
+
+        # Value-only aggregations that only take Vec<f64> as a single argument
+        is_value_only_aggregation: bool = (
+            streaming_aggregation_config.aggregationType == "datasketcheskll"
         )
 
         # Choose appropriate SQL template
@@ -625,15 +746,31 @@ def main(args):
             sql_template = deltasetaggregator_sql_template
         elif is_labels_accumulator:
             sql_template = labels_sql_template
+        elif is_value_only_aggregation:
+            sql_template = value_only_sql_template
         else:
             sql_template = aggregation_sql_template
 
+        # Determine if we should use nested labels based on source configuration
+        use_nested_labels = not (
+            args.source_type == "prometheus_remote_write"
+            and args.prometheus_remote_write_source == "optimized"
+        )
+
+        # When using unified source table, pass metric name for WHERE clause filtering
+        filter_metric_name = (
+            streaming_aggregation_config.metric if use_unified_source_table else None
+        )
+
         sql_query, agg_function, parameters = get_sql_query(
             streaming_aggregation_config,
+            metric_config,
             sql_template,
             source_table,
             sink_table,
             args.source_type,
+            use_nested_labels,
+            filter_metric_name,
         )
 
         sql_queries.append(sql_query)
@@ -725,6 +862,13 @@ if __name__ == "__main__":
         type=int,
         required=False,
         help="Pipeline parallelism (number of parallel tasks)",
+    )
+    parser.add_argument(
+        "--prometheus_remote_write_source",
+        type=str,
+        choices=["v1", "optimized"],
+        default="v1",
+        help="Version of Prometheus remote_write source (v1=nested labels, optimized=flattened labels)",
     )
 
     parser.add_argument(

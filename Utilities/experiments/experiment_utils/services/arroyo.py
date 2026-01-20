@@ -3,6 +3,7 @@ Arroyo service management for experiments.
 """
 
 import os
+import time
 import subprocess
 from typing import List, Optional
 
@@ -14,16 +15,23 @@ from experiment_utils.providers.base import InfrastructureProvider
 class ArroyoService(BaseService):
     """Service for managing Arroyo cluster and pipelines."""
 
-    def __init__(self, provider: InfrastructureProvider, use_container: bool):
+    def __init__(
+        self,
+        provider: InfrastructureProvider,
+        use_container: bool,
+        node_offset: int,
+    ):
         """
         Initialize Arroyo service.
 
         Args:
             provider: Infrastructure provider for node communication and management
             use_container: Whether to use containerized deployment
+            node_offset: Starting node index offset
         """
         super().__init__(provider)
         self.use_container = use_container
+        self.node_offset = node_offset
         self.container_name = "sketchdb-arroyo"
         self.active_pipelines = []
 
@@ -59,7 +67,7 @@ class ArroyoService(BaseService):
         cmd = "python3 delete_pipeline.py --all_pipelines"
         cmd_dir = os.path.join(self.provider.get_home_dir(), "code", "ArroyoSketch")
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=cmd_dir,
             nohup=False,
@@ -93,6 +101,8 @@ class ArroyoService(BaseService):
         remote_write_path: str,
         parallelism: int,
         use_kafka_ingest: bool = False,
+        enable_optimized_remote_write: bool = False,
+        avoid_long_ssh: bool = False,
     ) -> str:
         """
         Run ArroyoSketch pipeline.
@@ -108,6 +118,8 @@ class ArroyoService(BaseService):
             remote_write_base_port: Base port for Prometheus remote write endpoint
             remote_write_path: Path for Prometheus remote write endpoint
             parallelism: Pipeline parallelism
+            enable_optimized_remote_write: If True, use optimized Prometheus remote_write source (10-20x faster)
+            avoid_long_ssh: If True, run command in background to avoid long SSH connections
 
         Returns:
             Pipeline ID
@@ -130,6 +142,7 @@ class ArroyoService(BaseService):
                 arroyosketch_output_dir,
             )
         else:
+            # Build base command for Prometheus remote write
             cmd = "python run_arroyosketch.py --source_type prometheus_remote_write --prometheus_bind_ip {} --prometheus_base_port {} --prometheus_path {} --parallelism {} --output_format {} --pipeline_name {} --config_file_path {}/streaming_config.yaml --output_kafka_topic {} --output_dir {}".format(
                 remote_write_ip,
                 remote_write_base_port,
@@ -141,27 +154,51 @@ class ArroyoService(BaseService):
                 constants.FLINK_OUTPUT_TOPIC,
                 arroyosketch_output_dir,
             )
+            # Add optimized source flag if enabled
+            if enable_optimized_remote_write:
+                cmd += " --prometheus_remote_write_source optimized"
         cmd_dir = os.path.join(constants.CLOUDLAB_HOME_DIR, "code", "ArroyoSketch")
 
-        ret = self.provider.execute_command(
-            node_idx=0,
-            cmd=cmd,
-            cmd_dir=cmd_dir,
-            nohup=False,
-            popen=False,
-        )
-        assert isinstance(ret, subprocess.CompletedProcess)
-
-        pipeline_id = None
-        for line in ret.stdout.split("\n"):
-            if "Pipeline created with ID" in line:
-                pipeline_id = line.strip().split(":")[-1].strip()
-                break
-
-        if pipeline_id is None:
-            raise RuntimeError(
-                "Failed to retrieve pipeline ID from Arroyo job submission"
+        if avoid_long_ssh:
+            # Run in background to avoid long SSH connection
+            cmd = "mkdir -p {}; {}".format(arroyosketch_output_dir, cmd)
+            cmd += " > {}/arroyosketch.out 2>&1 < /dev/null &".format(
+                arroyosketch_output_dir
             )
+            self.provider.execute_command(
+                node_idx=self.node_offset,
+                cmd=cmd,
+                cmd_dir=cmd_dir,
+                nohup=True,
+                popen=False,
+            )
+            # Poll until process finishes
+            self.wait_for_run_arroyosketch()
+
+            # Read pipeline ID from file
+            pipeline_id = self.read_pipeline_id_from_file(arroyosketch_output_dir)
+        else:
+            # Traditional synchronous execution
+            ret = self.provider.execute_command(
+                node_idx=self.node_offset,
+                cmd=cmd,
+                cmd_dir=cmd_dir,
+                nohup=False,
+                popen=False,
+            )
+            assert isinstance(ret, subprocess.CompletedProcess)
+
+            # Parse pipeline ID from stdout
+            pipeline_id = None
+            for line in ret.stdout.split("\n"):
+                if "Pipeline created with ID" in line:
+                    pipeline_id = line.strip().split(":")[-1].strip()
+                    break
+
+            if pipeline_id is None:
+                raise RuntimeError(
+                    "Failed to retrieve pipeline ID from Arroyo job submission"
+                )
 
         self.active_pipelines.append(pipeline_id)
         return pipeline_id
@@ -176,7 +213,7 @@ class ArroyoService(BaseService):
         cmd = "python3 delete_pipeline.py --pipeline_id {}".format(pipeline_id)
         cmd_dir = os.path.join(constants.CLOUDLAB_HOME_DIR, "code", "ArroyoSketch")
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=cmd_dir,
             nohup=False,
@@ -186,6 +223,70 @@ class ArroyoService(BaseService):
 
         if pipeline_id in self.active_pipelines:
             self.active_pipelines.remove(pipeline_id)
+
+    def wait_for_run_arroyosketch(self, polling_interval: int = 10) -> None:
+        """
+        Wait for run_arroyosketch.py process to complete.
+
+        Args:
+            polling_interval: Seconds between polling checks
+        """
+        print("Waiting for run_arroyosketch.py to complete...")
+        while True:
+            cmd = "pgrep -f run_arroyosketch.py"
+            ret = self.provider.execute_command(
+                node_idx=self.node_offset,
+                cmd=cmd,
+                cmd_dir=None,
+                nohup=False,
+                popen=False,
+                ignore_errors=True,
+            )
+            assert isinstance(ret, subprocess.CompletedProcess)
+            if ret.stdout.strip() == "":
+                print("run_arroyosketch.py has completed")
+                break
+            print(
+                f"run_arroyosketch.py is still running. Will check again in {polling_interval} seconds."
+            )
+            time.sleep(polling_interval)
+
+    def read_pipeline_id_from_file(self, arroyosketch_output_dir: str) -> str:
+        """
+        Read pipeline ID from file written by run_arroyosketch.py.
+
+        Args:
+            arroyosketch_output_dir: Directory containing pipeline_id.txt
+
+        Returns:
+            Pipeline ID string
+
+        Raises:
+            RuntimeError: If file doesn't exist or is empty
+        """
+        pipeline_id_file = os.path.join(arroyosketch_output_dir, "pipeline_id.txt")
+
+        cmd = f"cat {pipeline_id_file}"
+        ret = self.provider.execute_command(
+            node_idx=self.node_offset,
+            cmd=cmd,
+            cmd_dir=None,
+            nohup=False,
+            popen=False,
+            ignore_errors=True,
+        )
+
+        assert isinstance(ret, subprocess.CompletedProcess)
+
+        if ret.returncode != 0 or not ret.stdout.strip():
+            raise RuntimeError(
+                f"Failed to read pipeline ID from {pipeline_id_file}. "
+                f"File may not exist or is empty. Return code: {ret.returncode}"
+            )
+
+        pipeline_id = ret.stdout.strip()
+        print(f"Retrieved pipeline ID from file: {pipeline_id}")
+        return pipeline_id
 
     def is_healthy(self) -> bool:
         """
@@ -214,7 +315,7 @@ class ArroyoService(BaseService):
         )
 
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -237,7 +338,7 @@ class ArroyoService(BaseService):
         cmd = f"docker run --detach --name {self.container_name} --network host -v {arroyo_config_file_path}:/config.yaml arroyo-full --config /config.yaml cluster > {arroyo_output_file} 2>&1"
 
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -252,7 +353,7 @@ class ArroyoService(BaseService):
         cmd = "pkill -SIGKILL -f 'arroyo.*cluster'"
 
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -262,7 +363,7 @@ class ArroyoService(BaseService):
         cmd = "pkill -SIGKILL -f 'arroyo.*worker'"
 
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -276,7 +377,7 @@ class ArroyoService(BaseService):
             # Stop and remove container
             cmd = f"docker stop {self.container_name}; docker rm {self.container_name}"
             self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=None,
                 nohup=False,
@@ -296,7 +397,7 @@ class ArroyoService(BaseService):
         )
 
         result = self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -318,7 +419,7 @@ class ArroyoService(BaseService):
             # Get container PID
             cmd = f"docker inspect --format='{{{{.State.Pid}}}}' {self.container_name}"
             result = self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=None,
                 nohup=False,
@@ -338,7 +439,7 @@ class ArroyoService(BaseService):
         try:
             cmd = "pgrep -f 'arroyo.*cluster'"
             result = self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=None,
                 nohup=False,
@@ -356,7 +457,7 @@ class ArroyoService(BaseService):
             # Check if container is running
             cmd = f"docker inspect -f '{{{{.State.Running}}}}' {self.container_name}"
             result = self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=None,
                 nohup=False,

@@ -16,13 +16,14 @@ pub fn map_statistic_to_precompute_operator(
             if treatment_type == QueryTreatmentType::Exact {
                 Err("Statistic Quantile cannot be computed exactly".to_string())
             } else {
-                // Ok(("DatasketchesKLL".to_string(), "".to_string()))
-                Ok(("HydraKLL".to_string(), "".to_string()))
+                Ok(("DatasketchesKLL".to_string(), "".to_string()))
+                //Ok(("HydraKLL".to_string(), "".to_string()))
             }
         }
         Statistic::Min | Statistic::Max => {
             if treatment_type == QueryTreatmentType::Approximate {
                 Ok(("DatasketchesKLL".to_string(), "".to_string()))
+                //Ok(("HydraKLL".to_string(), "".to_string()))
             } else {
                 Ok((
                     "MultipleMinMax".to_string(),
@@ -68,6 +69,10 @@ pub fn does_precompute_operator_support_subpopulations(
 
         // CountMinSketch supports subpopulations only for certain statistics
         "CountMinSketch" => matches!(statistic, Statistic::Sum | Statistic::Count),
+
+        // "CountMinSketchWithHeap" is only supported for Topk
+        // Other usages of CountMinSketchWithHeap will fall through.
+        "CountMinSketchWithHeap" if matches!(statistic, Statistic::Topk) => false,
 
         // Default: not supported
         _ => panic!("Unexpected precompute operator: {}", precompute_operator),
@@ -121,7 +126,8 @@ mod tests {
             QueryTreatmentType::Approximate,
         )
         .unwrap();
-        assert_eq!(result, ("KLL".to_string(), "".to_string()));
+        assert_eq!(result, ("DatasketchesKLL".to_string(), "".to_string()));
+        //assert_eq!(result, ("HydraKLL".to_string(), "".to_string()));
     }
 
     #[test]
@@ -132,10 +138,16 @@ mod tests {
             "MultipleSum"
         ));
 
-        // Test KLL doesn't support subpopulations
+        // Test DatasketchesKLL does not support subpopulations
         assert!(!does_precompute_operator_support_subpopulations(
             Statistic::Quantile,
-            "KLL"
+            "DatasketchesKLL"
+        ));
+
+        // Test HydraKLL supports subpopulations
+        assert!(does_precompute_operator_support_subpopulations(
+            Statistic::Quantile,
+            "HydraKLL"
         ));
 
         // Test CountMinSketch with valid statistic

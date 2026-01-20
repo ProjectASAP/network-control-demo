@@ -40,6 +40,93 @@ def read_exporter_config(experiment_params: DictConfig) -> Tuple[Optional[Dict],
         if missing_keys:
             return None, f"Missing keys in avalanche section: {missing_keys}"
 
+    if "cluster_data_exporter" in exporters_config.exporter_list:
+        # Validate cluster_data_exporter configuration
+        cde_config = exporters_config.exporter_list.cluster_data_exporter
+
+        # Check required keys
+        required_keys = ["provider", "port"]
+        missing_keys = [key for key in required_keys if key not in cde_config]
+        if missing_keys:
+            return (
+                None,
+                f"Missing keys in cluster_data_exporter section: {missing_keys}",
+            )
+
+        # Validate provider
+        provider = cde_config.provider
+        if provider not in ["google", "alibaba"]:
+            return (
+                None,
+                f"cluster_data_exporter provider must be 'google' or 'alibaba', got '{provider}'",
+            )
+
+        # Provider-specific validation
+        if provider == "google":
+            # Validate Google-specific configuration
+            if "metrics" not in cde_config:
+                return (
+                    None,
+                    "cluster_data_exporter with Google provider requires 'metrics'",
+                )
+            if "parts_mode" not in cde_config:
+                return (
+                    None,
+                    "cluster_data_exporter with Google provider requires 'parts_mode'",
+                )
+
+            parts_mode = cde_config.parts_mode
+            if parts_mode not in ["all-parts", "part-index"]:
+                return (
+                    None,
+                    f"cluster_data_exporter parts_mode must be 'all-parts' or 'part-index', got '{parts_mode}'",
+                )
+
+            if parts_mode == "part-index" and "part_index" not in cde_config:
+                return (
+                    None,
+                    "cluster_data_exporter with parts_mode='part-index' requires 'part_index'",
+                )
+
+        elif provider == "alibaba":
+            # Validate Alibaba-specific configuration
+            required_alibaba_keys = ["data_type", "data_year", "parts_mode"]
+            missing_alibaba_keys = [
+                key for key in required_alibaba_keys if key not in cde_config
+            ]
+            if missing_alibaba_keys:
+                return (
+                    None,
+                    f"cluster_data_exporter with Alibaba provider missing keys: {missing_alibaba_keys}",
+                )
+
+            data_type = cde_config.data_type
+            if data_type not in ["node", "msresource"]:
+                return (
+                    None,
+                    f"cluster_data_exporter data_type must be 'node' or 'msresource', got '{data_type}'",
+                )
+
+            data_year = cde_config.data_year
+            if data_year not in [2021, 2022]:
+                return (
+                    None,
+                    f"cluster_data_exporter data_year must be 2021 or 2022, got {data_year}",
+                )
+
+            parts_mode = cde_config.parts_mode
+            if parts_mode not in ["all-parts", "part-index"]:
+                return (
+                    None,
+                    f"cluster_data_exporter parts_mode must be 'all-parts' or 'part-index', got '{parts_mode}'",
+                )
+
+            if parts_mode == "part-index" and "part_index" not in cde_config:
+                return (
+                    None,
+                    "cluster_data_exporter with parts_mode='part-index' requires 'part_index'",
+                )
+
     return exporters_config, ""
 
 
@@ -50,14 +137,16 @@ class GeneratePrometheusArgs:
         self,
         num_nodes,
         local_experiment_dir,
-        output_file,
+        output_dir,
         prometheus_config,
         prometheus_client_ip,
         node_ip_prefix,
+        node_offset,
     ):
         self.num_nodes = num_nodes
-        self.output_file = output_file
-        # self.copy_to_dir = os.path.join(local_experiment_dir, "prometheus_config")
+        self.node_offset = node_offset
+        self.output_dir = output_dir
+        # self.copy_to_dir = os.path.join(local_experiment_dir, constants.PROMETHEUS_CONFIG_DIR)
         self.copy_to_dir = None
         self.rule_files = None
         self.remote_write_url = None
@@ -88,6 +177,7 @@ def call_generate_prometheus_config(
         sketchdb_experiment_name: Optional name to check for remote write setup
     """
     import generate_prometheus_config
+    import generate_victoriametrics_config
 
     # Set up remote write if this is a SketchDB experiment
     if experiment_mode == sketchdb_experiment_name and sketchdb_experiment_name:
@@ -109,6 +199,11 @@ def call_generate_prometheus_config(
 
     # Call the function directly instead of subprocess
     generate_prometheus_config.main(args, OmegaConf.to_container(cfg.experiment_params))
+
+    # Also generate VictoriaMetrics configs (will be used if tool=victoriametrics)
+    generate_victoriametrics_config.main(
+        args, OmegaConf.to_container(cfg.experiment_params)
+    )
 
 
 def get_metrics_to_remote_write(experiment_params: DictConfig):

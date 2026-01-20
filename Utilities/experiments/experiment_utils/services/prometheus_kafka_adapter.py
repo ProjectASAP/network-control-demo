@@ -13,14 +13,16 @@ from experiment_utils.providers.base import InfrastructureProvider
 class PrometheusKafkaAdapterService(BaseService):
     """Service for managing the Prometheus Kafka adapter."""
 
-    def __init__(self, provider: InfrastructureProvider):
+    def __init__(self, provider: InfrastructureProvider, node_offset: int):
         """
         Initialize Prometheus Kafka Adapter service.
 
         Args:
             provider: Infrastructure provider for node communication and management
+            node_offset: Starting node index offset
         """
         super().__init__(provider)
+        self.node_offset = node_offset
 
     def start(self, flink_input_format: str, **kwargs) -> None:
         """
@@ -42,7 +44,7 @@ class PrometheusKafkaAdapterService(BaseService):
         cmd_dir = os.path.join(installed_dir, "installation")
 
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=cmd_dir,
             nohup=True,
@@ -58,7 +60,7 @@ class PrometheusKafkaAdapterService(BaseService):
         """
         cmd = "pkill -f prometheus-kafka-adapter-musl"
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=None,
             nohup=False,
@@ -76,7 +78,7 @@ class PrometheusKafkaAdapterService(BaseService):
         try:
             cmd = "pgrep -f prometheus-kafka-adapter-musl"
             result = self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=None,
                 nohup=False,

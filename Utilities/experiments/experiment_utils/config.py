@@ -10,6 +10,8 @@ from typing import List, Tuple
 
 from omegaconf import DictConfig, OmegaConf
 
+import constants
+
 
 def validate_basic_config(
     cfg: DictConfig,
@@ -53,10 +55,49 @@ def validate_basic_config(
         raise ValueError(error_msg)
 
 
-def validate_experiment_config(experiment_params: DictConfig):
+def validate_experiment_config(
+    experiment_params: DictConfig, require_queries: bool = True
+):
     """
     Validate the loaded experiment configuration structure.
+
+    Args:
+        experiment_params: The experiment parameters configuration
+        require_queries: Whether to require query_groups to be non-empty (default: True)
     """
+    # Check for skip_querying mode
+    skip_querying = experiment_params.get("skip_querying", False)
+
+    if skip_querying:
+        # Require experiment_duration
+        if not hasattr(experiment_params, "experiment_duration"):
+            raise ValueError(
+                "experiment_duration must be specified when skip_querying=True. "
+                "Add it to your experiment config or as CLI override: experiment_duration=300"
+            )
+
+        # Validate no experiment mode has query_prometheus_too=True
+        if hasattr(experiment_params, "experiment") and experiment_params.experiment:
+            for mode in experiment_params.experiment:
+                if mode.get("query_prometheus_too", False):
+                    raise ValueError(
+                        "query_prometheus_too must be False when skip_querying=True. "
+                        "Cannot query Prometheus when queries are skipped."
+                    )
+
+        # Warn if query_groups is present
+        if (
+            hasattr(experiment_params, "query_groups")
+            and experiment_params.query_groups
+        ):
+            print("-" * 60)
+            print("WARNING: query_groups is present but will be IGNORED")
+            print("         skip_querying=True means no queries will be executed")
+            print("-" * 60)
+
+        # Don't require queries for validation
+        require_queries = False
+
     # Check for required sections
     required_sections = ["query_groups", "exporters", "metrics"]
     missing_sections = []
@@ -73,8 +114,8 @@ def validate_experiment_config(experiment_params: DictConfig):
         error_msg += "- metrics: Metric definitions\n"
         raise ValueError(error_msg)
 
-    # Validate query_groups structure
-    if len(experiment_params.query_groups) == 0:
+    # Validate query_groups structure (conditionally required)
+    if require_queries and len(experiment_params.query_groups) == 0:
         raise ValueError(
             "At least one query group must be defined in experiment config"
         )
@@ -130,44 +171,76 @@ def validate_experiment_config(experiment_params: DictConfig):
                 num_labels_in_metric = len(non_system_labels)
 
                 if num_labels_in_metric != num_labels_in_config:
-                    # NOTE: IGNORING ERROR FOR NOW
-                    pass
-                    # raise ValueError(
-                    #     f"Metric {i} ('{metric.metric}'): fake_exporter num_labels mismatch. "
-                    #     f"Exporter config specifies num_labels={num_labels_in_config}, "
-                    #     f"but metric has {num_labels_in_metric} non-system labels {non_system_labels}. "
-                    #     f"The num_labels in fake_exporter config should match the count of labels "
-                    #     f"excluding 'instance' and 'job'."
-                    # )
+                    raise ValueError(
+                        f"Metric {i} ('{metric.metric}'): fake_exporter num_labels mismatch. "
+                        f"Exporter config specifies num_labels={num_labels_in_config}, "
+                        f"but metric has {num_labels_in_metric} non-system labels {non_system_labels}. "
+                        f"The num_labels in fake_exporter config should match the count of labels "
+                        f"excluding 'instance' and 'job'."
+                    )
 
 
 def get_minimum_experiment_running_time(experiment_params: DictConfig) -> int:
-    """Calculate minimum experiment running time from query groups."""
+    """Calculate minimum experiment running time from query groups or experiment_duration."""
+    # Check for skip_querying mode
+    skip_querying = experiment_params.get("skip_querying", False)
+
+    if skip_querying:
+        # Return experiment_duration directly
+        if not hasattr(experiment_params, "experiment_duration"):
+            raise ValueError(
+                "experiment_duration must be specified when skip_querying=True"
+            )
+        experiment_duration = experiment_params.experiment_duration
+        print("Skip querying mode enabled")
+        print("Experiment duration:", experiment_duration)
+        return experiment_duration
+
+    # Original logic for calculating from query_groups
     query_groups = experiment_params.query_groups
-    if len(query_groups) != 1:
-        raise ValueError("Only one query group is supported for now")
+    # if len(query_groups) != 1:
+    #    raise ValueError("Only one query group is supported for now")
 
-    starting_delay = query_groups[0].client_options.starting_delay
-    repetitions = query_groups[0].client_options.repetitions
-    reptition_delay = query_groups[0].repetition_delay
+    experiment_running_time = 0
+    for query_group in query_groups:
+        query_group_starting_delay = query_group.client_options.starting_delay
+        query_group_repetitions = query_group.client_options.repetitions
+        query_group_reptition_delay = query_group.repetition_delay
 
-    experiment_running_time = starting_delay + repetitions * reptition_delay
+        query_group_running_time = (
+            query_group_starting_delay
+            + query_group_repetitions * query_group_reptition_delay
+        )
+        experiment_running_time = max(experiment_running_time, query_group_running_time)
 
-    print("Starting delay:", starting_delay)
-    print("Repetitions:", repetitions)
-    print("Repetition delay:", reptition_delay)
+    # print("Starting delay:", starting_delay)
+    # print("Repetitions:", repetitions)
+    # print("Repetition delay:", reptition_delay)
     print("Total experiment running time:", experiment_running_time)
 
     return experiment_running_time
 
 
 def generate_controller_client_configs(
-    experiment_params: DictConfig, local_experiment_dir: str
+    experiment_params: DictConfig,
+    local_experiment_dir: str,
+    aggregate_cleanup: DictConfig = None,
+    sketch_parameters: DictConfig = None,
 ) -> Tuple[List[str], List[str]]:
     """Generate controller client configurations from experiment parameters."""
     # experiment_params is already loaded by Hydra
     experiment_config = OmegaConf.to_container(experiment_params, resolve=True)
     assert experiment_config is not None and isinstance(experiment_config, dict)
+
+    # Add aggregate_cleanup configuration if provided
+    if aggregate_cleanup is not None:
+        cleanup_config = OmegaConf.to_container(aggregate_cleanup, resolve=True)
+        experiment_config["aggregate_cleanup"] = cleanup_config
+
+    # Add sketch_parameters configuration if provided
+    if sketch_parameters is not None:
+        sketch_params_config = OmegaConf.to_container(sketch_parameters, resolve=True)
+        experiment_config["sketch_parameters"] = sketch_params_config
 
     output_dir = os.path.join(local_experiment_dir, "controller_client_configs")
     os.makedirs(output_dir, exist_ok=True)
@@ -190,7 +263,7 @@ def generate_controller_client_configs(
         ]
 
         if (
-            experiment_mode["mode"] == "sketchdb"
+            experiment_mode["mode"] == constants.SKETCHDB_EXPERIMENT_NAME
             and "query_prometheus_too" in experiment_mode
             and experiment_mode["query_prometheus_too"]
         ):
@@ -295,6 +368,7 @@ class Args:
 
         # CloudLab configuration
         self.num_nodes = cfg.cloudlab.num_nodes
+        self.node_offset = cfg.cloudlab.node_offset
         self.cloudlab_username = cfg.cloudlab.username
         self.hostname_suffix = cfg.cloudlab.hostname_suffix
 
@@ -310,6 +384,9 @@ class Args:
         # Throughput monitoring options
         self.throughput_arroyo = cfg.throughput.arroyo
         self.throughput_prometheus = cfg.throughput.prometheus
+
+        # Health check monitoring options
+        self.health_check_prometheus = cfg.health_check.prometheus
 
         # Manual mode options
         self.manual_query_engine = cfg.manual.query_engine
@@ -339,8 +416,19 @@ class Args:
         # Query engine language
         self.query_engine_language = cfg.query_engine_language
 
+        # Query language (SQL vs PROMQL) - only used by Rust query engine
+        self.query_language = cfg.query_language
+
         # Query engine options
         self.dump_precomputes = cfg.query_engine.dump_precomputes
+        self.lock_strategy = cfg.query_engine.lock_strategy
+
+        # Controller configuration
+        self.controller_punting = cfg.controller.punting
+
+        # Aggregate cleanup configuration
+        self.aggregate_cleanup_enabled = cfg.aggregate_cleanup.enabled
+        self.use_read_count_policy = cfg.aggregate_cleanup.use_read_count_policy
 
         # Container configuration
         self.use_container_query_engine = cfg.use_container.query_engine
@@ -351,6 +439,32 @@ class Args:
 
         # Prometheus client configuration
         self.prometheus_client_parallel = cfg.prometheus_client.parallel
+
+    def get_node_range(self, include_coordinator: bool = True) -> list:
+        """
+        Get the range of node indices for this experiment.
+
+        Args:
+            include_coordinator: If True, includes node0/coordinator in the range
+
+        Returns:
+            List of node indices starting from node_offset
+
+        Example:
+            With num_nodes=2 and node_offset=10:
+            - get_node_range(True) returns [10, 11, 12] (coordinator + 2 workers)
+            - get_node_range(False) returns [11, 12] (2 workers only)
+        """
+        if include_coordinator:
+            return list(range(self.node_offset, self.node_offset + self.num_nodes + 1))
+        else:
+            return list(
+                range(self.node_offset + 1, self.node_offset + self.num_nodes + 1)
+            )
+
+    def get_coordinator_node(self) -> int:
+        """Get the coordinator node index (first node in the range)."""
+        return self.node_offset
 
 
 def validate_config(cfg: DictConfig, script_name: str = "experiment_run_e2e"):
@@ -387,18 +501,57 @@ def validate_config(cfg: DictConfig, script_name: str = "experiment_run_e2e"):
                 "--no_teardown can only be used with a single experiment mode"
             )
 
+    # Validate aggregate cleanup configuration
+    if (
+        hasattr(cfg, "aggregate_cleanup")
+        and hasattr(cfg.aggregate_cleanup, "use_read_count_policy")
+        and cfg.aggregate_cleanup.use_read_count_policy
+    ):
+        if not cfg.aggregate_cleanup.enabled:
+            raise ValueError(
+                "aggregate_cleanup.use_read_count_policy requires aggregate_cleanup.enabled to be True. "
+                "Either set aggregate_cleanup.enabled=True or set aggregate_cleanup.use_read_count_policy=False"
+            )
+
+    # Validate Python query engine doesn't use read_count_policy
+    if (
+        hasattr(cfg, "query_engine_language")
+        and cfg.query_engine_language == "python"
+        and hasattr(cfg, "aggregate_cleanup")
+        and hasattr(cfg.aggregate_cleanup, "use_read_count_policy")
+        and cfg.aggregate_cleanup.use_read_count_policy
+    ):
+        raise ValueError(
+            "aggregate_cleanup.use_read_count_policy is not supported by the Python query engine. "
+            "Either use query_engine_language='rust' or set aggregate_cleanup.use_read_count_policy=False"
+        )
+
 
 def generate_and_copy_prometheus_config(
     num_nodes_in_experiment,
     local_experiment_dir,
-    prometheus_config_output_file,
+    prometheus_config_output_dir,
     experiment_mode,
     cfg,
     prometheus_config,
-    sketchdb_experiment_name: str = "sketchdb",
+    node_offset: int,
+    sketchdb_experiment_name: str,
     provider=None,
 ):
-    """Generate and copy Prometheus configuration for experiment."""
+    """
+    Generate and copy Prometheus configuration for experiment.
+
+    Args:
+        num_nodes_in_experiment: Number of nodes in experiment
+        local_experiment_dir: Local experiment directory
+        prometheus_config_output_dir: Output directory for prometheus config files
+        experiment_mode: Experiment mode
+        cfg: Configuration object
+        prometheus_config: Prometheus configuration
+        sketchdb_experiment_name: SketchDB experiment name
+        provider: Infrastructure provider
+        node_offset: Starting node index offset
+    """
     # Import here to avoid circular imports
     import experiment_utils
 
@@ -406,17 +559,18 @@ def generate_and_copy_prometheus_config(
     if provider is None:
         raise ValueError("provider parameter is required for IP configuration")
 
-    prometheus_client_ip = provider.get_node_ip(0)
+    prometheus_client_ip = provider.get_node_ip(node_offset)
     # Extract IP prefix from first node (e.g., "10.10.1.1" -> "10.10.1")
     node_ip_prefix = ".".join(prometheus_client_ip.split(".")[:-1])
 
     args = experiment_utils.GeneratePrometheusArgs(
         num_nodes_in_experiment,
         local_experiment_dir,
-        prometheus_config_output_file,
+        prometheus_config_output_dir,
         prometheus_config,
         prometheus_client_ip,
         node_ip_prefix,
+        node_offset,
     )
 
     experiment_utils.call_generate_prometheus_config(

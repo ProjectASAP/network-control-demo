@@ -35,9 +35,7 @@ fn deltasetaggregator_{{aggregation_id}}_(concatenated_labels: Vec<&str>) -> Opt
     // Collect current window's unique label combinations
     let mut current_labels = HashSet::new();
     for label_string in concatenated_labels {
-        if !label_string.is_empty() {
-            current_labels.insert(label_string.to_string());
-        }
+        current_labels.insert(label_string.to_string());
     }
 
     // Get previous window's labels and update state

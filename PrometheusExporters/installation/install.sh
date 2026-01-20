@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 set -e
 
@@ -25,6 +25,13 @@ echo "Building Fake Exporter Python..."
 echo "Building Fake Exporter Rust..."
 (
     cd "$PROMETHEUS_EXPORTERS_DIR/fake_exporter/fake_exporter_rust/fake_exporter/installation"
+    ./install.sh
+)
+
+# Build fake kafka exporter
+echo "Building Fake Kafka Exporter..."
+(
+    cd "$PROMETHEUS_EXPORTERS_DIR/fake_kafka_exporter/installation"
     ./install.sh
 )
 

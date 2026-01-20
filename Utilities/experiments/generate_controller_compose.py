@@ -17,6 +17,7 @@ def generate_compose_file(
     output_dir: str,
     prometheus_scrape_interval: int,
     streaming_engine: str,
+    punting: bool,
 ):
     """Generate docker-compose.yml from template with provided variables."""
 
@@ -39,6 +40,7 @@ def generate_compose_file(
         "output_dir": output_dir,
         "prometheus_scrape_interval": prometheus_scrape_interval,
         "streaming_engine": streaming_engine,
+        "punting": punting,
     }
 
     # Render the template
@@ -110,6 +112,11 @@ def main():
         choices=["flink", "arroyo"],
         help="Streaming engine",
     )
+    parser.add_argument(
+        "--punting",
+        action="store_true",
+        help="Enable query punting based on performance heuristics",
+    )
 
     args = parser.parse_args()
 
@@ -122,6 +129,7 @@ def main():
         output_dir=args.controller_output_dir,
         prometheus_scrape_interval=args.prometheus_scrape_interval,
         streaming_engine=args.streaming_engine,
+        punting=args.punting,
     )
 
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/shared_utils.sh"
 

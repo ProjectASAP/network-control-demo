@@ -474,6 +474,17 @@ impl PrecomputedOutput {
                 .map_err(|e| format!("Failed to deserialize CountMinSketchAccumulator: {e}"))?;
                 Ok(Box::new(accumulator))
             }
+            "CountMinSketchWithHeap" => {
+                let accumulator = if streaming_engine == "flink" {
+                    CountMinSketchWithHeapAccumulator::deserialize_from_bytes(buffer)
+                } else {
+                    CountMinSketchWithHeapAccumulator::deserialize_from_bytes_arroyo(buffer)
+                }
+                .map_err(|e| {
+                    format!("Failed to deserialize CountMinSketchWithHeapAccumulator: {e}")
+                })?;
+                Ok(Box::new(accumulator))
+            }
             "DatasketchesKLL" => {
                 let accumulator = if streaming_engine == "flink" {
                     DatasketchesKLLAccumulator::deserialize_from_bytes(buffer)
@@ -483,6 +494,15 @@ impl PrecomputedOutput {
                 .map_err(|e| format!("Failed to deserialize DatasketchesKLLAccumulator: {e}"))?;
                 Ok(Box::new(accumulator))
             }
+            "HydraKLL" => {
+                let accumulator = if streaming_engine == "flink" {
+                    return Err("HydraKLL not supported for Flink".into());
+                } else {
+                    HydraKllSketchAccumulator::deserialize_from_bytes_arroyo(buffer)
+                }
+                .map_err(|e| format!("Failed to deserialize HydraKllSketchAccumulator: {e}"))?;
+                Ok(Box::new(accumulator))
+            }
             "DeltaSetAggregator" => {
                 let accumulator = if streaming_engine == "flink" {
                     DeltaSetAggregatorAccumulator::deserialize_from_bytes(buffer)
@@ -490,15 +510,6 @@ impl PrecomputedOutput {
                     DeltaSetAggregatorAccumulator::deserialize_from_bytes_arroyo(buffer)
                 }
                 .map_err(|e| format!("Failed to deserialize DeltaSetAggregatorAccumulator: {e}"))?;
-                Ok(Box::new(accumulator))
-            }
-            "HydraKLL" => {
-                let accumulator = if streaming_engine == "flink" {
-                    HydraKllSketchAccumulator::deserialize_from_bytes_arroyo(buffer)
-                } else {
-                    HydraKllSketchAccumulator::deserialize_from_bytes_arroyo(buffer)
-                }
-                .map_err(|e| format!("Failed to deserialize HydraKllSketchAccumulator: {e}"))?;
                 Ok(Box::new(accumulator))
             }
             _ => Err(format!("Unknown precompute type: {precompute_type}").into()),

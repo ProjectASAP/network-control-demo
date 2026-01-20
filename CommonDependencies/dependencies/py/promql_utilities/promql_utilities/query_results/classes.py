@@ -18,13 +18,17 @@ class QueryResult:
         result: Optional[List[Dict]],
         latency: Optional[float],
         cumulative_latency: Optional[float],
+        query_group_idx: int = 0,
+        raw_text_result: Optional[str] = None,
     ):
         self.server_name = server_name
         self.query = query
         self.query_idx = query_idx
         self.repetition_idx = repetition_idx
+        self.query_group_idx = query_group_idx
         self.latency = latency
         self.cumulative_latency = cumulative_latency
+        self.raw_text_result = raw_text_result
 
         self.result: Optional[Dict[frozenset, float]] = None
         if result:
@@ -80,11 +84,13 @@ class LatencyResult:
         repetition_idx: int,
         latency: Optional[float],
         cumulative_latency: Optional[float],
+        query_group_idx: int = 0,
     ):
         self.server_name = server_name
         self.query = query
         self.query_idx = query_idx
         self.repetition_idx = repetition_idx
+        self.query_group_idx = query_group_idx
         self.latency = latency
         self.cumulative_latency = cumulative_latency
 
@@ -130,6 +136,7 @@ class LatencyResultAcrossTime:
                 repetition_idx=query_result.repetition_idx,
                 latency=query_result.latency,
                 cumulative_latency=query_result.cumulative_latency,
+                query_group_idx=query_result.query_group_idx,
             )
             latency_result_across_time.add_latency_result(latency_result)
 

@@ -5,3 +5,6 @@ numpy
 loguru
 requests
 py-spy
+typing_extensions==4.13.2
+jinja2
+types-jinja2

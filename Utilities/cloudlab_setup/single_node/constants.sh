@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 #OPTIONS="-o StrictHostKeyChecking=no"
 OPTIONS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"

@@ -204,6 +204,121 @@ These parameters must be provided for all experiment scripts:
 - **Example**: `"10s"`
 - **Usage**: Controls pre-computed metric updates
 
+---
+
+## Monitoring Configuration
+
+### `monitoring.tool` (string, required in experiment_type configs)
+- **Description**: Which monitoring/TSDB tool to use for metrics collection
+- **Choices**: `"prometheus"`, `"victoriametrics"`
+- **Example**: `"prometheus"`
+- **Location**: Specified in experiment_type config files (e.g., `cloud_demo.yaml`)
+- **Usage**: Determines which time-series database service to deploy
+
+### `monitoring.deployment_mode` (string, required in experiment_type configs)
+- **Description**: How to deploy the monitoring tool
+- **Choices**: `"bare_metal"`, `"containerized"`
+- **Example**: `"containerized"`
+- **Location**: Specified in experiment_type config files
+- **Usage**: Determines deployment strategy for the monitoring service
+- **Constraints**:
+  - VictoriaMetrics only supports `containerized` mode
+  - `bare_metal` mode only available for Prometheus
+
+### `monitoring.resource_limits` (dict, optional)
+- **Description**: Resource constraints for containerized monitoring deployments
+- **Required when**: Only applicable when `deployment_mode: containerized`
+- **Location**: Specified in experiment_type config files
+- **Validation**: Will raise error if specified with `deployment_mode: bare_metal`
+- **Example**:
+  ```yaml
+  resource_limits:
+    cpu_limit: 4.0
+    memory_limit: 8g
+  ```
+
+### `monitoring.resource_limits.cpu_limit` (float, optional)
+- **Description**: Number of CPU cores to allocate to the monitoring container
+- **Range**: 0.5-64.0 (depending on host)
+- **Example**: `4.0`
+- **Usage**: Limits CPU usage via Docker `--cpus` flag
+- **Use case**: Vertical scalability testing
+
+### `monitoring.resource_limits.memory_limit` (string, optional)
+- **Description**: Memory limit for the monitoring container
+- **Format**: Integer with unit suffix (k, m, g)
+- **Example**: `"8g"`, `"4096m"`
+- **Usage**: Limits memory usage via Docker `--memory` flag
+- **Use case**: Vertical scalability testing
+
+---
+
+## Migration from Old Configuration
+
+### Deprecated: `docker_resources`
+
+The old `docker_resources` configuration is **deprecated and no longer supported**.
+
+**Old format (NO LONGER VALID):**
+```yaml
+docker_resources:
+  cpu_limit: 2.0
+  memory_limit: 2g
+  tool: prometheus
+```
+
+**New format:**
+```yaml
+monitoring:
+  tool: prometheus
+  deployment_mode: containerized
+  resource_limits:
+    cpu_limit: 2.0
+    memory_limit: 2g
+```
+
+**Error handling:** If an old config with `docker_resources` is used, the system will raise a clear error message directing users to update their configuration.
+
+---
+
+## Monitoring Configuration Examples
+
+### Example 1: Standard Bare-Metal Prometheus (Most Common)
+```yaml
+monitoring:
+  tool: prometheus
+  deployment_mode: bare_metal
+```
+
+### Example 2: Containerized Prometheus Without Resource Limits
+```yaml
+monitoring:
+  tool: prometheus
+  deployment_mode: containerized
+```
+
+### Example 3: Containerized Prometheus With Resource Limits (Vertical Scalability)
+```yaml
+monitoring:
+  tool: prometheus
+  deployment_mode: containerized
+  resource_limits:
+    cpu_limit: 2.0
+    memory_limit: 4g
+```
+
+### Example 4: Containerized VictoriaMetrics With Resource Limits
+```yaml
+monitoring:
+  tool: victoriametrics
+  deployment_mode: containerized
+  resource_limits:
+    cpu_limit: 4.0
+    memory_limit: 8g
+```
+
+---
+
 #### `fake_exporter_language` (string, optional)
 - **Description**: Language implementation for fake metric exporter
 - **Default**: `"python"`

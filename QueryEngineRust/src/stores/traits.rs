@@ -31,6 +31,25 @@ pub trait Store: Send + Sync {
         Box<dyn std::error::Error + Send + Sync>,
     >;
 
+    /// NEW: Query precomputed outputs for exact timestamp match (Issue #236 - Sliding Windows)
+    ///
+    /// For sliding windows, we need to find a precompute with EXACTLY matching start and end timestamps.
+    /// This is used to retrieve a single sliding window aggregate without merging.
+    ///
+    /// Returns precomputes only if an exact match is found for the timestamp range [exact_start, exact_end].
+    /// Returns empty HashMap if no exact match exists (strict matching, no tolerance).
+    #[allow(clippy::type_complexity)]
+    fn query_precomputed_output_exact(
+        &self,
+        metric: &str,
+        aggregation_id: u64,
+        exact_start: u64,
+        exact_end: u64,
+    ) -> Result<
+        HashMap<Option<KeyByLabelValues>, Vec<Box<dyn AggregateCore>>>,
+        Box<dyn std::error::Error + Send + Sync>,
+    >;
+
     /// Get earliest timestamp for each aggregation ID (for monitoring)
     fn get_earliest_timestamp_per_aggregation_id(
         &self,

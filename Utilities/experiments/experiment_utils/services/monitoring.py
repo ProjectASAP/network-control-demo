@@ -5,28 +5,30 @@ Monitoring service management for experiments.
 from .base import BaseService
 from .system_exporters import SystemExportersService
 from .prometheus import PrometheusService
+from experiment_utils.providers.base import InfrastructureProvider
 
 
 class MonitoringService(BaseService):
     """Service for managing monitoring across nodes."""
 
-    def __init__(self, username: str, hostname_suffix: str, num_nodes: int):
+    def __init__(
+        self, provider: InfrastructureProvider, num_nodes: int, node_offset: int
+    ):
         """
         Initialize Monitoring service.
 
         Args:
-            username: CloudLab username for SSH connections
-            hostname_suffix: CloudLab hostname suffix for node addressing
+            provider: Infrastructure provider for node communication and management
             num_nodes: Number of nodes to monitor
+            node_offset: Starting node index offset
         """
-        super().__init__(username, hostname_suffix)
+        super().__init__(provider)
         self.num_nodes = num_nodes
+        self.node_offset = node_offset
         self.system_exporters_service = SystemExportersService(
-            username, hostname_suffix, num_nodes
+            provider, num_nodes, node_offset
         )
-        self.prometheus_service = PrometheusService(
-            username, hostname_suffix, num_nodes
-        )
+        self.prometheus_service = PrometheusService(provider, num_nodes, node_offset)
 
     def start(self, experiment_params, experiment_output_dir: str, **kwargs) -> None:
         """

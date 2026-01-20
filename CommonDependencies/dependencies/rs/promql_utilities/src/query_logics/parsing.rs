@@ -99,10 +99,20 @@ pub fn get_spatial_aggregation_output_labels(
         .and_then(|token| token.aggregation.as_ref())
         .expect("aggregation token missing");
 
-    let modifier = aggregation_token
-        .modifier
-        .as_ref()
-        .expect("aggregation modifier missing");
+    // Patching: When the query is topk, we should always return all labels
+    if aggregation_token.op.to_lowercase() == "topk" {
+        debug!("Aggregation operation is 'topk', returning all labels");
+        return all_labels.clone();
+    }
+
+    // Fixing issue https://github.com/ProjectASAP/asap-internal/issues/24
+    let modifier: &crate::AggregationModifier = match aggregation_token.modifier.as_ref() {
+        Some(m) => m,
+        None => {
+            debug!("No aggregation modifier found, returning empty KeyByLabelNames");
+            return KeyByLabelNames::new(vec![]);
+        }
+    };
 
     debug!(
         "Modifier type: {}, labels: {:?}",

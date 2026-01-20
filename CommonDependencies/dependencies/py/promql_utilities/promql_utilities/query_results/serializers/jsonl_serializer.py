@@ -5,6 +5,7 @@ JSONL+gzip streaming serializer for query results.
 import json
 import gzip
 import os
+import threading
 from typing import Any, Dict, Iterator
 from .base import ResultsSerializer
 from ..classes import (
@@ -41,6 +42,9 @@ class JSONLResultsSerializer(ResultsSerializer):
         self._streaming_results_file = None
         self._streaming_latency_file = None
         self._streaming_metadata = None
+
+        # Thread safety for streaming writes
+        self._write_lock = threading.Lock()
 
     def _open_for_write(self, filepath: str):
         """Open file for writing with optional compression."""
@@ -109,16 +113,38 @@ class JSONLResultsSerializer(ResultsSerializer):
         # Read metadata
         metadata = self._read_metadata()
 
+        # Handle both old and new metadata formats
+        if "query_groups" in metadata:
+            # New format with query groups
+            all_queries = []
+            query_idx_to_repetitions = {}
+            global_query_idx = 0
+
+            for qg in metadata["query_groups"]:
+                for query in qg["queries"]:
+                    all_queries.append(query)
+                    query_idx_to_repetitions[global_query_idx] = qg["repetitions"]
+                    global_query_idx += 1
+
+            servers = metadata["servers"]
+        else:
+            # Old format (backward compatible)
+            all_queries = metadata["queries"]
+            servers = metadata["servers"]
+            query_idx_to_repetitions = {
+                i: metadata["repetitions"] for i in range(len(all_queries))
+            }
+
         # Initialize nested structure
         results = {}
-        for server in metadata["servers"]:
+        for server in servers:
             results[server] = {}
-            for query_idx in range(metadata["total_queries"]):
+            for query_idx, query in enumerate(all_queries):
                 results[server][query_idx] = QueryResultAcrossTime(
                     server,
-                    metadata["queries"][query_idx],
+                    query,
                     query_idx,
-                    metadata["repetitions"],
+                    query_idx_to_repetitions[query_idx],
                 )
 
         # Read latencies into lookup table
@@ -155,6 +181,9 @@ class JSONLResultsSerializer(ResultsSerializer):
                             result_record["repetition_idx"],
                         )
 
+                        # Check if this is a raw_text_result (SQL/ClickHouse) record
+                        is_raw_text = "raw_text_result" in result_record
+
                         # Initialize QueryResult if not exists
                         if key not in query_results:
                             latency, cumulative_latency = latencies.get(
@@ -165,19 +194,28 @@ class JSONLResultsSerializer(ResultsSerializer):
                                 query=result_record["query"],
                                 query_idx=result_record["query_idx"],
                                 repetition_idx=result_record["repetition_idx"],
-                                result=None,  # Will be populated below
+                                result=None,  # Will be populated below for Prometheus
                                 latency=latency,
                                 cumulative_latency=cumulative_latency,
+                                query_group_idx=result_record.get("query_group_idx", 0),
+                                raw_text_result=None,  # Will be populated for SQL
                             )
-                            query_results[key].result = {}
+                            if not is_raw_text:
+                                query_results[key].result = {}
 
-                        # Add this result to the QueryResult
-                        frozenset_key = self._deserialize_frozenset_key(
-                            result_record["result_labels"]
-                        )
-                        query_results[key].result[frozenset_key] = result_record[
-                            "result_value"
-                        ]
+                        if is_raw_text:
+                            # SQL/ClickHouse raw text result
+                            query_results[key].raw_text_result = result_record[
+                                "raw_text_result"
+                            ]
+                        else:
+                            # Prometheus-style result
+                            frozenset_key = self._deserialize_frozenset_key(
+                                result_record["result_labels"]
+                            )
+                            query_results[key].result[frozenset_key] = result_record[
+                                "result_value"
+                            ]
 
         # Add QueryResult objects to the nested structure
         for (
@@ -196,12 +234,13 @@ class JSONLResultsSerializer(ResultsSerializer):
                 # Create empty QueryResult with just latency data
                 empty_result = QueryResult(
                     server_name=server_name,
-                    query=metadata["queries"][query_idx],
+                    query=all_queries[query_idx],
                     query_idx=query_idx,
                     repetition_idx=repetition_idx,
                     result=None,
                     latency=latency,
                     cumulative_latency=cumulative_latency,
+                    query_group_idx=0,  # Default for backward compatibility
                 )
                 results[server_name][query_idx].add_result(empty_result)
 
@@ -242,28 +281,43 @@ class JSONLResultsSerializer(ResultsSerializer):
         if self._streaming_results_file is None or self._streaming_latency_file is None:
             raise RuntimeError("Streaming write session not started")
 
-        # Write result records
-        if query_result.result:
-            for frozenset_key, value in query_result.result.items():
+        with self._write_lock:
+            # Write result records - handle both Prometheus (result) and SQL (raw_text_result)
+            if query_result.result:
+                # Prometheus-style normalized results
+                for frozenset_key, value in query_result.result.items():
+                    result_record = {
+                        "query_group_idx": query_result.query_group_idx,
+                        "server_name": query_result.server_name,
+                        "query": query_result.query,
+                        "query_idx": query_result.query_idx,
+                        "repetition_idx": query_result.repetition_idx,
+                        "result_labels": self._serialize_frozenset_key(frozenset_key),
+                        "result_value": value,
+                    }
+                    self._streaming_results_file.write(json.dumps(result_record) + "\n")
+            elif query_result.raw_text_result is not None:
+                # SQL/ClickHouse raw text result
                 result_record = {
+                    "query_group_idx": query_result.query_group_idx,
                     "server_name": query_result.server_name,
                     "query": query_result.query,
                     "query_idx": query_result.query_idx,
                     "repetition_idx": query_result.repetition_idx,
-                    "result_labels": self._serialize_frozenset_key(frozenset_key),
-                    "result_value": value,
+                    "raw_text_result": query_result.raw_text_result,
                 }
                 self._streaming_results_file.write(json.dumps(result_record) + "\n")
 
-        # Write latency record
-        latency_record = {
-            "server_name": query_result.server_name,
-            "query_idx": query_result.query_idx,
-            "repetition_idx": query_result.repetition_idx,
-            "latency": query_result.latency,
-            "cumulative_latency": query_result.cumulative_latency,
-        }
-        self._streaming_latency_file.write(json.dumps(latency_record) + "\n")
+            # Write latency record
+            latency_record = {
+                "query_group_idx": query_result.query_group_idx,
+                "server_name": query_result.server_name,
+                "query_idx": query_result.query_idx,
+                "repetition_idx": query_result.repetition_idx,
+                "latency": query_result.latency,
+                "cumulative_latency": query_result.cumulative_latency,
+            }
+            self._streaming_latency_file.write(json.dumps(latency_record) + "\n")
 
     def streaming_write_end(self) -> None:
         """Finalize streaming write session and close any open resources."""
@@ -386,16 +440,38 @@ class JSONLResultsSerializer(ResultsSerializer):
         # Read metadata
         metadata = self._read_metadata()
 
+        # Handle both old and new metadata formats
+        if "query_groups" in metadata:
+            # New format with query groups
+            all_queries = []
+            query_idx_to_repetitions = {}
+            global_query_idx = 0
+
+            for qg in metadata["query_groups"]:
+                for query in qg["queries"]:
+                    all_queries.append(query)
+                    query_idx_to_repetitions[global_query_idx] = qg["repetitions"]
+                    global_query_idx += 1
+
+            servers = metadata["servers"]
+        else:
+            # Old format (backward compatible)
+            all_queries = metadata["queries"]
+            servers = metadata["servers"]
+            query_idx_to_repetitions = {
+                i: metadata["repetitions"] for i in range(len(all_queries))
+            }
+
         # Initialize nested structure
         latencies = {}
-        for server in metadata["servers"]:
+        for server in servers:
             latencies[server] = {}
-            for query_idx in range(metadata["total_queries"]):
+            for query_idx, query in enumerate(all_queries):
                 latencies[server][query_idx] = LatencyResultAcrossTime(
                     server,
-                    metadata["queries"][query_idx],
+                    query,
                     query_idx,
-                    metadata["repetitions"],
+                    query_idx_to_repetitions[query_idx],
                 )
 
         # Read only latency data
@@ -408,11 +484,12 @@ class JSONLResultsSerializer(ResultsSerializer):
 
                         latency_result = LatencyResult(
                             server_name=latency_record["server_name"],
-                            query=metadata["queries"][latency_record["query_idx"]],
+                            query=all_queries[latency_record["query_idx"]],
                             query_idx=latency_record["query_idx"],
                             repetition_idx=latency_record["repetition_idx"],
                             latency=latency_record["latency"],
                             cumulative_latency=latency_record["cumulative_latency"],
+                            query_group_idx=latency_record.get("query_group_idx", 0),
                         )
 
                         latencies[latency_record["server_name"]][

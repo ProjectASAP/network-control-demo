@@ -148,15 +148,11 @@ class DataProcessor:
             latency_data = exp_data["latency_data"]
             config = exp_data["config"]
 
-            # Get query information
+            # Get query information - flatten queries from all query groups
             query_groups = config["query_groups"]
-            if len(query_groups) != 1:
-                print(
-                    f"Warning: Expected 1 query group in {exp_name}, found {len(query_groups)}"
-                )
-                continue
-
-            queries = query_groups[0]["queries"]
+            queries = []
+            for query_group in query_groups:
+                queries.extend(query_group["queries"])
 
             # Process data for each server
             for server_name, server_data in latency_data.items():

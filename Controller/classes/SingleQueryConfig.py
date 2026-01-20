@@ -33,7 +33,9 @@ class SingleQueryConfig:
         metric_config: MetricConfig,
         prometheus_scrape_interval: int,
         streaming_engine: str,
+        sketch_parameters: dict,
     ):
+        self.config = config
         self.query = config["query"]
         self.query_ast = promql_parser.parse(self.query)
         self.t_repeat = int(config["t_repeat"])
@@ -43,6 +45,7 @@ class SingleQueryConfig:
         # self.latency_sla = float(config["latency_sla"])
         self.metric_config = metric_config
         self.streaming_engine = streaming_engine
+        self.sketch_parameters = sketch_parameters
 
         self.patterns = {
             QueryPatternType.ONLY_TEMPORAL: [
@@ -91,6 +94,7 @@ class SingleQueryConfig:
                             "quantile",
                             "min",
                             "max",
+                            "topk",
                             # "stddev",
                             # "stdvar",
                         ],
@@ -181,6 +185,43 @@ class SingleQueryConfig:
             # self.logger.warning("Query pattern not supported: %s", self.query)
             logger.warning("Query pattern not supported: {}", self.query)
 
+    def should_be_performant(self) -> bool:
+        if self.query_pattern_type == QueryPatternType.ONLY_TEMPORAL:
+            # Check quantile_over_time, rate, increase
+            # Calculate number of data points per key
+            function_name = self.query_pattern_match.tokens["function"]["name"]
+            if function_name in ["rate", "increase", "quantile_over_time"]:
+                num_data_points_per_tumbling_window = (
+                    self.t_repeat / self.prometheus_scrape_interval
+                )
+                range_duration = int(
+                    self.query_pattern_match.tokens["range_vector"][
+                        "range"
+                    ].total_seconds()
+                )
+                if num_data_points_per_tumbling_window < 60:
+                    logger.info(
+                        "[Performance Check Failed] num_data_points_per_tumbling_window {} < 60",
+                        num_data_points_per_tumbling_window,
+                    )
+                    return False
+                # bound time for merging for quantile_over_time
+                if function_name == "quantile_over_time":
+                    if range_duration / self.t_repeat > 15:
+                        logger.info(
+                            "[Performance Check Failed] range_duration / t_repeat {} > 15",
+                            range_duration / self.t_repeat,
+                        )
+                        return False
+            return True
+        elif self.query_pattern_type == QueryPatternType.ONLY_SPATIAL:
+            return True
+        elif self.query_pattern_type == QueryPatternType.ONE_TEMPORAL_ONE_SPATIAL:
+            # TODO: might need to add checks here
+            return True
+        else:
+            return True
+
     def is_supported(self) -> bool:
         return (
             self.query_pattern_type is not None and self.query_pattern_match is not None
@@ -219,6 +260,7 @@ class SingleQueryConfig:
                 "sum",
                 "count",
                 "avg",
+                "topk",
             ]:
                 return QueryTreatmentType.APPROXIMATE
             else:
@@ -257,19 +299,8 @@ class SingleQueryConfig:
             get_metric_and_spatial_filter(self.query_pattern_match)
         )
 
-        num_aggregates_to_retain = logics.get_num_aggregates_to_retain(
-            self.query_pattern_type, self.query_pattern_match, self.t_repeat
-        )
-
         statistics_to_compute = get_statistics_to_compute(
             self.query_pattern_type, self.query_pattern_match
-        )
-
-        logics.set_tumbling_window_size(
-            self.query_pattern_type,
-            self.t_repeat,
-            self.prometheus_scrape_interval,
-            template_config,
         )
 
         # if (
@@ -294,6 +325,17 @@ class SingleQueryConfig:
                 map_statistic_to_precompute_operator(
                     statistic_to_compute, self.query_treatment_type
                 )
+            )
+
+            # NEW: Set window parameters (auto-decides sliding vs tumbling based on query type)
+            # Issue #236: Sliding windows for ONLY_TEMPORAL queries (except DeltaSetAggregator)
+            logics.set_window_parameters(
+                self.query_pattern_type,
+                self.query_pattern_match,
+                self.t_repeat,
+                self.prometheus_scrape_interval,
+                aggregation_type,
+                template_config,
             )
 
             # for aggregation_type, aggregation_sub_type in list_of_precompute_operators:
@@ -444,12 +486,15 @@ class SingleQueryConfig:
             config.aggregationType = aggregation_type
             config.aggregationSubType = aggregation_sub_type
             config.parameters = logics.get_precompute_operator_parameters(
-                aggregation_type, aggregation_sub_type
+                aggregation_type,
+                aggregation_sub_type,
+                self.query_pattern_match,
+                self.sketch_parameters,
             )
 
             # TODO: remove this hardcoding once promql_utilities.query_logics has updated logic
             # https://github.com/SketchDB/Utilities/issues/44
-            if aggregation_type in ["CountMinSketch"]:
+            if aggregation_type in ["CountMinSketch", "HydraKLL"]:
                 # add another precompute operator for DeltaSetAggregator
                 delta_set_config = copy.deepcopy(template_config)
                 if (
@@ -465,8 +510,26 @@ class SingleQueryConfig:
                 delta_set_config.parameters = logics.get_precompute_operator_parameters(
                     delta_set_config.aggregationType,
                     delta_set_config.aggregationSubType,
+                    self.query_pattern_match,
+                    self.sketch_parameters,
                 )
                 configs.append(delta_set_config)
             configs.append(config)
+
+        # Calculate num_aggregates_to_retain based on window type
+        # This must be done AFTER set_window_parameters() has been called
+        aggregate_cleanup_enabled = self.config.get("aggregate_cleanup_enabled", True)
+        if not aggregate_cleanup_enabled:
+            logger.info(
+                "Aggregate cleanup is disabled - num_aggregates_to_retain will be None"
+            )
+            num_aggregates_to_retain = None
+        else:
+            num_aggregates_to_retain = logics.get_num_aggregates_to_retain(
+                self.query_pattern_type,
+                self.query_pattern_match,
+                self.t_repeat,
+                template_config.windowType,  # NEW: Pass window type
+            )
 
         return configs, num_aggregates_to_retain

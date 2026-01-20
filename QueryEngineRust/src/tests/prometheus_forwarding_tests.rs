@@ -1,10 +1,11 @@
 #[cfg(test)]
 use crate::data_model::{InferenceConfig, StreamingConfig};
-use crate::drivers::http_server::{HttpServer, HttpServerConfig};
+use crate::drivers::query::adapters::AdapterConfig;
+use crate::drivers::query::servers::http::{HttpServer, HttpServerConfig};
 use crate::engines::SimpleEngine;
 use crate::stores::simple_map_store::SimpleMapStore;
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::time::{sleep, Duration};
@@ -66,18 +67,21 @@ async fn setup_test_server(prometheus_port: u16) -> (HttpServer, u16) {
     let config = HttpServerConfig {
         port: 0, // Use random port
         handle_http_requests: true,
-        prometheus_server_url: format!("http://127.0.0.1:{prometheus_port}"),
-        forward_unsupported_queries: true,
+        adapter_config: AdapterConfig::prometheus_promql(
+            format!("http://127.0.0.1:{prometheus_port}"),
+            true,
+        ),
     };
 
     let inference_config = InferenceConfig::default();
     let streaming_config = Arc::new(StreamingConfig::default());
-    let store = Arc::new(SimpleMapStore::new(streaming_config.clone()));
+    let store = Arc::new(SimpleMapStore::new(streaming_config.clone(), false));
     let query_engine = Arc::new(SimpleEngine::new(
         store.clone(),
         inference_config,
         streaming_config.clone(),
         15000, // 15s scrape interval
+        crate::data_model::QueryLanguage::promql,
     ));
 
     let server = HttpServer::new(config, query_engine, store);
@@ -152,19 +156,22 @@ async fn test_forwarding_disabled() {
     let config = HttpServerConfig {
         port: 0,
         handle_http_requests: true,
-        prometheus_server_url: "http://127.0.0.1:19093".to_string(),
-        forward_unsupported_queries: false, // Forwarding disabled
+        adapter_config: AdapterConfig::prometheus_promql(
+            "http://127.0.0.1:19093".to_string(),
+            false, // Forwarding disabled
+        ),
     };
 
     let inference_config = InferenceConfig::default();
     let streaming_config = Arc::new(StreamingConfig::default());
-    let store = Arc::new(SimpleMapStore::new(streaming_config.clone()));
+    let store = Arc::new(SimpleMapStore::new(streaming_config.clone(), false));
 
     let query_engine = Arc::new(SimpleEngine::new(
         store.clone(),
         inference_config,
         streaming_config.clone(),
         15000, // 15s scrape interval
+        crate::data_model::QueryLanguage::promql,
     ));
 
     let server = HttpServer::new(config, query_engine, store);
@@ -201,19 +208,22 @@ async fn test_prometheus_server_unreachable() {
     let config = HttpServerConfig {
         port: 0,
         handle_http_requests: true,
-        prometheus_server_url: "http://127.0.0.1:99999".to_string(), // Unreachable port
-        forward_unsupported_queries: true,
+        adapter_config: AdapterConfig::prometheus_promql(
+            "http://127.0.0.1:99999".to_string(), // Unreachable port
+            true,
+        ),
     };
 
     let inference_config = InferenceConfig::default();
     let streaming_config = Arc::new(StreamingConfig::default());
-    let store = Arc::new(SimpleMapStore::new(streaming_config.clone()));
+    let store = Arc::new(SimpleMapStore::new(streaming_config.clone(), false));
 
     let query_engine = Arc::new(SimpleEngine::new(
         store.clone(),
         inference_config,
         streaming_config.clone(),
         15000, // 15s scrape interval
+        crate::data_model::QueryLanguage::promql,
     ));
 
     let server = HttpServer::new(config, query_engine, store);

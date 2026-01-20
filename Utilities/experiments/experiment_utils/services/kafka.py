@@ -15,16 +15,20 @@ from experiment_utils.providers.base import InfrastructureProvider
 class KafkaService(BaseService):
     """Service for managing Kafka server lifecycle and topics."""
 
-    def __init__(self, provider: InfrastructureProvider, num_tries: int = 5):
+    def __init__(
+        self, provider: InfrastructureProvider, node_offset: int, num_tries: int = 5
+    ):
         """
         Initialize Kafka service.
 
         Args:
             provider: Infrastructure provider for node communication and management
             num_tries: Number of retry attempts when starting Kafka
+            node_offset: Starting node index offset
         """
         super().__init__(provider)
         self.num_tries = num_tries
+        self.node_offset = node_offset
         self.topics_created = False
 
     def start(self, **kwargs) -> None:
@@ -46,7 +50,7 @@ class KafkaService(BaseService):
         tries_remaining = self.num_tries
         while tries_remaining > 0:
             self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=start_cmd,
                 cmd_dir=cmd_dir,
                 nohup=True,
@@ -55,7 +59,7 @@ class KafkaService(BaseService):
             time.sleep(30)
 
             check_result = self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=check_cmd,
                 cmd_dir=None,
                 nohup=False,
@@ -68,7 +72,7 @@ class KafkaService(BaseService):
 
             # Try to reset kafka storage
             self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=reset_cmd,
                 cmd_dir=cmd_dir,
                 nohup=False,
@@ -89,7 +93,7 @@ class KafkaService(BaseService):
         cmd_dir = os.path.join(self.provider.get_home_dir(), "kafka")
         cmd = "./bin/kafka-server-stop.sh > /dev/null 2>&1"
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=cmd_dir,
             nohup=False,
@@ -109,7 +113,7 @@ class KafkaService(BaseService):
             cmd = f"./bin/kafka-topics.sh --bootstrap-server {constants.KAFKA_BROKER} --list"
             cmd_dir = os.path.join(self.provider.get_home_dir(), "kafka")
             self.provider.execute_command(
-                node_idx=0,
+                node_idx=self.node_offset,
                 cmd=cmd,
                 cmd_dir=cmd_dir,
                 nohup=False,
@@ -127,7 +131,7 @@ class KafkaService(BaseService):
         )
         cmd_dir = os.path.join(self.provider.get_home_dir(), "kafka")
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=cmd,
             cmd_dir=cmd_dir,
             nohup=False,
@@ -146,14 +150,14 @@ class KafkaService(BaseService):
 
         cmds = []
         for topic in topics:
-            cmd = f"./bin/kafka-topics.sh --bootstrap-server {constants.KAFKA_BROKER} --create --topic {topic} --partitions 1 --replication-factor 1 --config max.message.bytes=4194304 &"
+            cmd = f"./bin/kafka-topics.sh --bootstrap-server {constants.KAFKA_BROKER} --create --topic {topic} --partitions 1 --replication-factor 1 --config max.message.bytes=20971520 &"
             cmds.append(cmd)
         cmds.append("wait")
 
         final_cmd = " ".join(cmds)
         cmd_dir = os.path.join(self.provider.get_home_dir(), "kafka")
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=final_cmd,
             cmd_dir=cmd_dir,
             nohup=False,
@@ -180,7 +184,7 @@ class KafkaService(BaseService):
         final_cmd = " ".join(cmds)
         cmd_dir = os.path.join(self.provider.get_home_dir(), "kafka")
         self.provider.execute_command(
-            node_idx=0,
+            node_idx=self.node_offset,
             cmd=final_cmd,
             cmd_dir=cmd_dir,
             nohup=False,

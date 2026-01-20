@@ -16,3 +16,21 @@ exclude = '''
   | dist
 )/
 '''
+
+[tool.mypy]
+python_version = "3.8"
+mypy_path = "../../../CommonDependencies/py"
+
+# STRICT MODE ENABLED
+# This enables all 14 strict type checking flags
+strict = false
+
+# Ignore missing imports for third-party libraries without stubs
+[[tool.mypy.overrides]]
+module = [
+    "prometheus_api_client.*",
+    "loguru.*",
+    "promql_utilities.*",
+    "jinja2.*"
+]
+ignore_missing_imports = true

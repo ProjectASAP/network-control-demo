@@ -10,6 +10,7 @@ use std::sync::OnceLock;
 use std::thread;
 use std::time::Duration;
 use std::{fs::File, io::BufReader};
+use tracing::{debug, info};
 
 type CsvGzReader<File> = Reader<GzDecoder<BufReader<File>>>;
 
@@ -445,7 +446,7 @@ pub fn export_from_queue() {
         .for_each(export_line);
 
     if GOOGLE_DATA_QUEUE.is_closed() && GOOGLE_DATA_QUEUE.is_empty() {
-        println!("No more task resource usage to export, shutting down...");
+        info!("No more task resource usage to export, shutting down");
         std::process::exit(0);
     }
 }
