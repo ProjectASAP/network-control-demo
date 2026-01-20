@@ -1,67 +1,83 @@
 use sketchlib_rust::{
-    CountMin, FastPath, Hydra, SketchInput, Vector2D, common::input::HydraCounter,
+    KLL, SketchInput,
+    common::input::{HydraCounter, HydraQuery},
+    hydra::MultiHeadHydra,
 };
 
 use super::MetricField;
 use super::key::split_key;
 
-pub(super) struct MetricFrequencyHydra {
-    cpu_frequency: Hydra,
-    mem_frequency: Hydra,
-    net_frequency: Hydra,
+const CPU_QUANTILE_DIM: &str = "cpu_cores_quantile";
+const MEM_QUANTILE_DIM: &str = "memory_gb_quantile";
+const NET_QUANTILE_DIM: &str = "network_mbps_quantile";
+
+pub(super) struct MetricHydra {
+    hydra: MultiHeadHydra,
 }
 
-impl MetricFrequencyHydra {
+impl MetricHydra {
     pub(super) fn new() -> Self {
-        let cm_template = HydraCounter::CM(CountMin::<Vector2D<i32>, FastPath>::default());
+        let kll_template = HydraCounter::KLL(KLL::default());
+        let dimensions = vec![
+            (CPU_QUANTILE_DIM.to_string(), kll_template.clone()),
+            (MEM_QUANTILE_DIM.to_string(), kll_template.clone()),
+            (NET_QUANTILE_DIM.to_string(), kll_template.clone()),
+        ];
 
         Self {
-            cpu_frequency: Hydra::with_dimensions(3, 64, cm_template.clone()),
-            mem_frequency: Hydra::with_dimensions(3, 64, cm_template.clone()),
-            net_frequency: Hydra::with_dimensions(3, 64, cm_template),
+            hydra: MultiHeadHydra::with_dimensions(3, 64, dimensions),
         }
     }
 
-    pub(super) fn update(&mut self, field: MetricField, key: &str, value: i32) {
-        let input = SketchInput::I64(value as i64);
-        match field {
-            MetricField::CpuCores => self.cpu_frequency.update(key, &input, None),
-            MetricField::MemoryGb => self.mem_frequency.update(key, &input, None),
-            MetricField::NetworkMbps => self.net_frequency.update(key, &input, None),
-        }
+    pub(super) fn update(
+        &mut self,
+        key: &str,
+        cpu_value: f64,
+        memory_value: f64,
+        network_value: f64,
+    ) {
+        self.update_with_count(key, cpu_value, memory_value, network_value, None);
     }
 
-    pub(super) fn query_frequency(&self, field: MetricField, key: &str, value: i32) -> Option<f64> {
+    pub(super) fn update_with_count(
+        &mut self,
+        key: &str,
+        cpu_value: f64,
+        memory_value: f64,
+        network_value: f64,
+        count: Option<i32>,
+    ) {
+        let cpu_quantile = SketchInput::F64(cpu_value);
+        let mem_quantile = SketchInput::F64(memory_value);
+        let net_quantile = SketchInput::F64(network_value);
+
+        let cpu_quantile_dims = [CPU_QUANTILE_DIM];
+        let mem_quantile_dims = [MEM_QUANTILE_DIM];
+        let net_quantile_dims = [NET_QUANTILE_DIM];
+
+        let mut values: Vec<(&SketchInput, &[&str])> = Vec::with_capacity(3);
+        values.push((&cpu_quantile, &cpu_quantile_dims));
+        values.push((&mem_quantile, &mem_quantile_dims));
+        values.push((&net_quantile, &net_quantile_dims));
+
+        self.hydra.update(key, &values, count);
+    }
+
+    pub(super) fn query_quantile(
+        &self,
+        field: MetricField,
+        key: &str,
+        quantile: f64,
+    ) -> Option<f64> {
         let parts = split_key(key)?;
-        let input = SketchInput::I64(value as i64);
-        Some(match field {
-            MetricField::CpuCores => self.cpu_frequency.query_frequency(parts, &input),
-            MetricField::MemoryGb => self.mem_frequency.query_frequency(parts, &input),
-            MetricField::NetworkMbps => self.net_frequency.query_frequency(parts, &input),
-        })
+        let query = HydraQuery::Quantile(quantile);
+        let dimension = match field {
+            MetricField::CpuCores => CPU_QUANTILE_DIM,
+            MetricField::MemoryGb => MEM_QUANTILE_DIM,
+            MetricField::NetworkMbps => NET_QUANTILE_DIM,
+        };
+        Some(self.hydra.query_key(parts, dimension, &query))
     }
-}
 
-#[inline(always)]
-pub(super) fn clamp_frequency_estimate(value: f64) -> i32 {
-    if !value.is_finite() || value <= 0.0 {
-        return 0;
-    }
-    if value >= i32::MAX as f64 {
-        return i32::MAX;
-    }
-    value.round() as i32
-}
-
-#[inline(always)]
-pub(super) fn round_to_i32(value: f64) -> Option<i32> {
-    if !value.is_finite() {
-        return None;
-    }
-    let rounded = value.round();
-    if rounded < i32::MIN as f64 || rounded > i32::MAX as f64 {
-        return None;
-    }
-    let as_i32 = rounded as i32;
-    if as_i32 <= 0 { None } else { Some(as_i32) }
+    // Frequency queries are intentionally unsupported here.
 }
