@@ -277,7 +277,7 @@ def get_metric_quantiles(
             url=ES_URL,
             index_name=ES_INDEX_NAME,
             api_key=ES_API_KEY,
-            also_es=True,
+            also_es=False,
         )
     if response is None:
         raise RuntimeError("percentile request failed")
@@ -328,7 +328,7 @@ def get_top_entities(
                 url=ES_URL,
                 index_name=ES_INDEX_NAME,
                 api_key=ES_API_KEY,
-                also_es=True,
+                also_es=False,
             )
         if response is not None:
             agg_result = response.get("aggregations", {}).get(f"top_{field}", {})
@@ -393,7 +393,7 @@ def get_cumulative_usage(
             url=ES_URL,
             index_name=ES_INDEX_NAME,
             api_key=ES_API_KEY,
-            also_es=True,
+            also_es=False,
         )
 
     if response is None:
@@ -458,7 +458,7 @@ def get_resource_frequency(
             url=ES_URL,
             index_name=ES_INDEX_NAME,
             api_key=ES_API_KEY,
-            also_es=True,
+            also_es=False,
         )
 
     if response is None:
