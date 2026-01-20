@@ -218,7 +218,23 @@ impl MetricPreAggregation {
             .update(task, task_hash, cpu_value, memory_value, network_value);
     }
 
-    pub fn insert_without_hydra(
+    pub fn insert_kll(&mut self, cpu_value: f64, memory_value: f64, network_value: f64) {
+        self.klls
+            .insert_samples(cpu_value, memory_value, network_value);
+    }
+
+    pub fn insert_kll_timed(
+        &mut self,
+        cpu_value: f64,
+        memory_value: f64,
+        network_value: f64,
+    ) -> u64 {
+        let t0 = Instant::now();
+        self.insert_kll(cpu_value, memory_value, network_value);
+        t0.elapsed().as_nanos() as u64
+    }
+
+    pub fn insert_cms(
         &mut self,
         cluster: &str,
         task: &str,
@@ -226,9 +242,6 @@ impl MetricPreAggregation {
         memory_value: f64,
         network_value: f64,
     ) {
-        self.klls
-            .insert_samples(cpu_value, memory_value, network_value);
-
         self.build_key_buffer(cluster, task);
 
         let cpu_rounded = round_to_i32(cpu_value);
@@ -243,30 +256,23 @@ impl MetricPreAggregation {
         );
     }
 
-    pub fn insert_timed_without_hydra(
+    pub fn insert_cms_timed(
         &mut self,
         cluster: &str,
         task: &str,
         cpu_value: f64,
         memory_value: f64,
         network_value: f64,
-    ) -> InsertTiming {
-        let mut timing = InsertTiming::default();
-
+    ) -> (u64, u64) {
         let t0 = Instant::now();
-        self.klls
-            .insert_samples(cpu_value, memory_value, network_value);
-        timing.kll_ns = t0.elapsed().as_nanos() as u64;
-
-        let t1 = Instant::now();
         self.build_key_buffer(cluster, task);
-        timing.build_key_ns = t1.elapsed().as_nanos() as u64;
+        let build_key_ns = t0.elapsed().as_nanos() as u64;
 
         let cpu_rounded = round_to_i32(cpu_value);
         let mem_rounded = round_to_i32(memory_value);
         let net_rounded = round_to_i32(network_value);
 
-        let t2 = Instant::now();
+        let t1 = Instant::now();
         self.update_countmins(
             cluster,
             task,
@@ -274,12 +280,26 @@ impl MetricPreAggregation {
             mem_rounded.map(|value| value as i128).unwrap_or(0),
             net_rounded.map(|value| value as i128).unwrap_or(0),
         );
-        timing.countmin_ns = t2.elapsed().as_nanos() as u64;
+        let countmin_ns = t1.elapsed().as_nanos() as u64;
 
-        timing
+        (build_key_ns, countmin_ns)
     }
 
-    pub fn update_hydra_batch(
+    #[allow(dead_code)]
+    pub fn insert_hydra(
+        &mut self,
+        cluster: &str,
+        task: &str,
+        cpu_value: f64,
+        memory_value: f64,
+        network_value: f64,
+    ) {
+        self.build_key_buffer(cluster, task);
+        self.hydra_by_label
+            .update(&self.key_buffer, cpu_value, memory_value, network_value);
+    }
+
+    pub fn insert_hydra_batch(
         &mut self,
         cluster: &str,
         task: &str,
@@ -314,8 +334,7 @@ impl MetricPreAggregation {
         memory_value: f64,
         network_value: f64,
     ) {
-        self.klls
-            .insert_samples(cpu_value, memory_value, network_value);
+        self.insert_kll(cpu_value, memory_value, network_value);
 
         // Label key order is always "cluster;task" (same order used for count-min updates).
         self.build_key_buffer(cluster, task);
@@ -347,10 +366,7 @@ impl MetricPreAggregation {
         let mut timing = InsertTiming::default();
 
         // KLL insertion
-        let t0 = Instant::now();
-        self.klls
-            .insert_samples(cpu_value, memory_value, network_value);
-        timing.kll_ns = t0.elapsed().as_nanos() as u64;
+        timing.kll_ns = self.insert_kll_timed(cpu_value, memory_value, network_value);
 
         // Build key
         let t1 = Instant::now();
