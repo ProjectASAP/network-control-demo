@@ -1,5 +1,6 @@
 import csv
 
+
 class Task:
     def __init__(self, task_id, resource_requirements):
         self.task_id = task_id
@@ -14,12 +15,14 @@ class Task:
     @staticmethod
     def load_tasks(filepath):
         tasks = []
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                task_id = row['id']
+                task_id = row["id"]
                 # Remove 'id' and convert resource values to float
-                resource_requirements = {k: float(v) for k, v in row.items() if k != 'id'}
+                resource_requirements = {
+                    k: float(v) for k, v in row.items() if k != "id"
+                }
                 tasks.append(Task(task_id, resource_requirements))
         return tasks
 

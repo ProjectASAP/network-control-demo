@@ -191,8 +191,12 @@ class NetworkControllerSolver:
 
         self._node_ids: Tuple[str, ...] = tuple(self._nodes.keys())
         self._directed_arcs: List[EdgeKey] = []
-        self._out_arcs: Dict[str, List[EdgeKey]] = {node_id: [] for node_id in self._node_ids}
-        self._in_arcs: Dict[str, List[EdgeKey]] = {node_id: [] for node_id in self._node_ids}
+        self._out_arcs: Dict[str, List[EdgeKey]] = {
+            node_id: [] for node_id in self._node_ids
+        }
+        self._in_arcs: Dict[str, List[EdgeKey]] = {
+            node_id: [] for node_id in self._node_ids
+        }
         for (u, v), edge in self._edges.items():
             if u not in self._nodes or v not in self._nodes:
                 raise ValueError(f"Edge {edge.edge_id} references unknown nodes")
@@ -245,37 +249,49 @@ class NetworkControllerSolver:
             raise ValueError("max_task_movements must be greater than or equal to zero")
 
         residual_cpu: Dict[str, float] = {
-            node_id: node.cpu_capacity - node.used_cpu for node_id, node in self._nodes.items()
+            node_id: node.cpu_capacity - node.used_cpu
+            for node_id, node in self._nodes.items()
         }
         residual_memory: Dict[str, float] = {
             node_id: node.memory_capacity - node.used_memory
             for node_id, node in self._nodes.items()
         }
         residual_bandwidth: Dict[EdgeKey, float] = {
-            edge_id: edge.capacity - edge.used_bandwidth for edge_id, edge in self._edges.items()
+            edge_id: edge.capacity - edge.used_bandwidth
+            for edge_id, edge in self._edges.items()
         }
 
         if existing_assignments:
             for assignment in existing_assignments:
                 if assignment.node_id not in self._nodes:
-                    raise KeyError(f"Existing assignment references unknown node {assignment.node_id}")
+                    raise KeyError(
+                        f"Existing assignment references unknown node {assignment.node_id}"
+                    )
                 residual_cpu[assignment.node_id] -= assignment.cpu
                 residual_memory[assignment.node_id] -= assignment.memory
                 for raw_edge in assignment.path:
                     edge_key = _normalise_edge(raw_edge, self._undirected)
                     if edge_key not in residual_bandwidth:
-                        raise KeyError(f"Existing assignment references unknown edge {raw_edge}")
+                        raise KeyError(
+                            f"Existing assignment references unknown edge {raw_edge}"
+                        )
                     residual_bandwidth[edge_key] -= assignment.bandwidth
 
         for node_id, remaining in residual_cpu.items():
             if remaining < -1e-9:
-                raise ValueError(f"Node {node_id} is over-subscribed before optimisation (CPU).")
+                raise ValueError(
+                    f"Node {node_id} is over-subscribed before optimisation (CPU)."
+                )
         for node_id, remaining in residual_memory.items():
             if remaining < -1e-9:
-                raise ValueError(f"Node {node_id} is over-subscribed before optimisation (memory).")
+                raise ValueError(
+                    f"Node {node_id} is over-subscribed before optimisation (memory)."
+                )
         for edge_id, remaining in residual_bandwidth.items():
             if remaining < -1e-9:
-                raise ValueError(f"Edge {edge_id} is over-subscribed before optimisation (bandwidth).")
+                raise ValueError(
+                    f"Edge {edge_id} is over-subscribed before optimisation (bandwidth)."
+                )
 
         solver = pywraplp.Solver.CreateSolver("CBC")
         if solver is None:
@@ -305,12 +321,10 @@ class NetworkControllerSolver:
 
         for node_id in self._node_ids:
             cpu_expr = solver.Sum(
-                task.cpu * x_vars[task.task_id][node_id]
-                for task in active_tasks
+                task.cpu * x_vars[task.task_id][node_id] for task in active_tasks
             )
             mem_expr = solver.Sum(
-                task.memory * x_vars[task.task_id][node_id]
-                for task in active_tasks
+                task.memory * x_vars[task.task_id][node_id] for task in active_tasks
             )
             solver.Add(cpu_expr <= residual_cpu[node_id])
             solver.Add(mem_expr <= residual_memory[node_id])
@@ -339,7 +353,9 @@ class NetworkControllerSolver:
 
             flow_vars[comm_id] = {}
             for arc in self._directed_arcs:
-                flow = solver.NumVar(0.0, solver.infinity(), f"f_{comm_id}_{arc[0]}_{arc[1]}")
+                flow = solver.NumVar(
+                    0.0, solver.infinity(), f"f_{comm_id}_{arc[0]}_{arc[1]}"
+                )
                 solver.Add(flow <= comm.bandwidth * z_var)
                 flow_vars[comm_id][arc] = flow
 
@@ -366,8 +382,12 @@ class NetworkControllerSolver:
                 solver.Add(dst_var <= x_vars[target_task.task_id][node_id])
                 solver.Add(dst_var >= x_vars[target_task.task_id][node_id] + z_var - 1)
 
-                out_sum = solver.Sum(flow_vars[comm_id][arc] for arc in self._out_arcs[node_id])
-                in_sum = solver.Sum(flow_vars[comm_id][arc] for arc in self._in_arcs[node_id])
+                out_sum = solver.Sum(
+                    flow_vars[comm_id][arc] for arc in self._out_arcs[node_id]
+                )
+                in_sum = solver.Sum(
+                    flow_vars[comm_id][arc] for arc in self._in_arcs[node_id]
+                )
                 solver.Add(out_sum - in_sum == comm.bandwidth * (src_var - dst_var))
 
         for edge_key, residual in residual_bandwidth.items():
@@ -398,11 +418,16 @@ class NetworkControllerSolver:
                 solver.Add(move_var == 0)
                 continue
             if prev_node not in self._node_ids:
-                raise KeyError(f"Previous assignment references unknown node {prev_node}")
+                raise KeyError(
+                    f"Previous assignment references unknown node {prev_node}"
+                )
             stay_var = solver.BoolVar(f"stay_{task.task_id}")
             solver.Add(stay_var <= x_vars[task.task_id][prev_node])
             solver.Add(stay_var <= assign_sums[task.task_id])
-            solver.Add(stay_var >= x_vars[task.task_id][prev_node] + assign_sums[task.task_id] - 1)
+            solver.Add(
+                stay_var
+                >= x_vars[task.task_id][prev_node] + assign_sums[task.task_id] - 1
+            )
             solver.Add(move_var + stay_var == 1)
 
         if max_task_movements is not None:
@@ -514,7 +539,9 @@ class NetworkControllerSolver:
         paths: List[Tuple[List[EdgeKey], float]] = []
 
         while True:
-            path = self._find_positive_path(residual, source_node, target_node, tolerance)
+            path = self._find_positive_path(
+                residual, source_node, target_node, tolerance
+            )
             if not path:
                 break
             path_flow = min(residual[arc] for arc in path)

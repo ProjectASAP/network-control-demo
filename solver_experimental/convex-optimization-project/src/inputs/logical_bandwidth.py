@@ -1,8 +1,9 @@
 import csv
 
+
 def load_logical_bandwidth(filepath):
     logical_bw = {}
-    with open(filepath, 'r') as f:
+    with open(filepath, "r") as f:
         reader = csv.reader(f)
         for row in reader:
             if len(row) != 3:

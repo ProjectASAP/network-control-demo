@@ -6,8 +6,8 @@ from cattrs import structure
 
 
 class ServerType(str, Enum):
-    PROMETHEUS = 'prometheus'
-    ELASTICSEARCH = 'elasticsearch'
+    PROMETHEUS = "prometheus"
+    ELASTICSEARCH = "elasticsearch"
 
 
 @dataclass
@@ -27,9 +27,9 @@ class QueryGroupConfig:
 
 
 class UpdateMethod(Enum):
-    AGGREGATE_BY_TASK = 'aggregate_by_task'
-    NO_OP = 'no_op'
-    
+    AGGREGATE_BY_TASK = "aggregate_by_task"
+    NO_OP = "no_op"
+
 
 @dataclass
 class TaskUpdateRules:

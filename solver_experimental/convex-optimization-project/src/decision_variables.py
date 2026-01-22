@@ -1,5 +1,6 @@
 from cvxpy import Variable
 
+
 class DecisionVariables:
     def __init__(self, num_tasks, num_nodes):
         self.num_tasks = num_tasks

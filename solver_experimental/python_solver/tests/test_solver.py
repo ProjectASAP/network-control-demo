@@ -4,9 +4,11 @@ from network_controller import NetworkControllerSolver, Task, build_edges, build
 
 
 def test_solver_assigns_single_task():
-    nodes = build_nodes({
-        "node-1": {"cpu": 8, "memory": 32},
-    })
+    nodes = build_nodes(
+        {
+            "node-1": {"cpu": 8, "memory": 32},
+        }
+    )
     edges = build_edges({})
 
     task = Task(
