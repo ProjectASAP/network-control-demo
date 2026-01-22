@@ -8,32 +8,41 @@ import networkx as nx
 
 
 def get_valid_task_graph(tasks: dict[str, Task], task_graph: nx.DiGraph):
-        """
-        Given some current tasks, filters out tasks that are invalid (cannot be scheduled), and returns a dictionary mapping between
-        valid task pairs and their bandwidth requirements. A task cannot be scheduled unless all its peer tasks are present.
+    """
+    Given some current tasks, filters out tasks that are invalid (cannot be scheduled), and returns a dictionary mapping between
+    valid task pairs and their bandwidth requirements. A task cannot be scheduled unless all its peer tasks are present.
 
-        Returns:
-            task_communication: {(t_i, t_j): bandwidth (float)} - t_i, t_j represents task ids
-            valid_tasks: {task_id: Task} - Tasks that can be scheduled.
-        """
-        weak_comps = nx.weakly_connected_components(task_graph)
-        valid_tasks = tasks.copy()
-        for comp in weak_comps:
-            for t in comp:
-                if t not in tasks:
-                    for t in comp:
-                        valid_tasks.pop(t, None)
-                    break
-        task_communication = {(t_i, t_j): bw for t_i, t_j, bw in task_graph.edges.data('bandwidth') if t_i in valid_tasks and t_j in valid_tasks}
-        return task_communication, valid_tasks
+    Returns:
+        task_communication: {(t_i, t_j): bandwidth (float)} - t_i, t_j represents task ids
+        valid_tasks: {task_id: Task} - Tasks that can be scheduled.
+    """
+    weak_comps = nx.weakly_connected_components(task_graph)
+    valid_tasks = tasks.copy()
+    for comp in weak_comps:
+        for t in comp:
+            if t not in tasks:
+                for t in comp:
+                    valid_tasks.pop(t, None)
+                break
+    task_communication = {
+        (t_i, t_j): bw
+        for t_i, t_j, bw in task_graph.edges.data("bandwidth")
+        if t_i in valid_tasks and t_j in valid_tasks
+    }
+    return task_communication, valid_tasks
 
 
 class TaskScheduler:
 
-    def __init__(self, network: NetworkTopology, reassignment_penalty: float = 1.0, max_reassignments: int = 5,):
+    def __init__(
+        self,
+        network: NetworkTopology,
+        reassignment_penalty: float = 1.0,
+        max_reassignments: int = 5,
+    ):
         """
         Initialize the task scheduler.
-        
+
         Args:
             network: Graph representation of network.
         """
@@ -43,23 +52,25 @@ class TaskScheduler:
 
         self.reassignment_penalty = reassignment_penalty
         self.max_reassignments = max_reassignments
-    
-    def solve(self, 
-              tasks: dict[str, Task],
-              running_tasks: dict[str, RunningTask],
-              paths: dict[tuple[str, str], List[str]],
-              task_graph: nx.DiGraph,
-              time_limit: int = 300) -> Tuple[Dict[str, RunningTask], dict[str, Task], float | None, int]:
+
+    def solve(
+        self,
+        tasks: dict[str, Task],
+        running_tasks: dict[str, RunningTask],
+        paths: dict[tuple[str, str], List[str]],
+        task_graph: nx.DiGraph,
+        time_limit: int = 300,
+    ) -> Tuple[Dict[str, RunningTask], dict[str, Task], float | None, int]:
         """
         Solve the task scheduling optimization problem.
-        
+
         Args:
             tasks: {task_id: Task} - Mapping between task id and associated Task spec.
             task_communication: {(task_i, task_j): TaskCommunication} - Mapping between (src, dest) task pair and bandwidth requirements.
             running_tasks: {task_id: RunningTask} - Map between task id and running task information.
             paths: {(node1, node2): [[path_nodes_1], [path_nodes_2], ...]} - Routing paths between node pairs, with each path represented as a sequence of node ids.
             time_limit: Solver time limit in seconds
-            
+
         Returns:
             (assignment, leftover_tasks, objective_value, status_code) - New assignment dict, objective value, and solver status code.
         """
@@ -70,52 +81,72 @@ class TaskScheduler:
 
         # Get task communication requirements and filter out tasks whose peers are not here as well.
         task_communication, tasks = get_valid_task_graph(tasks, task_graph=task_graph)
-        leftover_tasks = {task_id: original_tasks[task_id] for task_id in original_tasks.keys() - tasks.keys()}
+        leftover_tasks = {
+            task_id: original_tasks[task_id]
+            for task_id in original_tasks.keys() - tasks.keys()
+        }
 
         # Decision variables
         # d[t][n] = 1 if task t assigned to node n, 0 otherwise
-        d = {t: {n: plp.LpVariable(f"d_{t}_{n}", cat='Binary') 
-                 for n in self.nodes} for t in tasks}
-        
+        d = {
+            t: {n: plp.LpVariable(f"d_{t}_{n}", cat="Binary") for n in self.nodes}
+            for t in tasks
+        }
+
         # Auxiliary variable for task allocation tracking. Is 1 if task t has an assignment to any node (0 otherwise).
-        allocated = {t: plp.LpVariable(f"allocated_{t}", cat='Binary') 
-                     for t in tasks}
-        
+        allocated = {t: plp.LpVariable(f"allocated_{t}", cat="Binary") for t in tasks}
+
         # For a given task t (from a previous epoch), we sum over all d[t][n] for all n besides the node t was assigned originally.
         # Since only one d[t][n] can equal 1 (see constraint 1) for a given t, this sum is 1 if t is reassigned. Sum over all such tasks, and
         # we get the total reassignments.
         reassignments = plp.lpSum(
-            d[t][n] for t in tasks for n in self.nodes.keys()
+            d[t][n]
+            for t in tasks
+            for n in self.nodes.keys()
             if t in running_tasks and running_tasks[t].node_id != n
         )
         total_allocated = plp.lpSum(allocated[t] for t in tasks)
-        
+
         # Objective: Minimize reassignments, Maximize allocations.
         prob += -total_allocated + self.reassignment_penalty * reassignments
-        
+
         prob += reassignments <= self.max_reassignments
-        
+
         # Constraints
         # 1. Each task assigned to exactly one node if allocated
         for t in tasks:
             prob += plp.lpSum(d[t][n] for n in self.nodes) == allocated[t]
-        
+
         # 2. Node resource capacity constraints
         for n, node in self.nodes.items():
+            available_cpu = max(node.cpu_capacity - node.used_cpu, 0.0)
+            available_memory = max(node.memory_capacity - node.used_memory, 0.0)
             # CPU.
-            prob += plp.lpSum(
-                tasks[t].initial_cpu * d[t][n] 
-                for t in tasks.keys()
-            ) <= node.cpu_capacity
+            prob += (
+                plp.lpSum(tasks[t].initial_cpu * d[t][n] for t in tasks.keys())
+                <= available_cpu
+            )
             # Memory.
-            prob += plp.lpSum(
-                tasks[t].initial_memory * d[t][n] 
-                for t in tasks.keys()
-            ) <= node.memory_capacity
+            prob += (
+                plp.lpSum(tasks[t].initial_memory * d[t][n] for t in tasks.keys())
+                <= available_memory
+            )
+            # Optional per-node network capacity, if provided.
+            if node.network_capacity is not None:
+                available_network = max(node.network_capacity - node.used_network, 0.0)
+                prob += (
+                    plp.lpSum(
+                        sum(tasks[t].peer_bandwidths.values()) * d[t][n]
+                        for t in tasks.keys()
+                    )
+                    <= available_network
+                )
 
         # 3. Construct path bandwidth usage variables. For each node pair, compute the bandwidth used on each path between that node pair.
         used_path_bandwidths = {}
-        choose_path_constraints = {(t_i, t_j): 0 for t_i, t_j in task_communication.keys()}
+        choose_path_constraints = {
+            (t_i, t_j): 0 for t_i, t_j in task_communication.keys()
+        }
         for n_i, n_j in paths.keys():
             used_path_bandwidths[(n_i, n_j)] = {}
             pair_bandwidth = used_path_bandwidths[(n_i, n_j)]
@@ -131,13 +162,13 @@ class TaskScheduler:
 
                     # The following constraints are for mimicking the behavior of logical AND (i.e. z_ij = d[t_i][n_i] * d[t_j][n_j]).
                     # The result is a binary variable that represents whether we assigned t_i -> n_i and t_j -> n_j.
-                    z_ij = plp.LpVariable(f"z_{t_i}_{t_j}_{n_i}_{n_j}", cat='Binary')
+                    z_ij = plp.LpVariable(f"z_{t_i}_{t_j}_{n_i}_{n_j}", cat="Binary")
                     prob += z_ij <= d[t_i][n_i]
                     prob += z_ij <= d[t_j][n_j]
                     prob += z_ij >= (d[t_i][n_i] + d[t_j][n_j] - 1)
 
                     # Binary variable representing whether we assigned t_i -> n_j and t_j -> n_i (other way around from above).
-                    z_ji = plp.LpVariable(f"z_{t_i}_{t_j}_{n_j}_{n_i}", cat='Binary')
+                    z_ji = plp.LpVariable(f"z_{t_i}_{t_j}_{n_j}_{n_i}", cat="Binary")
                     prob += z_ji <= d[t_i][n_j]
                     prob += z_ji <= d[t_j][n_i]
                     prob += z_ji >= (d[t_i][n_j] + d[t_j][n_i] - 1)
@@ -151,18 +182,18 @@ class TaskScheduler:
         for n in self.nodes:
             for t_i, t_j in task_communication.keys():
                 # Whether task pair is assigned on the same node. z = 1 iff both d_i and d_j equal 1.
-                z_ii = plp.LpVariable(f"z_{t_i}_{t_j}_{n}_{n}", cat='Binary')
+                z_ii = plp.LpVariable(f"z_{t_i}_{t_j}_{n}_{n}", cat="Binary")
                 prob += z_ii <= d[t_i][n]
                 prob += z_ii <= d[t_j][n]
                 prob += z_ii >= (d[t_i][n] + d[t_j][n] - 1)
                 # Treat assignment to same node as a "path" option as well.
                 choose_path_constraints[(t_i, t_j)] += z_ii
-                    
-        # Force communicating task pairs to use exactly one path (or assign both to the same node if not possible). 
+
+        # Force communicating task pairs to use exactly one path (or assign both to the same node if not possible).
         # Note that we do not have to choose a path if neither task is assigned.
         for t_i, t_j in task_communication.keys():
             # These constraints mimick logical OR. The binary variable indicates whether either t_i or t_j is allocated anywhere.
-            allocated_ij = plp.LpVariable(f"allocated_{t_i}_{t_j}", cat='Binary')
+            allocated_ij = plp.LpVariable(f"allocated_{t_i}_{t_j}", cat="Binary")
             prob += allocated_ij >= allocated[t_i]
             prob += allocated_ij >= allocated[t_j]
             prob += allocated_ij <= (allocated[t_i] + allocated[t_j])
@@ -179,7 +210,11 @@ class TaskScheduler:
                 # Extract edges on this path
                 path_edges = []
                 for idx in range(len(path) - 1):
-                    edge_key: EdgeKey = (path[idx], path[idx+1]) if path[idx] < path[idx+1] else (path[idx+1], path[idx])
+                    edge_key: EdgeKey = (
+                        (path[idx], path[idx + 1])
+                        if path[idx] < path[idx + 1]
+                        else (path[idx + 1], path[idx])
+                    )
                     path_edges.append(edge_key)
                 # For each edge, add the bandwidth used by all paths that cross this edge.
                 for edge_key in path_edges:
@@ -189,22 +224,28 @@ class TaskScheduler:
         # Total used bandwidth should not exceed edge capacity.
         for edge_key, total_bandwidth in edge_constraints.items():
             prob += total_bandwidth <= self.edges[edge_key].capacity
-        
+
         # Solve
         solver = plp.PULP_CBC_CMD(timeLimit=time_limit, msg=0)
         prob.solve(solver)
-        
+
         # Extract solution
         assignments = {}
         status_code = prob.status
         objective_value = None
-        if plp.LpStatus[status_code] == 'Optimal':
+        if plp.LpStatus[status_code] == "Optimal":
             objective_value = plp.value(prob.objective)
             for t, task in tasks.items():
                 for n in self.nodes:
                     if plp.value(d[t][n]) == 1:
-                        task_start_time = running_tasks[t].start_time_s if t in running_tasks else time.time()
-                        assigned_task = RunningTask(node_id=n, start_time_s=task_start_time, task=task)
+                        task_start_time = (
+                            running_tasks[t].start_time_s
+                            if t in running_tasks
+                            else time.time()
+                        )
+                        assigned_task = RunningTask(
+                            node_id=n, start_time_s=task_start_time, task=task
+                        )
                         assignments[t] = assigned_task
                         break
                 else:
