@@ -1,6 +1,5 @@
 import sys
 import time
-import os
 import json
 import jsonlines
 import datetime
@@ -18,20 +17,23 @@ from contextlib import asynccontextmanager
 
 from scheduler.entities import RunningTask, Task, Node, Edge, NetworkTopology
 from scheduler.load_info import load_nodes, load_edges
-
+from config import (
+    ES_API_KEY,
+    ES_INDEX_NAME,
+    ES_INGEST_ENABLED,
+    ES_URL,
+    SKETCH_INGEST_ENABLED,
+    SKETCH_URL,
+)
 
 # Paramters for sending metrics to server.
-SERVER_URL = os.getenv("SKETCH_SERVER_URL", "http://localhost:10101")
-ES_BACKEND_URL = os.getenv("ES_BACKEND_URL", "http://localhost:9200")
-ES_BACKEND_API_KEY = os.getenv("ES_BACKEND_API_KEY", os.getenv("ES_API_KEY", "")).strip()
-ES_INDEX_NAME = os.getenv("ES_INDEX_NAME", "cluster-metrics")
+SERVER_URL = SKETCH_URL
 INTERVAL = 60  # seconds
 TIMEOUT = 5  # seconds
-SKETCH_INGEST_ENABLED = os.getenv("SKETCH_INGEST_ENABLED", "1").lower() not in ("0", "false", "no")
-ES_INGEST_ENABLED = os.getenv("ES_INGEST_ENABLED", "1").lower() not in ("0", "false", "no")
 
 
 def build_es_bulk_payload(records: list[dict]) -> str:
+    # Build an NDJSON bulk payload for Elasticsearch indexing.
     lines = []
     timestamp = datetime.datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
     for record in records:
@@ -58,29 +60,35 @@ def build_es_bulk_payload(records: list[dict]) -> str:
 
 
 async def send_es_bulk(client: httpx.AsyncClient, records: list[dict]) -> None:
-    if not ES_INGEST_ENABLED or not ES_BACKEND_URL:
+    # Send batched telemetry records to Elasticsearch using the bulk API.
+    if not ES_INGEST_ENABLED or not ES_URL:
         return
     payload = build_es_bulk_payload(records)
     if not payload:
         return
     headers = {"Content-Type": "application/x-ndjson"}
-    if ES_BACKEND_API_KEY:
-        headers["Authorization"] = f"ApiKey {ES_BACKEND_API_KEY}"
-    endpoint = f"{ES_BACKEND_URL.rstrip('/')}/{ES_INDEX_NAME}/_bulk"
+    if ES_API_KEY:
+        headers["Authorization"] = f"ApiKey {ES_API_KEY}"
+    endpoint = f"{ES_URL.rstrip('/')}/{ES_INDEX_NAME}/_bulk"
     try:
-        response = await client.post(endpoint, content=payload, headers=headers, timeout=TIMEOUT)
+        response = await client.post(
+            endpoint, content=payload, headers=headers, timeout=TIMEOUT
+        )
         response.raise_for_status()
         data = response.json()
         if data.get("errors"):
             logger.warning("Bulk ingest reported errors from Elasticsearch.")
     except Exception as exc:
-        logger.error(f"Error sending metrics to Elasticsearch {ES_BACKEND_URL}: {exc}")
+        logger.error(f"Error sending metrics to Elasticsearch {ES_URL}: {exc}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Launch background metric emission while the API is running.
     # Load the ML model
-    background_loop = asyncio.create_task(periodically_send_metrics())  # Adjust the sleep duration as needed
+    background_loop = asyncio.create_task(
+        periodically_send_metrics()
+    )  # Adjust the sleep duration as needed
     yield
     background_loop.cancel()
     try:
@@ -94,16 +102,18 @@ app = FastAPI(lifespan=lifespan)
 
 @app.post("/ingest")
 async def ingest(assignments: list[dict]):
+    # Receive task assignments and update the emulator state.
     running_tasks = structure(assignments, list[RunningTask])
     logger.debug(f"Running tasks: {running_tasks}")
 
     running_tasks = {rt.task.task_id: rt for rt in running_tasks}
     emulator.emulate_metrics(running_tasks=running_tasks)
-    
+
     return {"message": "Tasks ingested successfully."}
 
 
 async def periodically_send_metrics():
+    # Periodically push emulated metrics to sketch server and ES.
     async with httpx.AsyncClient() as client:
         while True:
             records = list(emulator.create_metrics_records())
@@ -117,7 +127,7 @@ async def periodically_send_metrics():
                         response = await record
                         response.raise_for_status()
                     except Exception as e:
-                        logger.error(f'Error sending metrics to {SERVER_URL}: {e}')
+                        logger.error(f"Error sending metrics to {SERVER_URL}: {e}")
             if ES_INGEST_ENABLED:
                 await send_es_bulk(client, records)
             await asyncio.sleep(INTERVAL)
@@ -125,12 +135,14 @@ async def periodically_send_metrics():
 
 @dataclass
 class TaskMetrics:
+    # Per-task timeseries buffers for CPU/memory.
     cpu_usage: np.ndarray
     memory_usage: np.ndarray
 
 
 @dataclass
 class MetricsRecord:
+    # Point-in-time metrics for a task.
     task_id: str
     cpu_usage: float
     memory_usage: float
@@ -142,17 +154,21 @@ class MetricsEmulator:
     """
 
     def __init__(self, network: NetworkTopology) -> None:
+        # Hold network topology and the current task time series buffers.
         self.network = network
         self.task_metrics: dict[str, TaskMetrics] = {}
         self.running_tasks: dict[str, RunningTask] = {}
 
     def create_task_metrics(self, task: Task) -> TaskMetrics:
+        # Generate a full-duration timeseries for a new task.
         size = int(task.duration_s)
         cpu_usage = generate_timeseries(size=size, base_value=task.initial_cpu)
         memory_usage = generate_timeseries(size=size, base_value=task.initial_memory)
         return TaskMetrics(cpu_usage=cpu_usage, memory_usage=memory_usage)
 
-    def emulate_metrics(self, running_tasks: dict[str, RunningTask]) -> dict[str, TaskMetrics]:
+    def emulate_metrics(
+        self, running_tasks: dict[str, RunningTask]
+    ) -> dict[str, TaskMetrics]:
         """
         Emulates telemetry metrics for running tasks.
 
@@ -161,13 +177,14 @@ class MetricsEmulator:
         Returns:
             Dictionary mapping task ids to their emulated metrics.
         """
+        # Merge new running tasks and ensure each has a metrics buffer.
         self.running_tasks.update(running_tasks)
         for t_id, running_task in running_tasks.items():
             task = running_task.task
             if t_id not in self.task_metrics:
                 self.task_metrics[t_id] = self.create_task_metrics(task)
         return self.task_metrics
-    
+
     def _emit_metrics(self, interval=60) -> dict[str, TaskMetrics]:
         """
         Emit emulated metrics for running tasks over a specified interval.
@@ -187,7 +204,7 @@ class MetricsEmulator:
             total_cpu_usage = np.zeros(interval)
             total_memory_usage = np.zeros(interval)
 
-            # Aggregate task metrics to get node usage.
+            # Aggregate task metrics to get node usage and per-task slices.
             for t_id in task_ids:
                 task_metrics = self.task_metrics[t_id]
                 start_time = self.running_tasks[t_id].start_time_s
@@ -195,27 +212,33 @@ class MetricsEmulator:
                 offset = min(int(elapsed_time), len(task_metrics.cpu_usage))
 
                 if offset >= len(task_metrics.cpu_usage):
-                    logger.warning(f"Task {t_id} has completed its duration. Skipping metric emission.")
+                    logger.warning(
+                        f"Task {t_id} has completed its duration. Skipping metric emission."
+                    )
                     continue
-                
-                cpu_slice = task_metrics.cpu_usage[offset:offset + interval]
-                memory_slice = task_metrics.memory_usage[offset:offset + interval]
+
+                cpu_slice = task_metrics.cpu_usage[offset : offset + interval]
+                memory_slice = task_metrics.memory_usage[offset : offset + interval]
 
                 metrics[t_id] = TaskMetrics(
-                    cpu_usage=cpu_slice,
-                    memory_usage=memory_slice
+                    cpu_usage=cpu_slice, memory_usage=memory_slice
                 )
 
-                total_cpu_usage += np.pad(cpu_slice, (0, interval - len(cpu_slice)), 'constant')
-                total_memory_usage += np.pad(memory_slice, (0, interval - len(memory_slice)), 'constant')
-            
+                total_cpu_usage += np.pad(
+                    cpu_slice, (0, interval - len(cpu_slice)), "constant"
+                )
+                total_memory_usage += np.pad(
+                    memory_slice, (0, interval - len(memory_slice)), "constant"
+                )
+
             # Update node used resources (for demonstration purposes).
             node.used_cpu = np.median(total_cpu_usage)
             node.used_memory = np.median(total_memory_usage)
-            logger.info(f"Node {node_id} used CPU: {node.used_cpu} ({node.used_cpu / node.cpu_capacity}), used Memory: {node.used_memory} ({node.used_memory / node.memory_capacity})")
+            logger.info(
+                f"Node {node_id} used CPU: {node.used_cpu} ({node.used_cpu / node.cpu_capacity}), used Memory: {node.used_memory} ({node.used_memory / node.memory_capacity})"
+            )
 
         return metrics
-    
 
     def create_metrics_records(self, interval=INTERVAL) -> Iterable[dict]:
         """
@@ -226,7 +249,8 @@ class MetricsEmulator:
         Returns:
             List of dictionaries representing the metrics records.
         """
-        metrics = self._emit_metrics(interval=interval)    
+        # Convert slices into the schema expected by sketch/ES ingestion.
+        metrics = self._emit_metrics(interval=interval)
         for task_id, task_metrics in metrics.items():
             running_task = self.running_tasks[task_id]
             record = {
@@ -234,12 +258,14 @@ class MetricsEmulator:
                 "cluster": [running_task.node_id] * len(task_metrics.cpu_usage),
                 "cpu_cores": task_metrics.cpu_usage.tolist(),
                 "memory_gb": task_metrics.memory_usage.tolist(),
-                "network_mbps": [0] * len(task_metrics.cpu_usage) # Ignore network for now.
+                "network_mbps": [0]
+                * len(task_metrics.cpu_usage),  # Ignore network for now.
             }
             yield record
 
 
 def generate_timeseries(size: int, base_value: float = 1) -> np.ndarray:
+    # Generate a noisy sinusoidal time series around the base value.
     """
     Generates a timeseries of emulated metric values.
 
@@ -256,22 +282,26 @@ def generate_timeseries(size: int, base_value: float = 1) -> np.ndarray:
     b = 2 * np.pi / period
     c = rng.uniform(0, 10 * size)
 
-    scale_factor = 1 + a * np.sin( b * (np.arange(size) - c) )
+    scale_factor = 1 + a * np.sin(b * (np.arange(size) - c))
     noise = rng.normal(loc=0, scale=0.1, size=size)
     return base_value * (scale_factor + noise)
 
 
 def create_emulator() -> MetricsEmulator:
-    nodes = load_nodes('dummy_data/nodes.csv')
-    edges = load_edges('dummy_data/edges.csv')
-    network = NetworkTopology(nodes=nodes.values(), edges=edges.values(), undirected=True)
+    # Construct an emulator using the dummy network topology.
+    nodes = load_nodes("dummy_data/nodes.jsonl")
+    edges = load_edges("dummy_data/edges.jsonl")
+    network = NetworkTopology(
+        nodes=nodes.values(), edges=edges.values(), undirected=True
+    )
     return MetricsEmulator(network=network)
 
 
 if __name__ == "__main__":
-    HOST = '127.0.0.1'
+    # Start the FastAPI telemetry emulator.
+    HOST = "127.0.0.1"
     PORT = 8000
-    LOG_LEVEL = 'debug'
+    LOG_LEVEL = "debug"
 
     emulator = create_emulator()
 
