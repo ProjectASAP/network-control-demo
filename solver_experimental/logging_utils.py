@@ -72,15 +72,64 @@ def _format_result(value: Any) -> str:
     return str(value)
 
 
-def log_query_comparison(
+def _format_top_entities(items: list[Any]) -> str:
+    # Serialize top-entity results as field=entity:value pairs.
+    if not items:
+        return ""
+    parts = []
+    for item in sorted(items, key=lambda entry: str(entry.field)):
+        parts.append(f"{item.field}={item.entity_key}:{item.value:.6g}")
+    return ";".join(parts)
+
+
+def log_node_metric_comparisons(
     correlation_id: str | None,
-    request_type: str,
-    label: str,
-    field: str,
-    sketch_result: Any,
-    es_result: Any,
+    sketch_metrics: dict[str, Any],
+    es_metrics: dict[str, Any],
+    sketch_top_entities: list[Any] | None = None,
+    es_top_entities: list[Any] | None = None,
 ) -> None:
-    # Write a single sketch vs ES comparison row.
+    # Emit wide comparison rows for node metrics.
+    all_node_ids = sorted(set(sketch_metrics.keys()) | set(es_metrics.keys()))
+    header = [
+        "correlation_id",
+        "node_id",
+        "cpu_p25_sk",
+        "cpu_p25_es",
+        "cpu_p50_sk",
+        "cpu_p50_es",
+        "cpu_p75_sk",
+        "cpu_p75_es",
+        "cpu_p90_sk",
+        "cpu_p90_es",
+        "memory_p25_sk",
+        "memory_p25_es",
+        "memory_p50_sk",
+        "memory_p50_es",
+        "memory_p75_sk",
+        "memory_p75_es",
+        "memory_p90_sk",
+        "memory_p90_es",
+        "network_p25_sk",
+        "network_p25_es",
+        "network_p50_sk",
+        "network_p50_es",
+        "network_p75_sk",
+        "network_p75_es",
+        "network_p90_sk",
+        "network_p90_es",
+        "cpu_sum_sk",
+        "cpu_sum_es",
+        "memory_sum_sk",
+        "memory_sum_es",
+        "network_sum_sk",
+        "network_sum_es",
+        "top_entity_sk",
+        "top_entity_es",
+    ]
+    top_entity_sk = _format_top_entities(sketch_top_entities or [])
+    top_entity_es = _format_top_entities(es_top_entities or [])
+
     with _QUERY_COMPARE_LOG_LOCK:
         try:
             try:
@@ -90,113 +139,52 @@ def log_query_comparison(
             with open(QUERY_COMPARE_CSV, "a", newline="") as handle:
                 writer = csv.writer(handle)
                 if needs_header:
+                    writer.writerow(header)
+                for node_id in all_node_ids:
+                    sketch = sketch_metrics.get(node_id)
+                    es = es_metrics.get(node_id)
+                    sketch_cum = sketch.cumulative if sketch is not None else None
+                    es_cum = es.cumulative if es is not None else None
                     writer.writerow(
                         [
-                            "correlation_id",
-                            "request_type",
-                            "label",
-                            "field",
-                            "sketch_result",
-                            "es_result",
+                            "" if correlation_id is None else correlation_id,
+                            node_id,
+                            _format_result(None if sketch is None else sketch.cpu_p25),
+                            _format_result(None if es is None else es.cpu_p25),
+                            _format_result(None if sketch is None else sketch.cpu_p50),
+                            _format_result(None if es is None else es.cpu_p50),
+                            _format_result(None if sketch is None else sketch.cpu_p75),
+                            _format_result(None if es is None else es.cpu_p75),
+                            _format_result(None if sketch is None else sketch.cpu_p90),
+                            _format_result(None if es is None else es.cpu_p90),
+                            _format_result(None if sketch is None else sketch.memory_p25),
+                            _format_result(None if es is None else es.memory_p25),
+                            _format_result(None if sketch is None else sketch.memory_p50),
+                            _format_result(None if es is None else es.memory_p50),
+                            _format_result(None if sketch is None else sketch.memory_p75),
+                            _format_result(None if es is None else es.memory_p75),
+                            _format_result(None if sketch is None else sketch.memory_p90),
+                            _format_result(None if es is None else es.memory_p90),
+                            _format_result(None if sketch is None else sketch.network_p25),
+                            _format_result(None if es is None else es.network_p25),
+                            _format_result(None if sketch is None else sketch.network_p50),
+                            _format_result(None if es is None else es.network_p50),
+                            _format_result(None if sketch is None else sketch.network_p75),
+                            _format_result(None if es is None else es.network_p75),
+                            _format_result(None if sketch is None else sketch.network_p90),
+                            _format_result(None if es is None else es.network_p90),
+                            _format_result(None if sketch_cum is None else sketch_cum.cpu_cores),
+                            _format_result(None if es_cum is None else es_cum.cpu_cores),
+                            _format_result(None if sketch_cum is None else sketch_cum.memory_gb),
+                            _format_result(None if es_cum is None else es_cum.memory_gb),
+                            _format_result(None if sketch_cum is None else sketch_cum.network_mbps),
+                            _format_result(None if es_cum is None else es_cum.network_mbps),
+                            top_entity_sk,
+                            top_entity_es,
                         ]
                     )
-                writer.writerow(
-                    [
-                        "" if correlation_id is None else correlation_id,
-                        request_type,
-                        label,
-                        field,
-                        _format_result(sketch_result),
-                        _format_result(es_result),
-                    ]
-                )
         except Exception as exc:
             print(f"failed to write query comparison log: {exc}")
-
-
-def log_node_metric_comparisons(
-    correlation_id: str | None,
-    sketch_metrics: dict[str, Any],
-    es_metrics: dict[str, Any],
-) -> None:
-    # Emit comparison rows for node metrics.
-    all_node_ids = sorted(set(sketch_metrics.keys()) | set(es_metrics.keys()))
-    for node_id in all_node_ids:
-        sketch = sketch_metrics.get(node_id)
-        es = es_metrics.get(node_id)
-        label = node_id
-
-        sketch_cpu = sketch.cpu_p50 if sketch is not None else None
-        es_cpu = es.cpu_p50 if es is not None else None
-        if sketch_cpu is not None or es_cpu is not None:
-            log_query_comparison(
-                correlation_id=correlation_id,
-                request_type="node_metrics",
-                label=label,
-                field="cpu_cores_p50",
-                sketch_result=sketch_cpu,
-                es_result=es_cpu,
-            )
-
-        sketch_mem = sketch.memory_p50 if sketch is not None else None
-        es_mem = es.memory_p50 if es is not None else None
-        if sketch_mem is not None or es_mem is not None:
-            log_query_comparison(
-                correlation_id=correlation_id,
-                request_type="node_metrics",
-                label=label,
-                field="memory_gb_p50",
-                sketch_result=sketch_mem,
-                es_result=es_mem,
-            )
-
-        sketch_net = sketch.network_p50 if sketch is not None else None
-        es_net = es.network_p50 if es is not None else None
-        if sketch_net is not None or es_net is not None:
-            log_query_comparison(
-                correlation_id=correlation_id,
-                request_type="node_metrics",
-                label=label,
-                field="network_mbps_p50",
-                sketch_result=sketch_net,
-                es_result=es_net,
-            )
-
-        sketch_cumulative = sketch.cumulative if sketch is not None else None
-        es_cumulative = es.cumulative if es is not None else None
-        if sketch_cumulative is not None or es_cumulative is not None:
-            log_query_comparison(
-                correlation_id=correlation_id,
-                request_type="node_metrics",
-                label=label,
-                field="cpu_cores_sum",
-                sketch_result=(
-                    None if sketch_cumulative is None else sketch_cumulative.cpu_cores
-                ),
-                es_result=None if es_cumulative is None else es_cumulative.cpu_cores,
-            )
-            log_query_comparison(
-                correlation_id=correlation_id,
-                request_type="node_metrics",
-                label=label,
-                field="memory_gb_sum",
-                sketch_result=(
-                    None if sketch_cumulative is None else sketch_cumulative.memory_gb
-                ),
-                es_result=None if es_cumulative is None else es_cumulative.memory_gb,
-            )
-            log_query_comparison(
-                correlation_id=correlation_id,
-                request_type="node_metrics",
-                label=label,
-                field="network_mbps_sum",
-                sketch_result=(
-                    None
-                    if sketch_cumulative is None
-                    else sketch_cumulative.network_mbps
-                ),
-                es_result=None if es_cumulative is None else es_cumulative.network_mbps,
-            )
 
 
 def log_e2e(
