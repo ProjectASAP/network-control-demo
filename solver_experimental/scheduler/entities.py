@@ -6,7 +6,6 @@ from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 import networkx as nx
 import datetime as dt
 
-
 EdgeKey = Tuple[str, str]
 
 
@@ -19,14 +18,13 @@ def _normalise_edge(edge: EdgeKey, undirected: bool) -> EdgeKey:
 class NetworkTopology:
     """Graph representation of the network."""
 
-    def __init__(self, nodes: Iterable[Node], edges: Iterable[Edge], undirected: bool = True) -> None:
+    def __init__(
+        self, nodes: Iterable[Node], edges: Iterable[Edge], undirected: bool = True
+    ) -> None:
         self._graph = nx.Graph() if undirected else nx.DiGraph()
         self.undirected = undirected
         for node in nodes:
-            self._graph.add_node(
-                node.node_id,
-                data=node
-            )
+            self._graph.add_node(node.node_id, data=node)
         for edge in edges:
             u, v = _normalise_edge(edge.edge_id, undirected)
             if u not in self._graph or v not in self._graph:
@@ -36,14 +34,17 @@ class NetworkTopology:
     @property
     def nodes(self) -> dict[str, Node]:
         return {node_id: node["data"] for node_id, node in self._graph.nodes(data=True)}
-    
+
     @property
     def edges(self) -> dict[EdgeKey, Edge]:
-        return {_normalise_edge((u, v), self.undirected): edge["data"] for u, v, edge in self._graph.edges(data=True)}
+        return {
+            _normalise_edge((u, v), self.undirected): edge["data"]
+            for u, v, edge in self._graph.edges(data=True)
+        }
 
     def get_node(self, node_id: str) -> Node:
         return self._graph.nodes[node_id]["data"]
-    
+
     def get_edge(self, edge_id: EdgeKey) -> Edge:
         return self._graph.edges[edge_id]["data"]
 
@@ -62,8 +63,10 @@ class Node:
     node_id: str
     cpu_capacity: float
     memory_capacity: float
+    network_capacity: float | None = None
     used_cpu: float = 0.0
     used_memory: float = 0.0
+    used_network: float = 0.0
 
 
 @dataclass
@@ -78,6 +81,7 @@ class Edge:
 @dataclass(frozen=True)
 class TaskCommunication:
     """Bandwidth demand between two tasks."""
+
     source_task_id: str
     target_task_id: str
     bandwidth: float
@@ -95,9 +99,9 @@ class Task:
     peer_bandwidths: dict[str, float] = field(default_factory=dict)
 
     class MetricType(Enum):
-        CPU = 'cpu'
-        MEMORY = 'memory'
-        PEER_BANDWIDTHS = 'peer_bandwidths'
+        CPU = "cpu"
+        MEMORY = "memory"
+        PEER_BANDWIDTHS = "peer_bandwidths"
 
 
 @dataclass
@@ -117,4 +121,3 @@ class RunningTask:
     node_id: str
     start_time_s: float
     task: Task
-    
