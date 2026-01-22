@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Instant;
 
 use axum::{
     Json, Router,
@@ -160,7 +161,13 @@ async fn search_handler(
                 match agg.kind() {
                     Some(kind) => match kind {
                         AggregationKind::Percentiles(pct) => {
-                            match handle_percentiles(&state, &pct, query_key) {
+                            let t0 = Instant::now();
+                            let res = handle_percentiles(&state, &pct, query_key);
+                            let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+                            if let Some(t) = &mut timing {
+                                t.record("sketch_estimate", elapsed_ms);
+                            }
+                            match res {
                                 Ok(Some(values)) => Some(json!({ "values": values })),
                                 Ok(None) => None,
                                 Err(message) => {
@@ -174,7 +181,13 @@ async fn search_handler(
                             if query_key.is_some() {
                                 None
                             } else {
-                                match handle_top_entities(&state, &top) {
+                                let t0 = Instant::now();
+                                let res = handle_top_entities(&state, &top);
+                                let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+                                if let Some(t) = &mut timing {
+                                    t.record("sketch_estimate", elapsed_ms);
+                                }
+                                match res {
                                     Ok(TopEntitiesResult::Single(entity)) => Some(json!({
                                         "key": entity.key,
                                         "value": entity.value
@@ -187,13 +200,21 @@ async fn search_handler(
                                 }
                             }
                         }
-                        AggregationKind::Cumulative(cum) => match handle_cumulative(&state, &cum) {
-                            Ok(value) => Some(json!({ "key": cum.key, "value": value })),
-                            Err(message) => {
-                                return (axum::http::StatusCode::BAD_REQUEST, message)
-                                    .into_response();
+                        AggregationKind::Cumulative(cum) => {
+                            let t0 = Instant::now();
+                            let res = handle_cumulative(&state, &cum);
+                            let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+                            if let Some(t) = &mut timing {
+                                t.record("sketch_estimate", elapsed_ms);
                             }
-                        },
+                            match res {
+                                Ok(value) => Some(json!({ "key": cum.key, "value": value })),
+                                Err(message) => {
+                                    return (axum::http::StatusCode::BAD_REQUEST, message)
+                                        .into_response();
+                                }
+                            }
+                        }
                     },
                     None => None,
                 }

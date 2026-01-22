@@ -31,6 +31,11 @@ impl QueryTiming {
         self.last_step = now;
     }
 
+    /// Record elapsed time for a specific operation (independent of step timing)
+    pub fn record(&mut self, name: &str, duration_ms: f64) {
+        self.steps.push((name.to_string(), duration_ms));
+    }
+
     /// Get total elapsed time in ms
     pub fn total_ms(&self) -> f64 {
         self.start.elapsed().as_secs_f64() * 1000.0
@@ -91,31 +96,19 @@ pub(crate) fn write_timing_log(
     };
     let mut steps: BTreeMap<&str, f64> = BTreeMap::new();
     for (name, ms) in &timing.steps {
-        steps.insert(name.as_str(), *ms);
+        // Accumulate times for repeated step names (e.g., multiple sketch_estimate calls)
+        *steps.entry(name.as_str()).or_insert(0.0) += *ms;
     }
     let total_ms: f64 = steps.values().copied().sum();
-    let step_names = [
-        "parse_json",
-        "deserialize",
-        "aggregations",
-        "prepare_upstream",
-        "upstream",
-        "merge",
-        "serialize",
-        "parse_field",
-        "validate",
-        "query_percentiles",
-        "build_response",
-    ];
-    let format_value =
-        |value: Option<&f64>| -> String { value.map(|ms| format!("{ms:.3}")).unwrap_or_default() };
-    let mut row = Vec::with_capacity(6 + step_names.len());
-    row.push(request_id.to_string());
-    row.push(request_type.to_string());
-    row.push(status.to_string());
-    row.push(format!("{total_ms:.3}"));
-    for name in step_names {
-        row.push(format_value(steps.get(name)));
-    }
-    let _ = sender.send(row.join(","));
+
+    // Simplified output: total, estimate (sketch query), json processing
+    let estimate_ms = steps.get("sketch_estimate").copied().unwrap_or(0.0);
+    let json_ms = steps.get("parse_json").copied().unwrap_or(0.0)
+        + steps.get("deserialize").copied().unwrap_or(0.0);
+
+    let row = format!(
+        "{},{},{},{:.3},{:.3},{:.3}",
+        request_id, request_type, status, total_ms, estimate_ms, json_ms
+    );
+    let _ = sender.send(row);
 }

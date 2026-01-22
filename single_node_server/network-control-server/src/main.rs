@@ -107,7 +107,7 @@ fn init_timing_sender() -> Option<TimingSender> {
     if is_empty {
         if let Err(err) = writeln!(
             writer,
-            "request_id,request_type,status,total_ms,parse_json_ms,deserialize_ms,aggregations_ms,prepare_upstream_ms,upstream_ms,merge_ms,serialize_ms,parse_field_ms,validate_ms,query_percentiles_ms,build_response_ms"
+            "request_id,request_type,status,total_ms,estimate_ms,json_ms"
         ) {
             eprintln!("failed to write timing CSV header: {err}");
             return None;
