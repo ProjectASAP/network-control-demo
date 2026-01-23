@@ -35,7 +35,7 @@ TIMEOUT = 5  # seconds
 def build_es_bulk_payload(records: list[dict]) -> str:
     # Build an NDJSON bulk payload for Elasticsearch indexing.
     lines = []
-    timestamp = datetime.datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+    timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds") + "Z"
     for record in records:
         tasks = record.get("task", [])
         clusters = record.get("cluster", [])
@@ -142,6 +142,7 @@ class TaskMetrics:
     # Per-task timeseries buffers for CPU/memory.
     cpu_usage: np.ndarray
     memory_usage: np.ndarray
+    network_usage: np.ndarray
 
 
 @dataclass
@@ -150,6 +151,7 @@ class MetricsRecord:
     task_id: str
     cpu_usage: float
     memory_usage: float
+    network_usage: float
 
 
 class MetricsEmulator:
@@ -168,7 +170,8 @@ class MetricsEmulator:
         size = int(task.duration_s)
         cpu_usage = generate_timeseries(size=size, base_value=task.initial_cpu)
         memory_usage = generate_timeseries(size=size, base_value=task.initial_memory)
-        return TaskMetrics(cpu_usage=cpu_usage, memory_usage=memory_usage)
+        network_usage = generate_timeseries(size=size, base_value=sum(task.peer_bandwidths.values()))
+        return TaskMetrics(cpu_usage=cpu_usage, memory_usage=memory_usage, network_usage=network_usage)
 
     def emulate_metrics(
         self, running_tasks: dict[str, RunningTask]
@@ -207,7 +210,7 @@ class MetricsEmulator:
 
             total_cpu_usage = np.zeros(interval)
             total_memory_usage = np.zeros(interval)
-
+            total_network_usage = np.zeros(interval)
             # Aggregate task metrics to get node usage and per-task slices.
             for t_id in task_ids:
                 task_metrics = self.task_metrics[t_id]
@@ -223,23 +226,42 @@ class MetricsEmulator:
 
                 cpu_slice = task_metrics.cpu_usage[offset : offset + interval]
                 memory_slice = task_metrics.memory_usage[offset : offset + interval]
+                network_slice = task_metrics.network_usage[offset : offset + interval]
 
-                metrics[t_id] = TaskMetrics(
-                    cpu_usage=cpu_slice, memory_usage=memory_slice
-                )
-
-                total_cpu_usage += np.pad(
+                # Pad to same length to send to server and maintain temporal consistency.
+                padded_cpu_slice = np.pad(
                     cpu_slice, (0, interval - len(cpu_slice)), "constant"
                 )
-                total_memory_usage += np.pad(
+                padded_memory_slice = np.pad(
                     memory_slice, (0, interval - len(memory_slice)), "constant"
                 )
+                padded_network_slice = np.pad(
+                    network_slice, (0, interval - len(network_slice)), "constant"
+                )
+
+                metrics[t_id] = TaskMetrics(
+                    cpu_usage=padded_cpu_slice, memory_usage=padded_memory_slice, network_usage=padded_network_slice
+                )
+
+                total_cpu_usage += padded_cpu_slice
+                total_memory_usage += padded_memory_slice
+                total_network_usage += padded_network_slice
 
             # Update node used resources (for demonstration purposes).
             node.used_cpu = np.median(total_cpu_usage)
             node.used_memory = np.median(total_memory_usage)
+            node.used_network = np.median(total_network_usage)
+
+            # If network capacity is None, sum capacities of connected edges.
+            network_capacity = node.network_capacity
+            if network_capacity is None:
+                network_capacity = 0.0
+                for nbr in self.network._graph.neighbors(node_id):
+                    edge = self.network.get_edge((node_id, nbr))
+                    network_capacity += edge.capacity
+
             logger.info(
-                f"Node {node_id} used CPU: {node.used_cpu} ({node.used_cpu / node.cpu_capacity}), used Memory: {node.used_memory} ({node.used_memory / node.memory_capacity})"
+                f"Node {node_id} used CPU: {node.used_cpu} ({node.used_cpu / node.cpu_capacity}), used Memory: {node.used_memory} ({node.used_memory / node.memory_capacity}), used Network: {node.used_network} ({node.used_network / network_capacity})"
             )
 
         return metrics
@@ -262,8 +284,7 @@ class MetricsEmulator:
                 "cluster": [running_task.node_id] * len(task_metrics.cpu_usage),
                 "cpu_cores": task_metrics.cpu_usage.tolist(),
                 "memory_gb": task_metrics.memory_usage.tolist(),
-                "network_mbps": [0]
-                * len(task_metrics.cpu_usage),  # Ignore network for now.
+                "network_mbps": task_metrics.network_usage.tolist(),
             }
             yield record
 
