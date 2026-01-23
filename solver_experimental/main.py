@@ -1,3 +1,4 @@
+import os
 import sys
 import yaml
 import time
@@ -93,8 +94,9 @@ def assign_tasks(args: AppConfig):
         unassigned_tasks: dict[str, Task] = {}
         retry_counts: dict[str, int] = {}
         failed_tasks: dict[str, Task] = {}
-        while task_queue:
-            # Pace the scheduler loop.
+        synthetic_node_id = os.getenv("SYNTHETIC_NODE_ID", "synthetic-node")
+
+        while task_queue or unassigned_tasks or running_tasks:
             time.sleep(args.interval)
             curr_offset = time.time() - start_time
             logger.debug(f"Current time offset: {curr_offset:.2f} s")
@@ -105,18 +107,20 @@ def assign_tasks(args: AppConfig):
                 for task_id, rt in running_tasks.items()
                 if curr_offset - rt.start_time_s < rt.task.duration_s
             }
-            logger.debug(f"Currently running tasks: {list(running_tasks.keys())}")
+            logger.debug(f"Currently running tasks ({len(running_tasks)}): {list(running_tasks.keys())}")
 
             arrived_tasks: dict[str, Task] = {}
             # Pull one newly arrived task into the scheduling window.
             while task_queue:
-                if len(arrived_tasks) >= 1:
+                task = task_queue[0]
+                if task.arrival_offset_s < curr_offset:
+                    arrived_tasks[task.task_id] = task
+                    task_queue.popleft()
+                else:
                     break
-                task = task_queue.popleft()
-                arrived_tasks[task.task_id] = task
-            logger.debug(f"Arrived tasks: {list(arrived_tasks.keys())}")
+            logger.debug(f"Arrived tasks ({len(arrived_tasks)}): {list(arrived_tasks.keys())}")
             logger.debug(
-                f"Unassigned tasks from previous rounds: {list(unassigned_tasks.keys())}"
+                f"Unassigned tasks from previous rounds ({len(unassigned_tasks)}): {list(unassigned_tasks.keys())}"
             )
 
             # Combine leftover and new tasks, keeping older unassigned tasks first.
@@ -351,11 +355,9 @@ def assign_tasks(args: AppConfig):
             )
             running_tasks.update(assignments)
 
-            # Emit summary logging for each scheduling round.
-            logger.info(
-                f"Number of unassigned tasks after scheduling: {len(unassigned_tasks)}"
-            )
-            if pulp.LpStatus[status_code] == "Optimal" and assignments:
+            logger.info(f"Number of running tasks ({len(assignments)} new assignments): {len(running_tasks)}")
+            logger.info(f"Number of unassigned tasks after scheduling: {len(unassigned_tasks)}")
+            if pulp.LpStatus[status_code] == 'Optimal' and assignments:
                 assignment_repr = "Assignment: "
                 for task, rt in sorted(assignments.items()):
                     assignment_repr += f"{task} -> {rt.node_id}, "

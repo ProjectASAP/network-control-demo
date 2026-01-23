@@ -81,6 +81,10 @@ async def send_es_bulk(client: httpx.AsyncClient, records: list[dict]) -> None:
     except Exception as exc:
         logger.error(f"Error sending metrics to Elasticsearch {ES_URL}: {exc}")
 
+# Random seed for reproducibility.
+SEED = 42
+_RNG = np.random.default_rng(SEED)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -275,8 +279,7 @@ def generate_timeseries(size: int, base_value: float = 1) -> np.ndarray:
     Returns:
         List of emulated metric values.
     """
-    rng = np.random.default_rng()
-
+    rng = _RNG
     period = rng.uniform(0, 10 * size)
     a = rng.uniform(0.05, 0.95)
     b = 2 * np.pi / period
