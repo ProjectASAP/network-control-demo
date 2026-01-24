@@ -121,6 +121,7 @@ async def periodically_send_metrics():
     async with httpx.AsyncClient() as client:
         while True:
             records = list(emulator.create_metrics_records())
+            logger.info(f"Generated {len(records)} metrics records to send.")
             if SKETCH_INGEST_ENABLED:
                 posts = []
                 for record in records:
@@ -139,6 +140,15 @@ async def periodically_send_metrics():
 
 @dataclass
 class TaskMetrics:
+    # Per metric data generators for a task.
+    cpu_usage: "MetricGenerator"
+    memory_usage: "MetricGenerator"
+    network_usage: "MetricGenerator"
+    projected_duration: int
+
+
+@dataclass
+class MetricBuffers:
     # Per-task timeseries buffers for CPU/memory.
     cpu_usage: np.ndarray
     memory_usage: np.ndarray
@@ -154,7 +164,81 @@ class MetricsRecord:
     network_usage: float
 
 
-class MetricsEmulator:
+@dataclass
+class MetricGenerator:
+    """
+    Generates emulated metric values using a noisy sinusoidal model.
+    """
+    a: float
+    b: float
+    c: float
+    base_value: float = 1.0
+    noise_scale: float = 0.1
+    p_scalable: float = 0
+
+    def __post_init__(self):
+        num = 1000
+        p = (self.generate(num=num) > 1).sum() / num
+        self.p_scalable = p
+
+    @classmethod
+    def create(cls, base_value: float = 1.0) -> "MetricGenerator":
+        # Generate a noisy sinusoidal time series around the base value.
+        """
+        Creates a MetricGenerator with random parameters.
+    
+        Args:
+            base_value: Base value around which to generate data.
+        Returns:
+            A MetricGenerator instance.
+        """
+        rng = _RNG
+        period = rng.uniform(0, 10)
+        a = rng.uniform(0.05, 0.95)
+        b = 2 * np.pi / period
+        c = b * rng.uniform(0, 10)
+    
+        return cls(a=a, b=b, c=c, base_value=base_value)
+
+    def generate(self, stop: float = 1.0, start: float = 0.0, num: int = 60, value: float = 1.0) -> np.ndarray:
+        # Generate a noisy sinusoidal time series around the base value.
+        """
+        Generates a timeseries of emulated metric values over a specified range of the metric duration.
+    
+        Args:
+            start: Start time (in [0, 1]) of the metric duration.
+            stop: Stop time (in [0, 1]) of the metric duration.
+            num: Number of samples to generate.
+            value: Target value to scale the generated metric values.
+        Returns:
+            Array of emulated metric values.
+        """
+        if self.base_value == 0:
+            return np.zeros(num)
+        rng = _RNG
+        value_scale = value / self.base_value
+
+        speed_up = amdahl_factor(self.p_scalable, value_scale)
+        a = self.a
+        # Compress timeseries by corresponding factor.
+        b = self.b * speed_up
+        c = self.c
+
+        
+        t = np.linspace(start / speed_up, stop / speed_up, num=num)
+    
+        scale_factor = 1 + a * np.sin(b * t - c)
+        noise = rng.normal(loc=0, scale=self.noise_scale, size=len(scale_factor))
+        return value_scale * self.base_value * (scale_factor + noise)
+
+
+def amdahl_factor(p: float, n: float):
+    time_scale = (1 - p) + p / n
+    speed_up = 1 / time_scale
+    return speed_up
+
+
+class TaskMetricsEmulator:
     """
     Emulates telemetry metrics for running tasks.
     """
@@ -168,10 +252,15 @@ class MetricsEmulator:
     def create_task_metrics(self, task: Task) -> TaskMetrics:
         # Generate a full-duration timeseries for a new task.
         size = int(task.duration_s)
-        cpu_usage = generate_timeseries(size=size, base_value=task.initial_cpu)
-        memory_usage = generate_timeseries(size=size, base_value=task.initial_memory)
-        network_usage = generate_timeseries(size=size, base_value=sum(task.peer_bandwidths.values()))
-        return TaskMetrics(cpu_usage=cpu_usage, memory_usage=memory_usage, network_usage=network_usage)
+        cpu_usage = MetricGenerator.create(base_value=task.initial_cpu)
+        memory_usage = MetricGenerator.create(base_value=task.initial_memory)
+        network_usage = MetricGenerator.create(base_value=sum(task.peer_bandwidths.values()))
+        return TaskMetrics(
+            cpu_usage=cpu_usage, 
+            memory_usage=memory_usage, 
+            network_usage=network_usage, 
+            projected_duration=size
+        )
 
     def emulate_metrics(
         self, running_tasks: dict[str, RunningTask]
@@ -192,7 +281,7 @@ class MetricsEmulator:
                 self.task_metrics[t_id] = self.create_task_metrics(task)
         return self.task_metrics
 
-    def _emit_metrics(self, interval=60) -> dict[str, TaskMetrics]:
+    def _emit_metrics(self, interval=60) -> dict[str, MetricBuffers]:
         """
         Emit emulated metrics for running tasks over a specified interval.
         """
@@ -204,7 +293,7 @@ class MetricsEmulator:
             task_list.append(t_id)
 
         # Emulate node resource usage based on assigned tasks.
-        metrics: dict[str, TaskMetrics] = {}
+        metrics: dict[str, MetricBuffers] = {}
         for node_id, task_ids in nodes_to_tasks.items():
             node = self.network.get_node(node_id)
 
@@ -216,17 +305,21 @@ class MetricsEmulator:
                 task_metrics = self.task_metrics[t_id]
                 start_time = self.running_tasks[t_id].start_time_s
                 elapsed_time = time.time() - start_time
-                offset = min(int(elapsed_time), len(task_metrics.cpu_usage))
+                offset = min(int(elapsed_time), task_metrics.projected_duration)
 
-                if offset >= len(task_metrics.cpu_usage):
+                if offset >= task_metrics.projected_duration:
                     logger.warning(
                         f"Task {t_id} has completed its duration. Skipping metric emission."
                     )
                     continue
+                
+                size = min(interval, task_metrics.projected_duration - offset)
+                start = offset / task_metrics.projected_duration
+                stop = (offset + size) / task_metrics.projected_duration
 
-                cpu_slice = task_metrics.cpu_usage[offset : offset + interval]
-                memory_slice = task_metrics.memory_usage[offset : offset + interval]
-                network_slice = task_metrics.network_usage[offset : offset + interval]
+                cpu_slice = task_metrics.cpu_usage.generate(start=start, stop=stop, num=size, value=self.running_tasks[t_id].task.initial_cpu)
+                memory_slice = task_metrics.memory_usage.generate(start=start, stop=stop, num=size, value=self.running_tasks[t_id].task.initial_memory)
+                network_slice = task_metrics.network_usage.generate(start=start, stop=stop, num=size, value=sum(self.running_tasks[t_id].task.peer_bandwidths.values()))
 
                 # Pad to same length to send to server and maintain temporal consistency.
                 padded_cpu_slice = np.pad(
@@ -239,7 +332,7 @@ class MetricsEmulator:
                     network_slice, (0, interval - len(network_slice)), "constant"
                 )
 
-                metrics[t_id] = TaskMetrics(
+                metrics[t_id] = MetricBuffers(
                     cpu_usage=padded_cpu_slice, memory_usage=padded_memory_slice, network_usage=padded_network_slice
                 )
 
@@ -289,36 +382,14 @@ class MetricsEmulator:
             yield record
 
 
-def generate_timeseries(size: int, base_value: float = 1) -> np.ndarray:
-    # Generate a noisy sinusoidal time series around the base value.
-    """
-    Generates a timeseries of emulated metric values.
-
-    Args:
-        size: Number of data points to generate.
-        base_value: Base value around which to generate data.
-    Returns:
-        List of emulated metric values.
-    """
-    rng = _RNG
-    period = rng.uniform(0, 10 * size)
-    a = rng.uniform(0.05, 0.95)
-    b = 2 * np.pi / period
-    c = rng.uniform(0, 10 * size)
-
-    scale_factor = 1 + a * np.sin(b * (np.arange(size) - c))
-    noise = rng.normal(loc=0, scale=0.1, size=size)
-    return base_value * (scale_factor + noise)
-
-
-def create_emulator() -> MetricsEmulator:
+def create_emulator() -> TaskMetricsEmulator:
     # Construct an emulator using the dummy network topology.
     nodes = load_nodes("dummy_data/nodes.jsonl")
     edges = load_edges("dummy_data/edges.jsonl")
     network = NetworkTopology(
         nodes=nodes.values(), edges=edges.values(), undirected=True
     )
-    return MetricsEmulator(network=network)
+    return TaskMetricsEmulator(network=network)
 
 
 if __name__ == "__main__":
