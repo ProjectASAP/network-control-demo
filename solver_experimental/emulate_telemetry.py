@@ -6,6 +6,7 @@ import datetime
 import numpy as np
 import networkx as nx
 from dataclasses import dataclass, field
+from pprint import pformat
 from cattrs import structure, unstructure
 from loguru import logger
 from typing import Iterable
@@ -117,7 +118,7 @@ async def active_tasks():
             rt.end_time_s = rt.start_time_s + metrics.projected_duration
             completed_tasks[tid] = rt
             continue
-        logger.info(f"Running task: {rt}")
+        logger.info(f"Running task: {rt.task.task_id}, elapsed: {elapsed:.2f}s / projected {metrics.projected_duration:.2f}s")
         running_tasks[tid] = rt
     result = {
         "running_tasks": unstructure(running_tasks),
@@ -130,7 +131,7 @@ async def active_tasks():
 async def ingest(assignments: list[dict]):
     # Receive task assignments and update the emulator state.
     running_tasks = structure(assignments, list[RunningTask])
-    logger.debug(f"Running tasks: {running_tasks}")
+    logger.debug(f"Ingesting assignments: {running_tasks}")
 
     running_tasks = {rt.task.task_id: rt for rt in running_tasks}
     emulator.emulate_metrics(running_tasks=running_tasks)
@@ -147,7 +148,7 @@ async def periodically_send_metrics():
             if SKETCH_INGEST_ENABLED:
                 posts = []
                 for record in records:
-                    logger.trace(f"Sending record: {record}")
+                    logger.trace(f"Sending record: {pformat(record, indent=2)}")
                     posts.append(client.post(SERVER_URL, json=record, timeout=TIMEOUT))
                 for record in asyncio.as_completed(posts):
                     try:
@@ -249,15 +250,17 @@ class MetricGenerator:
         # Compress timeseries by corresponding factor.
         b = self.b * speed_up
         c = self.c
-
-        # Calculate adjusted duration based on speed-up from Amdahl's law.
-        duration_adjust_factor = self.duration_adjust_factor(speed_up=speed_up, start=start)
         
         t = np.linspace(start / speed_up, stop / speed_up, num=num)
     
         scale_factor = 1 + a * np.sin(b * t - c)
         noise = rng.normal(loc=0, scale=self.noise_scale, size=len(scale_factor))
-        buffer = value_scale * self.base_value * (scale_factor + noise)
+        buffer = speed_up * self.base_value * (scale_factor + noise)
+
+        # Re-calculate speed-up using Amdahl's law with the observed value scale. Use for duration adjustment.
+        empirical_speed_up = amdahl_factor(self.p_scalable, buffer.mean() / self.base_value)
+        duration_adjust_factor = self.duration_adjust_factor(speed_up=empirical_speed_up, start=start)
+
         return buffer, duration_adjust_factor
     
     def duration_adjust_factor(self, speed_up: float = 1.0, start: float = 0.0) -> float:
