@@ -6,7 +6,7 @@ import datetime
 import numpy as np
 import networkx as nx
 from dataclasses import dataclass, field
-from cattrs import structure, Converter
+from cattrs import structure, unstructure
 from loguru import logger
 from typing import Iterable
 import httpx
@@ -102,6 +102,28 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/active_tasks")
+async def active_tasks():
+    running_tasks: dict[str, RunningTask] = {}
+    completed_tasks: dict[str, RunningTask] = {}
+    for tid, rt in emulator.running_tasks.items():
+        curr_time = time.time()
+        elapsed = curr_time - rt.start_time_s
+        metrics = emulator.task_metrics[tid]
+        if elapsed >= metrics.projected_duration:
+            logger.info(f"Task {tid} has completed.")
+            rt.end_time_s = rt.start_time_s + metrics.projected_duration
+            completed_tasks[tid] = rt
+            continue
+        logger.info(f"Running task: {rt}")
+        running_tasks[tid] = rt
+    result = {
+        "running_tasks": unstructure(running_tasks),
+        "completed_tasks": unstructure(completed_tasks),
+    }
+    return result
 
 
 @app.post("/ingest")
@@ -262,6 +284,17 @@ class TaskMetricsEmulator:
         self.network = network
         self.task_metrics: dict[str, TaskMetrics] = {}
         self.running_tasks: dict[str, RunningTask] = {}
+        self.completed_tasks: dict[str, RunningTask] = {}
+
+    @classmethod
+    def create_emulator(cls, node_path: str = "dummy_data/nodes.jsonl", edge_path: str = "dummy_data/edges.jsonl") -> "TaskMetricsEmulator":
+        # Construct an emulator using the dummy network topology.
+        nodes = load_nodes(node_path)
+        edges = load_edges(edge_path)
+        network = NetworkTopology(
+            nodes=nodes.values(), edges=edges.values(), undirected=True
+        )
+        return cls(network=network)
 
     def create_task_metrics(self, task: Task) -> TaskMetrics:
         # Generate a full-duration timeseries for a new task.
@@ -403,23 +436,13 @@ class TaskMetricsEmulator:
             yield record
 
 
-def create_emulator() -> TaskMetricsEmulator:
-    # Construct an emulator using the dummy network topology.
-    nodes = load_nodes("dummy_data/nodes.jsonl")
-    edges = load_edges("dummy_data/edges.jsonl")
-    network = NetworkTopology(
-        nodes=nodes.values(), edges=edges.values(), undirected=True
-    )
-    return TaskMetricsEmulator(network=network)
-
-
 if __name__ == "__main__":
     # Start the FastAPI telemetry emulator.
     HOST = "127.0.0.1"
     PORT = 8000
     LOG_LEVEL = "debug"
 
-    emulator = create_emulator()
+    emulator = TaskMetricsEmulator.create_emulator()
 
     logger.remove()
     logger.add(sys.stderr, level=LOG_LEVEL.upper())
