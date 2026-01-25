@@ -9,7 +9,6 @@ from itertools import combinations
 from collections import deque
 from loguru import logger
 import pulp
-from typing import Dict
 import httpx
 from urllib3.util.retry import Retry
 from dataclasses import dataclass
@@ -46,11 +45,35 @@ class AppConfig:
     edge_path: str
     task_path: str
     query_manager_config: str
+    emulator_url: str = "http://localhost:8000"
     interval: float = 10.0
     log_level: str = "INFO"
 
 
-def assign_tasks(args: AppConfig):
+def filter_completed_tasks(client: httpx.Client, running_tasks: dict[str, RunningTask], current_time: float | None = None) -> dict[str, RunningTask]:
+    """Filter out tasks whose duration has elapsed. Assumes client base URL is set to the emulator URL."""
+    active_tasks = {}
+    try:
+        response = client.get("/active_tasks")
+        response.raise_for_status()
+        data = response.json()
+        active_tasks = structure(data["running_tasks"], dict[str, RunningTask])
+        return active_tasks
+    except Exception as exc:
+        logger.warning(f"Failed to fetch active tasks from emulator: {exc}")
+
+    # Fallback: local filtering based on time estimates.
+    logger.warning("Falling back to local task completion filtering.")
+    if current_time is None:
+        current_time = time.time()
+    for task_id, rt in running_tasks.items():
+        elapsed = current_time - rt.start_time_s
+        if elapsed < rt.task.duration_s:
+            active_tasks[task_id] = rt
+    return active_tasks
+
+
+def assign_tasks(args: AppConfig, client: httpx.Client):
     logger.info("Loading network information and initializing solver...")
     # Load network topology from disk.
     logger.debug(f"Node path: {args.node_path}")
@@ -101,12 +124,8 @@ def assign_tasks(args: AppConfig):
             logger.debug(f"Current time offset: {curr_offset:.2f} s")
 
             # Prune tasks whose duration has elapsed.
-            curr_time = time.time()
-            running_tasks = {
-                task_id: rt
-                for task_id, rt in running_tasks.items()
-                if curr_time - rt.start_time_s < rt.task.duration_s
-            }
+            curr_time = start_time + curr_offset
+            running_tasks = filter_completed_tasks(client, running_tasks, curr_time)
             logger.debug(f"Currently running tasks ({len(running_tasks)}): {list(running_tasks.keys())}")
 
             arrived_tasks: dict[str, Task] = {}
@@ -372,11 +391,17 @@ def assign_tasks(args: AppConfig):
 def main(args: argparse.Namespace):
     # Convert CLI args to config and post assignments to the emulator.
     config = structure(vars(args), AppConfig)
-    with httpx.Client(timeout=5) as client:
-        for assignments in assign_tasks(config):
+    with httpx.Client(timeout=5, base_url=config.emulator_url) as client:
+        for assignments in assign_tasks(config, client):
             running_tasks = unstructure(assignments.values(), list[RunningTask])
-            if running_tasks:
-                client.post("http://localhost:8000/ingest", json=running_tasks)
+            if not running_tasks:
+                continue
+            try:
+                response = client.post("/ingest", json=running_tasks)
+                response.raise_for_status()
+                logger.info(f"Posted {len(running_tasks)} assignments to emulator.")
+            except Exception as exc:
+                logger.error(f"Failed to post assignments to emulator: {exc}")
 
 
 if __name__ == "__main__":
@@ -385,7 +410,8 @@ if __name__ == "__main__":
     parser.add_argument("--node-path", type=str, default="dummy_data/nodes.jsonl")
     parser.add_argument("--edge-path", type=str, default="dummy_data/edges.jsonl")
     parser.add_argument("--task-path", type=str, default="dummy_data/tasks.jsonl")
-    parser.add_argument("--interval", type=float, default=10.0)
+    parser.add_argument("--emulator-url", type=str, default="http://localhost:8000")
+    parser.add_argument("--interval", type=float, default=30.0)
     parser.add_argument("--query-manager-config", type=str, required=True)
     parser.add_argument("--log-level", type=str, default="INFO")
     args = parser.parse_args()
