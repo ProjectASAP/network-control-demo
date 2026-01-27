@@ -20,6 +20,46 @@ NODE_LABEL = os.getenv("ES_NODE_LABEL", "cluster")
 TASK_LABEL = os.getenv("ES_TASK_LABEL", "task")
 _NODE_METRICS_DEBUG_LOGGED = False
 _NODE_METRICS_SERVER_DEBUG_LOGGED = False
+_NODE_METRICS_PAYLOAD_DEBUG_LOGGED = {"es": False, "server": False}
+
+
+def _log_time_window_summary(payload: dict, use_es: bool) -> None:
+    # Log only the time window info so payload debug is readable.
+    if use_es:
+        range_block = payload.get("query", {}).get("range", {})
+        if not isinstance(range_block, dict) or not range_block:
+            logger.debug("ES time window: <missing range query>")
+            return
+        field, spec = next(iter(range_block.items()))
+        if not isinstance(spec, dict):
+            logger.debug("ES time window: field={} spec=<invalid>", field)
+            return
+        logger.debug(
+            "ES time window: field={} gte={} lte={}",
+            field,
+            spec.get("gte"),
+            spec.get("lte"),
+        )
+        return
+
+    # Sketch payload time window lives inside each agg; sample the first one.
+    aggs = payload.get("aggs", {})
+    if not isinstance(aggs, dict) or not aggs:
+        logger.debug("Sketch time window: <missing aggs>")
+        return
+    first_agg = next(iter(aggs.values()))
+    if not isinstance(first_agg, dict) or not first_agg:
+        logger.debug("Sketch time window: <invalid agg>")
+        return
+    agg_body = next(iter(first_agg.values()))
+    if not isinstance(agg_body, dict):
+        logger.debug("Sketch time window: <invalid agg body>")
+        return
+    logger.debug(
+        "Sketch time window: current_time_ms={} time_range_ms={}",
+        agg_body.get("current_time_ms"),
+        agg_body.get("time_range_ms"),
+    )
 
 
 @dataclass
@@ -69,6 +109,9 @@ def fetch_node_usage(
     metrics: list[str] | None = None,
     percentiles: list[int] | None = None,
     node_metrics_sink: dict[str, NodeMetricsSnapshot] | None = None,
+    current_time_ms: int | None = None,
+    time_range_ms: int | None = None,
+    time_field: str | None = None,
 ) -> tuple[dict[str, NodeMetricsSnapshot], list[TopEntityResult]]:
     """
     Fetch node-level usage metrics and return node snapshots plus top entities.
@@ -88,6 +131,9 @@ def fetch_node_usage(
             correlation_id=correlation_id,
             metrics=metrics,
             percentiles=percentiles,
+            current_time_ms=current_time_ms,
+            time_range_ms=time_range_ms,
+            time_field=time_field,
         )
         if top_entities_sink is not None:
             top_entities_sink.clear()
@@ -127,6 +173,8 @@ def build_sketch_node_metrics_payload(
     node_ids: list[str],
     metrics: list[str] | None = None,
     percentiles: list[int] | None = None,
+    current_time_ms: int | None = None,
+    time_range_ms: int | None = None,
 ) -> dict:
     # Build a full sketch-server payload for node metrics with selected fields.
     # Extend here for task-scoped queries or additional agg types.
@@ -134,6 +182,12 @@ def build_sketch_node_metrics_payload(
     if percentiles is None:
         percentiles = [50]
     aggs: dict[str, dict] = {}
+    time_range = None
+    if current_time_ms is not None and time_range_ms is not None:
+        time_range = {
+            "current_time_ms": int(current_time_ms),
+            "time_range_ms": int(time_range_ms),
+        }
     for node_id in node_ids:
         for metric_name, field in metric_fields:
             if field == "cpu_cores":
@@ -142,10 +196,15 @@ def build_sketch_node_metrics_payload(
                         "field": field,
                         "percents": percentiles,
                         "key": node_id,
+                        **(time_range or {}),
                     }
                 }
                 aggs[f"cum_cpu_{node_id}"] = {
-                    "cumulative": {"field": field, "key": node_id}
+                    "cumulative": {
+                        "field": field,
+                        "key": node_id,
+                        **(time_range or {}),
+                    }
                 }
             elif field == "memory_gb":
                 aggs[f"p50_mem_{node_id}"] = {
@@ -153,10 +212,15 @@ def build_sketch_node_metrics_payload(
                         "field": field,
                         "percents": percentiles,
                         "key": node_id,
+                        **(time_range or {}),
                     }
                 }
                 aggs[f"cum_mem_{node_id}"] = {
-                    "cumulative": {"field": field, "key": node_id}
+                    "cumulative": {
+                        "field": field,
+                        "key": node_id,
+                        **(time_range or {}),
+                    }
                 }
             elif field == "network_mbps":
                 aggs[f"p50_net_{node_id}"] = {
@@ -164,15 +228,23 @@ def build_sketch_node_metrics_payload(
                         "field": field,
                         "percents": percentiles,
                         "key": node_id,
+                        **(time_range or {}),
                     }
                 }
                 aggs[f"cum_net_{node_id}"] = {
-                    "cumulative": {"field": field, "key": node_id}
+                    "cumulative": {
+                        "field": field,
+                        "key": node_id,
+                        **(time_range or {}),
+                    }
                 }
 
     if metric_fields:
         aggs["top_all"] = {
-            "top_entities": {"fields": [field for _, field in metric_fields]}
+            "top_entities": {
+                "fields": [field for _, field in metric_fields],
+                **(time_range or {}),
+            }
         }
 
     return {"size": 0, "aggs": aggs}
@@ -182,6 +254,9 @@ def build_es_node_metrics_payload(
     node_ids: list[str],
     metrics: list[str] | None = None,
     percentiles: list[int] | None = None,
+    current_time_ms: int | None = None,
+    time_range_ms: int | None = None,
+    time_field: str | None = None,
 ) -> dict:
     # Build a full ES payload for node metrics with selected fields.
     # Extend here for task-scoped queries or additional agg types.
@@ -240,7 +315,20 @@ def build_es_node_metrics_payload(
             "aggs": top_aggs,
         }
 
-    return {"size": 0, "aggs": aggs}
+    payload: dict = {"size": 0, "aggs": aggs}
+    if current_time_ms is not None and time_range_ms is not None:
+        field = time_field or "timestamp"
+        start_ms = max(0, int(current_time_ms) - int(time_range_ms))
+        payload["query"] = {
+            "range": {
+                field: {
+                    "gte": start_ms,
+                    "lte": int(current_time_ms),
+                    "format": "epoch_millis",
+                }
+            }
+        }
+    return payload
 
 
 def _get_agg_value(container: dict, key: str) -> float | None:
@@ -328,6 +416,9 @@ def get_node_metrics(
     correlation_id: str | None = None,
     metrics: list[str] | None = None,
     percentiles: list[int] | None = None,
+    current_time_ms: int | None = None,
+    time_range_ms: int | None = None,
+    time_field: str | None = None,
 ) -> tuple[dict[str, NodeMetricsSnapshot], list[TopEntityResult]]:
     """
     Query node-level percentiles and cumulative usage for a list of nodes.
@@ -341,8 +432,19 @@ def get_node_metrics(
     # Select ES or sketch backend and issue the query.
     if use_es:
         payload = build_es_node_metrics_payload(
-            node_ids, metrics=metrics, percentiles=percentiles
+            node_ids,
+            metrics=metrics,
+            percentiles=percentiles,
+            current_time_ms=current_time_ms,
+            time_range_ms=time_range_ms,
+            time_field=time_field,
         )
+        if (
+            (current_time_ms is not None or time_range_ms is not None)
+            and not _NODE_METRICS_PAYLOAD_DEBUG_LOGGED["es"]
+        ):
+            _NODE_METRICS_PAYLOAD_DEBUG_LOGGED["es"] = True
+            _log_time_window_summary(payload, use_es=True)
         response = send_search_request_payload(
             session=session,
             request_type="node_metrics",
@@ -355,8 +457,18 @@ def get_node_metrics(
         )
     else:
         payload = build_sketch_node_metrics_payload(
-            node_ids, metrics=metrics, percentiles=percentiles
+            node_ids,
+            metrics=metrics,
+            percentiles=percentiles,
+            current_time_ms=current_time_ms,
+            time_range_ms=time_range_ms,
         )
+        if (
+            (current_time_ms is not None or time_range_ms is not None)
+            and not _NODE_METRICS_PAYLOAD_DEBUG_LOGGED["server"]
+        ):
+            _NODE_METRICS_PAYLOAD_DEBUG_LOGGED["server"] = True
+            _log_time_window_summary(payload, use_es=False)
         response = send_search_request_payload(
             session=session,
             request_type="node_metrics",
@@ -607,6 +719,10 @@ def pick_percentile(
     direct = values.get(str(percentile))
     if direct is not None:
         return direct
+    if percentile.is_integer():
+        direct_int = values.get(str(int(percentile)))
+        if direct_int is not None:
+            return direct_int
     alt = values.get(f"{percentile:.1f}")
     if alt is not None:
         return alt
