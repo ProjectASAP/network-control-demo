@@ -56,6 +56,10 @@ pub(crate) struct PercentileAggregation {
     pub(crate) percents: Vec<f64>,
     #[serde(default)]
     pub(crate) key: Option<String>,
+    #[serde(default)]
+    pub(crate) current_time_ms: Option<u64>,
+    #[serde(default)]
+    pub(crate) time_range_ms: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -64,12 +68,20 @@ pub(crate) struct TopEntitiesAggregation {
     pub(crate) field: Option<String>,
     #[serde(default)]
     pub(crate) fields: Option<Vec<String>>,
+    #[serde(default)]
+    pub(crate) current_time_ms: Option<u64>,
+    #[serde(default)]
+    pub(crate) time_range_ms: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct CumulativeAggregation {
     pub(crate) field: String,
     pub(crate) key: String,
+    #[serde(default)]
+    pub(crate) current_time_ms: Option<u64>,
+    #[serde(default)]
+    pub(crate) time_range_ms: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]

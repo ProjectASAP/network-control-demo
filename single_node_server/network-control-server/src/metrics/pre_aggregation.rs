@@ -7,6 +7,7 @@ use super::cms_cumulative::MetricCumulativeAndTop;
 use super::hydra_labels::MetricHydra;
 use super::key::hash_key_128;
 use super::kll_quantiles::MetricQuantiles;
+use super::minute_window::MetricMinuteWindow;
 use super::util::{clamp_i128_to_i32, round_to_i32};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -42,6 +43,7 @@ pub struct MetricStore {
     klls: Mutex<MetricQuantiles>,
     countmins: MetricCumulativeAndTop,
     hydra_by_label: Mutex<MetricHydra>,
+    minute_window: Mutex<MetricMinuteWindow>,
 }
 
 impl MetricStore {
@@ -151,6 +153,17 @@ impl MetricStore {
         Some(results)
     }
 
+    pub fn query_percentiles_time(
+        &self,
+        field: MetricField,
+        percents: &[f64],
+        current_time_ms: u64,
+        time_range_ms: u64,
+    ) -> Option<Vec<Option<f64>>> {
+        let mut window = self.minute_window.lock().ok()?;
+        window.query_percentiles(field, percents, current_time_ms, time_range_ms)
+    }
+
     pub fn query_percentiles_by_key(
         &self,
         field: MetricField,
@@ -170,13 +183,46 @@ impl MetricStore {
         Some(results)
     }
 
+    pub fn query_percentiles_by_key_time(
+        &self,
+        field: MetricField,
+        key: &str,
+        percents: &[f64],
+        current_time_ms: u64,
+        time_range_ms: u64,
+    ) -> Option<Vec<Option<f64>>> {
+        let mut window = self.minute_window.lock().ok()?;
+        window.query_percentiles_by_key(field, key, percents, current_time_ms, time_range_ms)
+    }
+
     pub fn top_entity(&self, field: MetricField) -> Option<EntityEstimate> {
         self.countmins.top_entity(field)
+    }
+
+    pub fn top_entity_time(
+        &self,
+        field: MetricField,
+        current_time_ms: u64,
+        time_range_ms: u64,
+    ) -> Option<EntityEstimate> {
+        let mut window = self.minute_window.lock().ok()?;
+        window.top_entity(field, current_time_ms, time_range_ms)
     }
 
     pub fn cumulative_value(&self, field: MetricField, key: &str) -> i32 {
         let key_hash = hash_key_128(key);
         clamp_i128_to_i32(self.countmins.cumulative_estimate(field, key_hash))
+    }
+
+    pub fn cumulative_value_time(
+        &self,
+        field: MetricField,
+        key: &str,
+        current_time_ms: u64,
+        time_range_ms: u64,
+    ) -> Option<i32> {
+        let mut window = self.minute_window.lock().ok()?;
+        window.cumulative_value(field, key, current_time_ms, time_range_ms)
     }
 
     pub fn insert(
@@ -241,6 +287,7 @@ pub struct MetricPreAggregation {
     klls: MetricQuantiles,
     countmins: MetricCumulativeAndTop,
     hydra_by_label: MetricHydra,
+    minute_window: MetricMinuteWindow,
     key_buffer: String,
 }
 
@@ -250,6 +297,7 @@ impl MetricPreAggregation {
             klls: MetricQuantiles::default(),
             countmins: MetricCumulativeAndTop::default(),
             hydra_by_label: MetricHydra::new(),
+            minute_window: MetricMinuteWindow::default(),
             key_buffer: String::with_capacity(128),
         }
     }
@@ -295,6 +343,30 @@ impl MetricPreAggregation {
         let task_hash = hash_key_128(task);
         self.countmins
             .update(task, task_hash, cpu_value, memory_value, network_value);
+    }
+
+    pub fn insert_time_window(
+        &mut self,
+        start_time_ms: u64,
+        end_time_ms: u64,
+        cluster: &str,
+        task: &str,
+        cpu_value: f64,
+        memory_value: f64,
+        network_value: f64,
+    ) {
+        self.build_key_buffer(cluster, task);
+        let full_key = self.key_buffer.as_str();
+        self.minute_window.insert_range(
+            start_time_ms,
+            end_time_ms,
+            cluster,
+            task,
+            full_key,
+            cpu_value,
+            memory_value,
+            network_value,
+        );
     }
 
     pub fn insert_kll(&mut self, cpu_value: f64, memory_value: f64, network_value: f64) {
@@ -481,6 +553,7 @@ impl MetricPreAggregation {
             klls: Mutex::new(self.klls),
             countmins: self.countmins,
             hydra_by_label: Mutex::new(self.hydra_by_label),
+            minute_window: Mutex::new(self.minute_window),
         }
     }
 }

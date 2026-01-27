@@ -1,5 +1,6 @@
 use std::{collections::HashMap, env, error::Error, path::PathBuf, time::Instant};
 
+use chrono::DateTime;
 use csv::StringRecord;
 
 use crate::metrics::{MetricPreAggregation, MetricStore};
@@ -8,6 +9,8 @@ struct BatchInput {
     cpu: Vec<f64>,
     mem: Vec<f64>,
     net: Vec<f64>,
+    start_times: Vec<u64>,
+    end_times: Vec<u64>,
 }
 
 impl BatchInput {
@@ -16,31 +19,43 @@ impl BatchInput {
         let cpu_values = Vec::new();
         let mem_values = Vec::new();
         let net_values = Vec::new();
+        let start_values = Vec::new();
+        let end_values = Vec::new();
         Self {
             cpu: cpu_values,
             mem: mem_values,
             net: net_values,
+            start_times: start_values,
+            end_times: end_values,
         }
     }
 
-    fn new_with_val(cpu: f64, mem: f64, net: f64) -> Self {
+    fn new_with_val(cpu: f64, mem: f64, net: f64, start_time_ms: u64, end_time_ms: u64) -> Self {
         let mut cpu_values = Vec::with_capacity(8);
         let mut mem_values = Vec::with_capacity(8);
         let mut net_values = Vec::with_capacity(8);
+        let mut start_values = Vec::with_capacity(8);
+        let mut end_values = Vec::with_capacity(8);
         cpu_values.push(cpu);
         mem_values.push(mem);
         net_values.push(net);
+        start_values.push(start_time_ms);
+        end_values.push(end_time_ms);
         Self {
             cpu: cpu_values,
             mem: mem_values,
             net: net_values,
+            start_times: start_values,
+            end_times: end_values,
         }
     }
 
-    fn push(&mut self, cpu: f64, mem: f64, net: f64) {
+    fn push(&mut self, cpu: f64, mem: f64, net: f64, start_time_ms: u64, end_time_ms: u64) {
         self.cpu.push(cpu);
         self.mem.push(mem);
         self.net.push(net);
+        self.start_times.push(start_time_ms);
+        self.end_times.push(end_time_ms);
     }
 
     #[allow(dead_code)]
@@ -52,6 +67,8 @@ impl BatchInput {
         self.cpu.clear();
         self.mem.clear();
         self.net.clear();
+        self.start_times.clear();
+        self.end_times.clear();
     }
 }
 
@@ -127,7 +144,9 @@ fn flush_batch(
             .cpu
             .len()
             .min(batch.mem.len())
-            .min(batch.net.len());
+            .min(batch.net.len())
+            .min(batch.start_times.len())
+            .min(batch.end_times.len());
         // Update KLL and CountMin (CMS) sketches per sample.
         if timing.enabled {
             for idx in 0..len {
@@ -145,11 +164,29 @@ fn flush_batch(
                 );
                 timing.build_key_ns += build_key_ns;
                 timing.insert_countmin_ns += countmin_ns;
+                builder.insert_time_window(
+                    batch.start_times[idx],
+                    batch.end_times[idx],
+                    cluster,
+                    task,
+                    batch.cpu[idx],
+                    batch.mem[idx],
+                    batch.net[idx],
+                );
             }
         } else {
             for idx in 0..len {
                 builder.insert_kll(batch.cpu[idx], batch.mem[idx], batch.net[idx]);
                 builder.insert_cms(
+                    cluster,
+                    task,
+                    batch.cpu[idx],
+                    batch.mem[idx],
+                    batch.net[idx],
+                );
+                builder.insert_time_window(
+                    batch.start_times[idx],
+                    batch.end_times[idx],
                     cluster,
                     task,
                     batch.cpu[idx],
@@ -189,6 +226,10 @@ pub fn load_metric_store(
         .ok_or_else(|| format!("missing 'cluster' column in {}", csv_path.display()))?;
     let task_idx = find_column(&headers, &["task"])
         .ok_or_else(|| format!("missing 'task' column in {}", csv_path.display()))?;
+    let timestamp_idx = find_column(&headers, &["timestamp", "time"])
+        .ok_or_else(|| format!("missing 'timestamp' column in {}", csv_path.display()))?;
+    let duration_idx = find_column(&headers, &["estimated_duration", "duration"])
+        .ok_or_else(|| format!("missing 'estimated_duration' column in {}", csv_path.display()))?;
     let cpu_idx = find_column(&headers, &["cpu_cores", "cpu-cores"])
         .ok_or_else(|| format!("missing 'cpu_cores' column in {}", csv_path.display()))?;
     let mem_idx = find_column(&headers, &["memory_gb", "memory-gb"])
@@ -224,6 +265,8 @@ pub fn load_metric_store(
         let cpu_raw = record.get(cpu_idx).unwrap_or("").trim();
         let mem_raw = record.get(mem_idx).unwrap_or("").trim();
         let net_raw = record.get(net_idx).unwrap_or("").trim();
+        let time_raw = record.get(timestamp_idx).unwrap_or("").trim();
+        let duration_raw = record.get(duration_idx).unwrap_or("").trim();
 
         let cpu_value = match cpu_raw.parse::<f64>() {
             Ok(value) => value,
@@ -237,6 +280,18 @@ pub fn load_metric_store(
             Ok(value) => value,
             Err(_) => continue,
         };
+        let time_ms = match DateTime::parse_from_rfc3339(time_raw) {
+            Ok(value) => match value.timestamp_millis() {
+                millis if millis >= 0 => millis as u64,
+                _ => continue,
+            },
+            Err(_) => continue,
+        };
+        let duration_ms = match duration_raw.parse::<f64>() {
+            Ok(value) if value.is_finite() && value >= 0.0 => (value * 1000.0).round() as u64,
+            _ => continue,
+        };
+        let end_time_ms = time_ms.saturating_add(duration_ms);
 
         if let Some(t) = parse_start {
             timing.parse_row_ns += t.elapsed().as_nanos() as u64;
@@ -244,11 +299,11 @@ pub fn load_metric_store(
 
         let key = (cluster.to_string(), task.to_string());
         if let Some(batch) = input_batch.get_mut(&key) {
-            batch.push(cpu_value, mem_value, net_value);
+            batch.push(cpu_value, mem_value, net_value, time_ms, end_time_ms);
         } else {
             input_batch.insert(
                 key,
-                BatchInput::new_with_val(cpu_value, mem_value, net_value),
+                BatchInput::new_with_val(cpu_value, mem_value, net_value, time_ms, end_time_ms),
             );
         }
         processed += 1;

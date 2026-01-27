@@ -361,6 +361,8 @@ async fn batch_query_handler(
                 field: field_name.clone(),
                 percents: percents.clone(),
                 key: None,
+                current_time_ms: None,
+                time_range_ms: None,
             })
             .collect()
     };

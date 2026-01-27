@@ -2,6 +2,7 @@ mod cms_cumulative;
 mod hydra_labels;
 mod key;
 mod kll_quantiles;
+mod minute_window;
 mod pre_aggregation;
 mod util;
 

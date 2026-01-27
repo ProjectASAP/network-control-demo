@@ -46,7 +46,8 @@ pub(crate) fn handle_percentiles(
         return Err("percentiles key is required when provided".to_string());
     }
     let key = explicit_key.or(query_key);
-    let cache_key = if state.cache.is_enabled() {
+    let time_window = extract_time_window(pct.current_time_ms, pct.time_range_ms)?;
+    let cache_key = if state.cache.is_enabled() && time_window.is_none() {
         Some(QueryCache::build_percentiles_cache_key(
             field,
             key,
@@ -61,12 +62,17 @@ pub(crate) fn handle_percentiles(
         }
     }
 
-    let query_results = if let Some(key) = key {
-        state
+    let query_results = match (key, time_window) {
+        (Some(key), Some((current_time_ms, time_range_ms))) => state
             .store
-            .query_percentiles_by_key(field, key, &pct.percents)
-    } else {
-        state.store.query_percentiles(field, &pct.percents)
+            .query_percentiles_by_key_time(field, key, &pct.percents, current_time_ms, time_range_ms),
+        (Some(key), None) => state
+            .store
+            .query_percentiles_by_key(field, key, &pct.percents),
+        (None, Some((current_time_ms, time_range_ms))) => state
+            .store
+            .query_percentiles_time(field, &pct.percents, current_time_ms, time_range_ms),
+        (None, None) => state.store.query_percentiles(field, &pct.percents),
     };
     let query_results = query_results.unwrap_or_else(|| vec![None; pct.percents.len()]);
 
@@ -96,6 +102,7 @@ pub(crate) fn handle_percentiles(
 fn handle_multi_top_entities(
     state: &AppState,
     fields: &[String],
+    time_window: Option<(u64, u64)>,
 ) -> Result<HashMap<String, EntityEstimate>, String> {
     let mut results = HashMap::new();
 
@@ -114,7 +121,13 @@ fn handle_multi_top_entities(
         let field = MetricField::from_spec(trimmed)
             .ok_or_else(|| format!("unsupported top_entities field: {}", field_name))?;
 
-        if let Some(entity) = state.store.top_entity(field) {
+        let entity = match time_window {
+            Some((current_time_ms, time_range_ms)) => {
+                state.store.top_entity_time(field, current_time_ms, time_range_ms)
+            }
+            None => state.store.top_entity(field),
+        };
+        if let Some(entity) = entity {
             results.insert(field_name.clone(), entity);
         }
     }
@@ -130,8 +143,9 @@ pub(crate) fn handle_top_entities(
     state: &AppState,
     top: &TopEntitiesAggregation,
 ) -> Result<TopEntitiesResult, String> {
+    let time_window = extract_time_window(top.current_time_ms, top.time_range_ms)?;
     if let Some(fields) = top.fields.as_ref().filter(|fields| !fields.is_empty()) {
-        let results = handle_multi_top_entities(state, fields)?;
+        let results = handle_multi_top_entities(state, fields, time_window)?;
         return Ok(TopEntitiesResult::Multi(results));
     }
 
@@ -150,10 +164,13 @@ pub(crate) fn handle_top_entities(
     }
     let field = MetricField::from_spec(field_name)
         .ok_or_else(|| format!("unsupported top_entities field: {}", field_name))?;
-    let entity = state
-        .store
-        .top_entity(field)
-        .ok_or_else(|| "no top entity available".to_string())?;
+    let entity = match time_window {
+        Some((current_time_ms, time_range_ms)) => state
+            .store
+            .top_entity_time(field, current_time_ms, time_range_ms),
+        None => state.store.top_entity(field),
+    }
+    .ok_or_else(|| "no top entity available".to_string())?;
     Ok(TopEntitiesResult::Single(entity))
 }
 
@@ -173,7 +190,26 @@ pub(crate) fn handle_cumulative(
     if cum.key.trim().is_empty() {
         return Err("cumulative key is required".to_string());
     }
-    Ok(state.store.cumulative_value(field, cum.key.trim()))
+    let time_window = extract_time_window(cum.current_time_ms, cum.time_range_ms)?;
+    let value = match time_window {
+        Some((current_time_ms, time_range_ms)) => state
+            .store
+            .cumulative_value_time(field, cum.key.trim(), current_time_ms, time_range_ms)
+            .ok_or_else(|| "no cumulative value available".to_string())?,
+        None => state.store.cumulative_value(field, cum.key.trim()),
+    };
+    Ok(value)
+}
+
+fn extract_time_window(
+    current_time_ms: Option<u64>,
+    time_range_ms: Option<u64>,
+) -> Result<Option<(u64, u64)>, String> {
+    match (current_time_ms, time_range_ms) {
+        (None, None) => Ok(None),
+        (Some(current), Some(range)) => Ok(Some((current, range))),
+        _ => Err("current_time_ms and time_range_ms must be provided together".to_string()),
+    }
 }
 
 pub(crate) fn extract_query_key(query_value: Option<&Value>) -> QueryKeyStatus {
