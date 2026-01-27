@@ -3,6 +3,8 @@ import time
 import json
 import jsonlines
 import datetime
+import csv
+import datetime as dt
 import numpy as np
 import networkx as nx
 from dataclasses import dataclass, field
@@ -24,39 +26,68 @@ from config import (
     ES_URL,
     SKETCH_INGEST_ENABLED,
     SKETCH_URL,
+    CLUSTER_METRICS_CSV,
 )
 
 # Paramters for sending metrics to server.
 SERVER_URL = SKETCH_URL
-INTERVAL = 60  # seconds
+INTERVAL = 1  # seconds
 TIMEOUT = 5  # seconds
 
 
 def build_es_bulk_payload(records: list[dict]) -> str:
     # Build an NDJSON bulk payload for Elasticsearch indexing.
     lines = []
-    timestamp = datetime.datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
     for record in records:
         tasks = record.get("task", [])
         clusters = record.get("cluster", [])
         cpu = record.get("cpu_cores", [])
         memory = record.get("memory_gb", [])
         network = record.get("network_mbps", [])
+        timestamps_ms = record.get("timestamp_ms", [])
         count = min(len(tasks), len(clusters), len(cpu), len(memory), len(network))
         for idx in range(count):
             lines.append(json.dumps({"index": {}}))
+            ts_ms = None
+            if isinstance(timestamps_ms, list) and idx < len(timestamps_ms):
+                ts_ms = int(timestamps_ms[idx])
+            if ts_ms is None:
+                ts_ms = int(time.time() * 1000)
+            ts_iso = dt.datetime.fromtimestamp(ts_ms / 1000, tz=dt.timezone.utc)
+            ts_str = ts_iso.isoformat(timespec="milliseconds").replace("+00:00", "Z")
             doc = {
                 "task": tasks[idx],
                 "cluster": clusters[idx],
                 "cpu_cores": cpu[idx],
                 "memory_gb": memory[idx],
                 "network_mbps": network[idx],
-                "@timestamp": timestamp,
+                # Include both time fields so ES range filters can use either.
+                "timestamp": ts_str,
+                "@timestamp": ts_str,
             }
             lines.append(json.dumps(doc))
     if not lines:
         return ""
     return "\n".join(lines) + "\n"
+
+
+def _latest_timestamp_ms_from_csv(path: str) -> int:
+    latest: dt.datetime | None = None
+    with open(path, "r", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            ts = row.get("timestamp")
+            if not ts:
+                continue
+            try:
+                parsed = dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if latest is None or parsed > latest:
+                latest = parsed
+    if latest is None:
+        raise ValueError(f"No valid timestamp rows found in {path}")
+    return int(latest.timestamp() * 1000)
 
 
 async def send_es_bulk(client: httpx.AsyncClient, records: list[dict]) -> None:
@@ -153,11 +184,13 @@ class MetricsEmulator:
     Emulates telemetry metrics for running tasks.
     """
 
-    def __init__(self, network: NetworkTopology) -> None:
+    def __init__(self, network: NetworkTopology, base_epoch_ms: int) -> None:
         # Hold network topology and the current task time series buffers.
         self.network = network
+        self.base_epoch_ms = base_epoch_ms
         self.task_metrics: dict[str, TaskMetrics] = {}
         self.running_tasks: dict[str, RunningTask] = {}
+        self.ingest_wall_time_s: dict[str, float] = {}
 
     def create_task_metrics(self, task: Task) -> TaskMetrics:
         # Generate a full-duration timeseries for a new task.
@@ -183,9 +216,13 @@ class MetricsEmulator:
             task = running_task.task
             if t_id not in self.task_metrics:
                 self.task_metrics[t_id] = self.create_task_metrics(task)
+            # Track when we learned about this task to estimate elapsed time.
+            self.ingest_wall_time_s[t_id] = time.time()
         return self.task_metrics
 
-    def _emit_metrics(self, interval=60) -> dict[str, TaskMetrics]:
+    def _emit_metrics(
+        self, interval: int = 60
+    ) -> tuple[dict[str, TaskMetrics], dict[str, float]]:
         """
         Emit emulated metrics for running tasks over a specified interval.
         """
@@ -198,6 +235,7 @@ class MetricsEmulator:
 
         # Emulate node resource usage based on assigned tasks.
         metrics: dict[str, TaskMetrics] = {}
+        current_offsets_s: dict[str, float] = {}
         for node_id, task_ids in nodes_to_tasks.items():
             node = self.network.get_node(node_id)
 
@@ -207,9 +245,13 @@ class MetricsEmulator:
             # Aggregate task metrics to get node usage and per-task slices.
             for t_id in task_ids:
                 task_metrics = self.task_metrics[t_id]
-                start_time = self.running_tasks[t_id].start_time_s
-                elapsed_time = time.time() - start_time
-                offset = min(int(elapsed_time), len(task_metrics.cpu_usage))
+                running_task = self.running_tasks[t_id]
+                ingest_time = self.ingest_wall_time_s.get(t_id, time.time())
+                elapsed_since_ingest = max(0.0, time.time() - ingest_time)
+                # Approximate global offset by anchoring to the scheduler offset at ingest.
+                current_offset_s = running_task.start_time_s + elapsed_since_ingest
+                current_offsets_s[t_id] = current_offset_s
+                offset = min(int(elapsed_since_ingest), len(task_metrics.cpu_usage))
 
                 if offset >= len(task_metrics.cpu_usage):
                     logger.warning(
@@ -238,7 +280,7 @@ class MetricsEmulator:
                 f"Node {node_id} used CPU: {node.used_cpu} ({node.used_cpu / node.cpu_capacity}), used Memory: {node.used_memory} ({node.used_memory / node.memory_capacity})"
             )
 
-        return metrics
+        return metrics, current_offsets_s
 
     def create_metrics_records(self, interval=INTERVAL) -> Iterable[dict]:
         """
@@ -250,9 +292,14 @@ class MetricsEmulator:
             List of dictionaries representing the metrics records.
         """
         # Convert slices into the schema expected by sketch/ES ingestion.
-        metrics = self._emit_metrics(interval=interval)
+        metrics, current_offsets_s = self._emit_metrics(interval=interval)
         for task_id, task_metrics in metrics.items():
             running_task = self.running_tasks[task_id]
+            current_offset_s = current_offsets_s.get(task_id, running_task.start_time_s)
+            timestamp_ms = [
+                self.base_epoch_ms + int((current_offset_s + i) * 1000.0)
+                for i in range(len(task_metrics.cpu_usage))
+            ]
             record = {
                 "task": [task_id] * len(task_metrics.cpu_usage),
                 "cluster": [running_task.node_id] * len(task_metrics.cpu_usage),
@@ -260,6 +307,7 @@ class MetricsEmulator:
                 "memory_gb": task_metrics.memory_usage.tolist(),
                 "network_mbps": [0]
                 * len(task_metrics.cpu_usage),  # Ignore network for now.
+                "timestamp_ms": timestamp_ms,
             }
             yield record
 
@@ -294,7 +342,9 @@ def create_emulator() -> MetricsEmulator:
     network = NetworkTopology(
         nodes=nodes.values(), edges=edges.values(), undirected=True
     )
-    return MetricsEmulator(network=network)
+    base_epoch_ms = _latest_timestamp_ms_from_csv(CLUSTER_METRICS_CSV)
+    logger.info("Telemetry emulator using base epoch {} ms", base_epoch_ms)
+    return MetricsEmulator(network=network, base_epoch_ms=base_epoch_ms)
 
 
 if __name__ == "__main__":

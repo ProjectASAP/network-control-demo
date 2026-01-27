@@ -4,6 +4,8 @@ import time
 import argparse
 import copy
 import uuid
+import csv
+import datetime as dt
 from itertools import combinations
 from collections import deque
 from loguru import logger
@@ -27,6 +29,9 @@ from config import (
     CONSISTENCY_CHECK_TOLERANCE,
     PARALLEL_BENCHMARK_ENABLED,
     SCHEDULER_BATCH_SIZE,
+    CLUSTER_METRICS_CSV,
+    ES_TIME_FIELD,
+    TIME_RANGE_MS,
 )
 from logging_utils import log_e2e, log_node_metric_comparisons
 
@@ -47,6 +52,25 @@ class AppConfig:
     query_manager_config: str
     interval: float = 10.0
     log_level: str = "INFO"
+
+
+def _latest_timestamp_ms_from_csv(path: str) -> int:
+    latest: dt.datetime | None = None
+    with open(path, "r", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            ts = row.get("timestamp")
+            if not ts:
+                continue
+            try:
+                parsed = dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if latest is None or parsed > latest:
+                latest = parsed
+    if latest is None:
+        raise ValueError(f"No valid timestamp rows found in {path}")
+    return int(latest.timestamp() * 1000)
 
 
 def assign_tasks(args: AppConfig):
@@ -86,6 +110,13 @@ def assign_tasks(args: AppConfig):
         logger.warning("Direct ES backend unavailable; running sketch-only benchmark.")
     if not parallel_enabled:
         logger.info("Parallel benchmark disabled; running sketch-only benchmark.")
+
+    base_epoch_ms = _latest_timestamp_ms_from_csv(CLUSTER_METRICS_CSV)
+    logger.info(
+        "Using base epoch {} ms from {} for time-range queries",
+        base_epoch_ms,
+        CLUSTER_METRICS_CSV,
+    )
 
     with QueryManager(query_config=query_config) as query_manager:
         # Track running and unassigned tasks across iterations.
@@ -161,6 +192,20 @@ def assign_tasks(args: AppConfig):
             # TODO: Execute PromQL queries and do something with results (e.g. update task spec estimates).
             # query_manager.update_task_metrics(running_tasks=query_tasks)
 
+            newest_arrival = max(
+                (task.arrival_offset_s for task in tasks_to_schedule_pool.values()),
+                default=curr_offset,
+            )
+            current_time_ms = base_epoch_ms + int(newest_arrival * 1000.0)
+            window_start_ms = max(0, current_time_ms - TIME_RANGE_MS)
+            logger.debug(
+                "Time window base={} current={} start={} field={}",
+                base_epoch_ms,
+                current_time_ms,
+                window_start_ms,
+                ES_TIME_FIELD,
+            )
+
             # Fetch metrics from sketch and optionally from ES.
             correlation_id = uuid.uuid4().hex[:8]
             sketch_node_metrics: dict[str, NodeMetricsSnapshot] = {}
@@ -178,6 +223,8 @@ def assign_tasks(args: AppConfig):
                     correlation_id=correlation_id,
                     metrics=metrics_needed,
                     percentiles=percentiles,
+                    current_time_ms=current_time_ms,
+                    time_range_ms=TIME_RANGE_MS,
                 )
                 sketch_query_ms = (time.perf_counter() - sketch_start) * 1000.0
 
@@ -188,6 +235,9 @@ def assign_tasks(args: AppConfig):
                     correlation_id=correlation_id,
                     metrics=metrics_needed,
                     percentiles=percentiles,
+                    current_time_ms=current_time_ms,
+                    time_range_ms=TIME_RANGE_MS,
+                    time_field=ES_TIME_FIELD,
                 )
                 es_query_ms = (time.perf_counter() - es_start) * 1000.0
                 logger.debug(
@@ -204,6 +254,8 @@ def assign_tasks(args: AppConfig):
                     correlation_id=correlation_id,
                     metrics=metrics_needed,
                     percentiles=percentiles,
+                    current_time_ms=current_time_ms,
+                    time_range_ms=TIME_RANGE_MS,
                 )
                 sketch_query_ms = (time.perf_counter() - sketch_start) * 1000.0
                 if sketch_node_metrics:

@@ -40,6 +40,12 @@ ES_API_KEY = os.getenv(
     "ES_API_KEY", "TWg0S01wc0JhR1AxOFVUcUY5N2w6bGR0TjIySHRZTHVwdmZLTmtqcGtGQQ=="
 )
 SKETCH_API_KEY = os.getenv("SKETCH_API_KEY") or ES_API_KEY
+CLUSTER_METRICS_CSV = os.path.expanduser(
+    os.getenv("CLUSTER_METRICS_CSV", "~/cluster-metrics.csv")
+)
+# Emulator ingests ES docs with "@timestamp", so default the ES time filter to match.
+ES_TIME_FIELD = os.getenv("ES_TIME_FIELD", "@timestamp")
+TIME_RANGE_MS = _env_int("TIME_RANGE_MS", 180_000)
 
 QUERY_RTT_CSV = os.getenv("QUERY_RTT_CSV", "query_rtt.csv")
 QUERY_COMPARE_CSV = os.getenv("QUERY_COMPARE_CSV", "query_compare.csv")
