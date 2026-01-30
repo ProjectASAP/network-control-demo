@@ -14,6 +14,7 @@ use axum::{
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio::task::JoinSet;
+use chrono::DateTime;
 
 use crate::metrics::MetricField;
 
@@ -91,27 +92,88 @@ async fn ingest_handler(
         )
             .into_response();
     }
-
-    let mut inserted = 0usize;
-    for idx in 0..len {
-        let cluster = record.cluster[idx].trim();
-        let task = record.task[idx].trim();
-        if cluster.is_empty() || task.is_empty() {
-            continue;
+    if let Some(timestamps) = record.timestamp_ms.as_ref() {
+        if timestamps.len() != len {
+            return (
+                axum::http::StatusCode::BAD_REQUEST,
+                "timestamp_ms must match metrics length".to_string(),
+            )
+                .into_response();
         }
-        if let Err(message) = state.store.insert(
-            cluster,
-            task,
-            record.cpu_cores[idx],
-            record.memory_gb[idx],
-            record.network_mbps[idx],
-        ) {
-            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, message).into_response();
+    }
+    if let Some(timestamps) = record.timestamp.as_ref() {
+        if timestamps.len() != len {
+            return (
+                axum::http::StatusCode::BAD_REQUEST,
+                "timestamp must match metrics length".to_string(),
+            )
+                .into_response();
         }
-        inserted += 1;
+    }
+    if let Some(timestamps) = record.at_timestamp.as_ref() {
+        if timestamps.len() != len {
+            return (
+                axum::http::StatusCode::BAD_REQUEST,
+                "@timestamp must match metrics length".to_string(),
+            )
+                .into_response();
+        }
     }
 
-    Json(json!({ "inserted": inserted })).into_response()
+    // Ingest is currently disabled; we only validate payload shape and acknowledge receipt.
+    // let mut inserted = 0usize;
+    // for idx in 0..len {
+    //     let cluster = record.cluster[idx].trim();
+    //     let task = record.task[idx].trim();
+    //     if cluster.is_empty() || task.is_empty() {
+    //         continue;
+    //     }
+    //     let timestamp_ms = record
+    //         .timestamp_ms
+    //         .as_ref()
+    //         .and_then(|values| values.get(idx).copied())
+    //         .or_else(|| {
+    //             record
+    //                 .at_timestamp
+    //                 .as_ref()
+    //                 .and_then(|values| values.get(idx))
+    //                 .and_then(|value| parse_rfc3339_millis(value))
+    //         })
+    //         .or_else(|| {
+    //             record
+    //                 .timestamp
+    //                 .as_ref()
+    //                 .and_then(|values| values.get(idx))
+    //                 .and_then(|value| parse_rfc3339_millis(value))
+    //         });
+    //     if let Err(message) = state.store.insert(
+    //         cluster,
+    //         task,
+    //         record.cpu_cores[idx],
+    //         record.memory_gb[idx],
+    //         record.network_mbps[idx],
+    //         timestamp_ms,
+    //     ) {
+    //         return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, message).into_response();
+    //     }
+    //     inserted += 1;
+    // }
+
+    Json(json!({ "inserted": 0 })).into_response()
+}
+
+fn parse_rfc3339_millis(value: &str) -> Option<u64> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let parsed = DateTime::parse_from_rfc3339(trimmed).ok()?;
+    let millis = parsed.timestamp_millis();
+    if millis < 0 {
+        None
+    } else {
+        Some(millis as u64)
+    }
 }
 
 async fn search_handler(
@@ -194,8 +256,12 @@ async fn search_handler(
                                     })),
                                     Ok(TopEntitiesResult::Multi(entities)) => Some(json!(entities)),
                                     Err(message) => {
-                                        return (axum::http::StatusCode::BAD_REQUEST, message)
-                                            .into_response();
+                                        if message == "no top entity available" {
+                                            Some(json!({}))
+                                        } else {
+                                            return (axum::http::StatusCode::BAD_REQUEST, message)
+                                                .into_response();
+                                        }
                                     }
                                 }
                             }

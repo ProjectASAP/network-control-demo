@@ -169,9 +169,11 @@ pub(crate) fn handle_top_entities(
             .store
             .top_entity_time(field, current_time_ms, time_range_ms),
         None => state.store.top_entity(field),
+    };
+    match entity {
+        Some(value) => Ok(TopEntitiesResult::Single(value)),
+        None => Ok(TopEntitiesResult::Multi(std::collections::HashMap::new())),
     }
-    .ok_or_else(|| "no top entity available".to_string())?;
-    Ok(TopEntitiesResult::Single(entity))
 }
 
 pub(crate) fn handle_cumulative(
@@ -195,7 +197,7 @@ pub(crate) fn handle_cumulative(
         Some((current_time_ms, time_range_ms)) => state
             .store
             .cumulative_value_time(field, cum.key.trim(), current_time_ms, time_range_ms)
-            .ok_or_else(|| "no cumulative value available".to_string())?,
+            .unwrap_or(0),
         None => state.store.cumulative_value(field, cum.key.trim()),
     };
     Ok(value)

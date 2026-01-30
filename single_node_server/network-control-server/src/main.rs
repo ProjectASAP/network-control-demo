@@ -15,6 +15,7 @@ use std::{
 
 use config::AggregationConfig;
 use ingest::load_metric_store;
+use metrics::MetricPreAggregation;
 use reqwest::Client;
 use server::{AppState, QueryCache, TimingSender, run_http_server, start_request_logger};
 
@@ -45,18 +46,20 @@ async fn main() {
         config_start.elapsed()
     );
 
-    eprintln!("loading metrics from CSV...");
-    let store = match tokio::task::spawn_blocking(move || load_metric_store(timing_enabled)).await {
-        Ok(Ok(store)) => store,
-        Ok(Err(err)) => {
-            eprintln!("failed to load metric store: {err}");
-            return;
-        }
-        Err(join_err) => {
-            eprintln!("loader task panicked: {join_err}");
-            return;
-        }
-    };
+    // Startup ingestion is disabled; start with an empty store.
+    // eprintln!("loading metrics from CSV...");
+    // let store = match tokio::task::spawn_blocking(move || load_metric_store(timing_enabled)).await {
+    //     Ok(Ok(store)) => store,
+    //     Ok(Err(err)) => {
+    //         eprintln!("failed to load metric store: {err}");
+    //         return;
+    //     }
+    //     Err(join_err) => {
+    //         eprintln!("loader task panicked: {join_err}");
+    //         return;
+    //     }
+    // };
+    let store = MetricPreAggregation::new().finish();
 
     let state = AppState {
         store: Arc::new(store),

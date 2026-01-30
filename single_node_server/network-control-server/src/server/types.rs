@@ -116,6 +116,12 @@ pub(crate) struct IngestRecord {
     pub(crate) cpu_cores: Vec<f64>,
     pub(crate) memory_gb: Vec<f64>,
     pub(crate) network_mbps: Vec<f64>,
+    #[serde(default)]
+    pub(crate) timestamp_ms: Option<Vec<u64>>,
+    #[serde(default)]
+    pub(crate) timestamp: Option<Vec<String>>,
+    #[serde(default, rename = "@timestamp")]
+    pub(crate) at_timestamp: Option<Vec<String>>,
 }
 
 pub(crate) enum AggregationKind {

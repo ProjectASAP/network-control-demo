@@ -10,6 +10,7 @@ from config import (
     ES_API_KEY,
     ES_INDEX_NAME,
     ES_URL,
+    ES_TIME_FIELD,
     SKETCH_API_KEY,
     SKETCH_URL,
 )
@@ -175,6 +176,7 @@ def build_sketch_node_metrics_payload(
     percentiles: list[int] | None = None,
     current_time_ms: int | None = None,
     time_range_ms: int | None = None,
+    time_field: str | None = None,
 ) -> dict:
     # Build a full sketch-server payload for node metrics with selected fields.
     # Extend here for task-scoped queries or additional agg types.
@@ -187,6 +189,7 @@ def build_sketch_node_metrics_payload(
         time_range = {
             "current_time_ms": int(current_time_ms),
             "time_range_ms": int(time_range_ms),
+            **({"time_field": time_field} if time_field else {}),
         }
     for node_id in node_ids:
         for metric_name, field in metric_fields:
@@ -462,6 +465,7 @@ def get_node_metrics(
             percentiles=percentiles,
             current_time_ms=current_time_ms,
             time_range_ms=time_range_ms,
+            time_field=time_field or ES_TIME_FIELD,
         )
         if (
             (current_time_ms is not None or time_range_ms is not None)
@@ -632,6 +636,20 @@ def send_search_request_payload(
             ok=response.ok if response is not None else False,
         )
         if not response.ok or data is None:
+            status = response.status_code if response is not None else None
+            body = ""
+            if response is not None:
+                try:
+                    body = response.text
+                except Exception:
+                    body = "<unreadable response body>"
+            logger.warning(
+                "Search request failed (target={}, type={}, status={}): {}",
+                target,
+                request_type,
+                status,
+                body,
+            )
             return None
         return data
     except Exception as exc:
@@ -645,6 +663,12 @@ def send_search_request_payload(
             status=response.status_code if response is not None else None,
             ok=False,
             error=str(exc),
+        )
+        logger.warning(
+            "Search request exception (target={}, type={}): {}",
+            target,
+            request_type,
+            exc,
         )
         return None
 

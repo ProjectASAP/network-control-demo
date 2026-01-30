@@ -10,7 +10,11 @@ import json
 import os
 import random
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
+
+
+DATA_ROOT = Path(__file__).resolve().parent / "solver_experimental" / "python_solver" / "data"
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,19 +27,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--nodes",
         type=str,
-        default="solver_experimental/python_solver/data/nodes.json",
+        default=str(DATA_ROOT / "nodes.json"),
         help="Path to nodes.json",
     )
     parser.add_argument(
         "--edges",
         type=str,
-        default="solver_experimental/python_solver/data/edges.json",
+        default=str(DATA_ROOT / "edges.json"),
         help="Path to edges.json",
     )
     parser.add_argument(
         "--tasks",
         type=str,
-        default="solver_experimental/python_solver/data/tasks.json",
+        default=str(DATA_ROOT / "tasks.json"),
         help="Path to tasks.json",
     )
     parser.add_argument(

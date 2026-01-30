@@ -60,6 +60,7 @@ class TaskScheduler:
         paths: dict[tuple[str, str], List[str]],
         task_graph: nx.DiGraph,
         time_limit: int = 300,
+        current_time_s: float | None = None,
     ) -> Tuple[Dict[str, RunningTask], dict[str, Task], float | None, int]:
         """
         Solve the task scheduling optimization problem.
@@ -70,6 +71,7 @@ class TaskScheduler:
             running_tasks: {task_id: RunningTask} - Map between task id and running task information.
             paths: {(node1, node2): [[path_nodes_1], [path_nodes_2], ...]} - Routing paths between node pairs, with each path represented as a sequence of node ids.
             time_limit: Solver time limit in seconds
+            current_time_s: Optional simulated time used for new task start timestamps.
 
         Returns:
             (assignment, leftover_tasks, objective_value, status_code) - New assignment dict, objective value, and solver status code.
@@ -241,7 +243,11 @@ class TaskScheduler:
                         task_start_time = (
                             running_tasks[t].start_time_s
                             if t in running_tasks
-                            else time.time()
+                            else (
+                                current_time_s
+                                if current_time_s is not None
+                                else time.time()
+                            )
                         )
                         assigned_task = RunningTask(
                             node_id=n, start_time_s=task_start_time, task=task

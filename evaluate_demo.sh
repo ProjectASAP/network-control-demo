@@ -9,7 +9,7 @@ rm -f solver_experimental/query_rtt.csv \
       solver_experimental/e2e.csv \
       solver_experimental/query_compare.csv && sync
 
-python3 "$ROOT_DIR/reset_and_ingest.py"
+python3 "$ROOT_DIR/reset_es_index.py"
 
 find_pids() {
   if command -v lsof >/dev/null 2>&1; then

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use sketchlib_rust::{
     FastPath, KLL, SketchInput, XLCountMin,
     common::input::{HydraCounter, HydraQuery},
@@ -12,6 +10,7 @@ use super::util::{clamp_i128_to_i32, round_to_i32};
 
 const BUCKET_COUNT: usize = 60;
 const BUCKET_MS: u64 = 60_000;
+const EMPTY_MINUTE: u64 = u64::MAX;
 
 #[derive(Clone, Debug, Default)]
 struct TopEntityState {
@@ -246,14 +245,36 @@ impl MinuteBucket {
 
 #[derive(Clone, Debug)]
 pub(super) struct MetricMinuteWindow {
-    buckets: HashMap<u64, MinuteBucket>,
+    buckets: Vec<MinuteSlot>,
+}
+
+#[derive(Clone, Debug)]
+struct MinuteSlot {
+    minute: u64,
+    bucket: MinuteBucket,
+}
+
+impl MinuteSlot {
+    fn empty() -> Self {
+        Self {
+            minute: EMPTY_MINUTE,
+            bucket: MinuteBucket::new(0),
+        }
+    }
+
+    fn reset(&mut self, minute: u64) {
+        self.minute = minute;
+        self.bucket = MinuteBucket::new(minute);
+    }
 }
 
 impl Default for MetricMinuteWindow {
     fn default() -> Self {
-        Self {
-            buckets: HashMap::new(),
+        let mut buckets = Vec::with_capacity(BUCKET_COUNT);
+        for _ in 0..BUCKET_COUNT {
+            buckets.push(MinuteSlot::empty());
         }
+        Self { buckets }
     }
 }
 
@@ -301,7 +322,6 @@ impl MetricMinuteWindow {
     ) -> Option<Vec<Option<f64>>> {
         let (start_min, end_min) = resolve_time_range_minutes(current_time_ms, time_range_ms);
         let effective_start = start_min.max(end_min.saturating_sub((BUCKET_COUNT - 1) as u64));
-        self.cleanup(end_min);
         let mut merged = KLL::default();
         let mut seen = false;
         for minute in effective_start..=end_min {
@@ -341,7 +361,6 @@ impl MetricMinuteWindow {
     ) -> Option<Vec<Option<f64>>> {
         let (start_min, end_min) = resolve_time_range_minutes(current_time_ms, time_range_ms);
         let effective_start = start_min.max(end_min.saturating_sub((BUCKET_COUNT - 1) as u64));
-        self.cleanup(end_min);
         let mut merged = HydraSketch::new();
         let mut seen = false;
         for minute in effective_start..=end_min {
@@ -376,7 +395,6 @@ impl MetricMinuteWindow {
     ) -> Option<i32> {
         let (start_min, end_min) = resolve_time_range_minutes(current_time_ms, time_range_ms);
         let effective_start = start_min.max(end_min.saturating_sub((BUCKET_COUNT - 1) as u64));
-        self.cleanup(end_min);
         let mut merged = MetricCumulativeSketch::default();
         let mut seen = false;
         for minute in effective_start..=end_min {
@@ -400,7 +418,6 @@ impl MetricMinuteWindow {
     ) -> Option<EntityEstimate> {
         let (start_min, end_min) = resolve_time_range_minutes(current_time_ms, time_range_ms);
         let effective_start = start_min.max(end_min.saturating_sub((BUCKET_COUNT - 1) as u64));
-        self.cleanup(end_min);
         let mut merged = MetricCumulativeSketch::default();
         let mut seen = false;
         for minute in effective_start..=end_min {
@@ -425,20 +442,23 @@ impl MetricMinuteWindow {
         mem_value: f64,
         net_value: f64,
     ) {
-        let bucket = self
-            .buckets
-            .entry(minute)
-            .or_insert_with(|| MinuteBucket::new(minute));
-        bucket.update(cluster, task, full_key, cpu_value, mem_value, net_value);
+        let idx = (minute % BUCKET_COUNT as u64) as usize;
+        let slot = &mut self.buckets[idx];
+        if slot.minute != minute {
+            slot.reset(minute);
+        }
+        slot.bucket
+            .update(cluster, task, full_key, cpu_value, mem_value, net_value);
     }
 
     fn bucket_for_minute(&self, minute: u64) -> Option<&MinuteBucket> {
-        self.buckets.get(&minute)
-    }
-
-    fn cleanup(&mut self, current_minute: u64) {
-        let cutoff = current_minute.saturating_sub((BUCKET_COUNT - 1) as u64);
-        self.buckets.retain(|minute, _| *minute >= cutoff);
+        let idx = (minute % BUCKET_COUNT as u64) as usize;
+        let slot = &self.buckets[idx];
+        if slot.minute == minute {
+            Some(&slot.bucket)
+        } else {
+            None
+        }
     }
 }
 

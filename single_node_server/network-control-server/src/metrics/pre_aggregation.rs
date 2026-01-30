@@ -232,6 +232,7 @@ impl MetricStore {
         cpu_value: f64,
         memory_value: f64,
         network_value: f64,
+        timestamp_ms: Option<u64>,
     ) -> Result<(), String> {
         let cluster = cluster.trim();
         let task = task.trim();
@@ -268,6 +269,19 @@ impl MetricStore {
             mem_rounded.map(|value| value as i128).unwrap_or(0),
             net_rounded.map(|value| value as i128).unwrap_or(0),
         );
+        if let Some(timestamp_ms) = timestamp_ms {
+            let mut window = self.minute_window.lock().map_err(|_| "failed to lock window")?;
+            window.insert_range(
+                timestamp_ms,
+                timestamp_ms,
+                cluster,
+                task,
+                &key,
+                cpu_value,
+                memory_value,
+                network_value,
+            );
+        }
 
         Ok(())
     }
