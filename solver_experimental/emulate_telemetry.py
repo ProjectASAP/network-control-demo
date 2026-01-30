@@ -191,6 +191,7 @@ class MetricsEmulator:
         self.task_metrics: dict[str, TaskMetrics] = {}
         self.running_tasks: dict[str, RunningTask] = {}
         self.ingest_wall_time_s: dict[str, float] = {}
+        self.ingest_offset_s: dict[str, float] = {}
 
     def create_task_metrics(self, task: Task) -> TaskMetrics:
         # Generate a full-duration timeseries for a new task.
@@ -218,6 +219,8 @@ class MetricsEmulator:
                 self.task_metrics[t_id] = self.create_task_metrics(task)
             # Track when we learned about this task to estimate elapsed time.
             self.ingest_wall_time_s[t_id] = time.time()
+            # Anchor timestamps to the task's arrival offset for consistent replay.
+            self.ingest_offset_s[t_id] = task.arrival_offset_s
         return self.task_metrics
 
     def _emit_metrics(
@@ -248,8 +251,11 @@ class MetricsEmulator:
                 running_task = self.running_tasks[t_id]
                 ingest_time = self.ingest_wall_time_s.get(t_id, time.time())
                 elapsed_since_ingest = max(0.0, time.time() - ingest_time)
-                # Approximate global offset by anchoring to the scheduler offset at ingest.
-                current_offset_s = running_task.start_time_s + elapsed_since_ingest
+                # Approximate global offset by anchoring to the task arrival offset.
+                base_offset_s = self.ingest_offset_s.get(
+                    t_id, running_task.start_time_s
+                )
+                current_offset_s = base_offset_s + elapsed_since_ingest
                 current_offsets_s[t_id] = current_offset_s
                 offset = min(int(elapsed_since_ingest), len(task_metrics.cpu_usage))
 
@@ -295,7 +301,10 @@ class MetricsEmulator:
         metrics, current_offsets_s = self._emit_metrics(interval=interval)
         for task_id, task_metrics in metrics.items():
             running_task = self.running_tasks[task_id]
-            current_offset_s = current_offsets_s.get(task_id, running_task.start_time_s)
+            current_offset_s = current_offsets_s.get(
+                task_id,
+                self.ingest_offset_s.get(task_id, running_task.start_time_s),
+            )
             timestamp_ms = [
                 self.base_epoch_ms + int((current_offset_s + i) * 1000.0)
                 for i in range(len(task_metrics.cpu_usage))

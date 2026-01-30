@@ -54,8 +54,12 @@ class AppConfig:
     log_level: str = "INFO"
 
 
-def _latest_timestamp_ms_from_csv(path: str) -> int:
-    latest: dt.datetime | None = None
+def _epoch_end_times_ms_from_csv(path: str, epoch_seconds: int) -> list[int]:
+    epoch_ms = int(epoch_seconds * 1000)
+    if epoch_ms <= 0:
+        raise ValueError("epoch_seconds must be positive")
+    first_ts_ms: int | None = None
+    epoch_end_ms: dict[int, int] = {}
     with open(path, "r", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
@@ -66,11 +70,16 @@ def _latest_timestamp_ms_from_csv(path: str) -> int:
                 parsed = dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
             except ValueError:
                 continue
-            if latest is None or parsed > latest:
-                latest = parsed
-    if latest is None:
+            ts_ms = int(parsed.timestamp() * 1000)
+            if first_ts_ms is None:
+                first_ts_ms = ts_ms
+            epoch_idx = max(0, (ts_ms - first_ts_ms) // epoch_ms)
+            current_end = epoch_end_ms.get(epoch_idx)
+            if current_end is None or ts_ms > current_end:
+                epoch_end_ms[epoch_idx] = ts_ms
+    if first_ts_ms is None:
         raise ValueError(f"No valid timestamp rows found in {path}")
-    return int(latest.timestamp() * 1000)
+    return [epoch_end_ms[idx] for idx in sorted(epoch_end_ms)]
 
 
 def assign_tasks(args: AppConfig):
@@ -111,12 +120,18 @@ def assign_tasks(args: AppConfig):
     if not parallel_enabled:
         logger.info("Parallel benchmark disabled; running sketch-only benchmark.")
 
-    base_epoch_ms = _latest_timestamp_ms_from_csv(CLUSTER_METRICS_CSV)
+    epoch_seconds = 180
+    epoch_end_times_ms = _epoch_end_times_ms_from_csv(
+        CLUSTER_METRICS_CSV, epoch_seconds=epoch_seconds
+    )
     logger.info(
-        "Using base epoch {} ms from {} for time-range queries",
-        base_epoch_ms,
+        "Loaded %d epochs (%ds each) from %s",
+        len(epoch_end_times_ms),
+        epoch_seconds,
         CLUSTER_METRICS_CSV,
     )
+    epoch_index = 0
+    epoch_exhausted = False
 
     with QueryManager(query_config=query_config) as query_manager:
         # Track running and unassigned tasks across iterations.
@@ -192,15 +207,23 @@ def assign_tasks(args: AppConfig):
             # TODO: Execute PromQL queries and do something with results (e.g. update task spec estimates).
             # query_manager.update_task_metrics(running_tasks=query_tasks)
 
-            newest_arrival = max(
-                (task.arrival_offset_s for task in tasks_to_schedule_pool.values()),
-                default=curr_offset,
-            )
-            current_time_ms = base_epoch_ms + int(newest_arrival * 1000.0)
+            epoch_idx_for_window = epoch_index
+            if epoch_idx_for_window >= len(epoch_end_times_ms):
+                if not epoch_exhausted:
+                    logger.warning(
+                        "Epoch cursor exhausted (%d epochs); reusing last epoch window.",
+                        len(epoch_end_times_ms),
+                    )
+                    epoch_exhausted = True
+                epoch_idx_for_window = len(epoch_end_times_ms) - 1
+            current_time_ms = epoch_end_times_ms[epoch_idx_for_window]
+            epoch_display = min(epoch_idx_for_window + 1, len(epoch_end_times_ms))
+            if not epoch_exhausted:
+                epoch_index += 1
             window_start_ms = max(0, current_time_ms - TIME_RANGE_MS)
             logger.debug(
-                "Time window base={} current={} start={} field={}",
-                base_epoch_ms,
+                "Time window epoch={} current={} start={} field={}",
+                epoch_display,
                 current_time_ms,
                 window_start_ms,
                 ES_TIME_FIELD,
