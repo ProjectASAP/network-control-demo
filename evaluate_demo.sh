@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT=10101
 
+kill -9 $(cat server_10101.pid )
+
 rm -f solver_experimental/query_rtt.csv \
       single_node_server/network-control-server/server_request_timing.csv \
       solver_experimental/e2e.csv \
