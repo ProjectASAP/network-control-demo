@@ -178,11 +178,9 @@ def build_sketch_node_metrics_payload(
     time_range_ms: int | None = None,
     time_field: str | None = None,
 ) -> dict:
-    # Build a full sketch-server payload for node metrics with selected fields.
-    # Extend here for task-scoped queries or additional agg types.
+    # Build a sketch-server payload for node metrics.
+    # Simplified to only query cumulative (current usage per node).
     metric_fields = _normalize_metrics(metrics)
-    if percentiles is None:
-        percentiles = [50]
     aggs: dict[str, dict] = {}
     time_range = None
     if current_time_ms is not None and time_range_ms is not None:
@@ -194,14 +192,15 @@ def build_sketch_node_metrics_payload(
     for node_id in node_ids:
         for metric_name, field in metric_fields:
             if field == "cpu_cores":
-                aggs[f"p50_cpu_{node_id}"] = {
-                    "percentiles": {
-                        "field": field,
-                        "percents": percentiles,
-                        "key": node_id,
-                        **(time_range or {}),
-                    }
-                }
+                # Percentiles commented out - only need cumulative for scheduling.
+                # aggs[f"p50_cpu_{node_id}"] = {
+                #     "percentiles": {
+                #         "field": field,
+                #         "percents": percentiles or [50],
+                #         "key": node_id,
+                #         **(time_range or {}),
+                #     }
+                # }
                 aggs[f"cum_cpu_{node_id}"] = {
                     "cumulative": {
                         "field": field,
@@ -210,14 +209,14 @@ def build_sketch_node_metrics_payload(
                     }
                 }
             elif field == "memory_gb":
-                aggs[f"p50_mem_{node_id}"] = {
-                    "percentiles": {
-                        "field": field,
-                        "percents": percentiles,
-                        "key": node_id,
-                        **(time_range or {}),
-                    }
-                }
+                # aggs[f"p50_mem_{node_id}"] = {
+                #     "percentiles": {
+                #         "field": field,
+                #         "percents": percentiles or [50],
+                #         "key": node_id,
+                #         **(time_range or {}),
+                #     }
+                # }
                 aggs[f"cum_mem_{node_id}"] = {
                     "cumulative": {
                         "field": field,
@@ -226,14 +225,14 @@ def build_sketch_node_metrics_payload(
                     }
                 }
             elif field == "network_mbps":
-                aggs[f"p50_net_{node_id}"] = {
-                    "percentiles": {
-                        "field": field,
-                        "percents": percentiles,
-                        "key": node_id,
-                        **(time_range or {}),
-                    }
-                }
+                # aggs[f"p50_net_{node_id}"] = {
+                #     "percentiles": {
+                #         "field": field,
+                #         "percents": percentiles or [50],
+                #         "key": node_id,
+                #         **(time_range or {}),
+                #     }
+                # }
                 aggs[f"cum_net_{node_id}"] = {
                     "cumulative": {
                         "field": field,
@@ -242,13 +241,14 @@ def build_sketch_node_metrics_payload(
                     }
                 }
 
-    if metric_fields:
-        aggs["top_all"] = {
-            "top_entities": {
-                "fields": [field for _, field in metric_fields],
-                **(time_range or {}),
-            }
-        }
+    # Top entities commented out - not needed for scheduling.
+    # if metric_fields:
+    #     aggs["top_all"] = {
+    #         "top_entities": {
+    #             "fields": [field for _, field in metric_fields],
+    #             **(time_range or {}),
+    #         }
+    #     }
 
     return {"size": 0, "aggs": aggs}
 
@@ -261,28 +261,27 @@ def build_es_node_metrics_payload(
     time_range_ms: int | None = None,
     time_field: str | None = None,
 ) -> dict:
-    # Build a full ES payload for node metrics with selected fields.
-    # Extend here for task-scoped queries or additional agg types.
+    # Build an ES payload for node metrics.
+    # Simplified to only query cumulative (sum) for scheduling decisions.
     metric_fields = _normalize_metrics(metrics)
-    if percentiles is None:
-        percentiles = [50]
     filters = {node_id: {"term": {NODE_LABEL: node_id}} for node_id in node_ids}
     node_aggs: dict[str, dict] = {}
     for _, field in metric_fields:
         if field == "cpu_cores":
-            node_aggs["p50_cpu"] = {
-                "percentiles": {"field": field, "percents": percentiles}
-            }
+            # Percentiles commented out - only need cumulative for scheduling.
+            # node_aggs["p50_cpu"] = {
+            #     "percentiles": {"field": field, "percents": percentiles or [50]}
+            # }
             node_aggs["cum_cpu"] = {"sum": {"field": field}}
         elif field == "memory_gb":
-            node_aggs["p50_mem"] = {
-                "percentiles": {"field": field, "percents": percentiles}
-            }
+            # node_aggs["p50_mem"] = {
+            #     "percentiles": {"field": field, "percents": percentiles or [50]}
+            # }
             node_aggs["cum_mem"] = {"sum": {"field": field}}
         elif field == "network_mbps":
-            node_aggs["p50_net"] = {
-                "percentiles": {"field": field, "percents": percentiles}
-            }
+            # node_aggs["p50_net"] = {
+            #     "percentiles": {"field": field, "percents": percentiles or [50]}
+            # }
             node_aggs["cum_net"] = {"sum": {"field": field}}
 
     aggs: dict[str, dict] = {
@@ -292,31 +291,32 @@ def build_es_node_metrics_payload(
         }
     }
 
-    order_field = None
-    for _, field in metric_fields:
-        if field == "cpu_cores":
-            order_field = "max_cpu"
-            break
-        if field == "memory_gb":
-            order_field = "max_mem"
-            break
-        if field == "network_mbps":
-            order_field = "max_net"
-            break
-
-    if order_field:
-        top_aggs: dict[str, dict] = {}
-        for _, field in metric_fields:
-            if field == "cpu_cores":
-                top_aggs["max_cpu"] = {"max": {"field": field}}
-            elif field == "memory_gb":
-                top_aggs["max_mem"] = {"max": {"field": field}}
-            elif field == "network_mbps":
-                top_aggs["max_net"] = {"max": {"field": field}}
-        aggs["top_all"] = {
-            "terms": {"field": TASK_LABEL, "size": 1, "order": {order_field: "desc"}},
-            "aggs": top_aggs,
-        }
+    # Top entities commented out - not needed for scheduling.
+    # order_field = None
+    # for _, field in metric_fields:
+    #     if field == "cpu_cores":
+    #         order_field = "max_cpu"
+    #         break
+    #     if field == "memory_gb":
+    #         order_field = "max_mem"
+    #         break
+    #     if field == "network_mbps":
+    #         order_field = "max_net"
+    #         break
+    #
+    # if order_field:
+    #     top_aggs: dict[str, dict] = {}
+    #     for _, field in metric_fields:
+    #         if field == "cpu_cores":
+    #             top_aggs["max_cpu"] = {"max": {"field": field}}
+    #         elif field == "memory_gb":
+    #             top_aggs["max_mem"] = {"max": {"field": field}}
+    #         elif field == "network_mbps":
+    #             top_aggs["max_net"] = {"max": {"field": field}}
+    #     aggs["top_all"] = {
+    #         "terms": {"field": TASK_LABEL, "size": 1, "order": {order_field: "desc"}},
+    #         "aggs": top_aggs,
+    #     }
 
     payload: dict = {"size": 0, "aggs": aggs}
     if current_time_ms is not None and time_range_ms is not None:

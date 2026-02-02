@@ -363,14 +363,13 @@ def assign_tasks(args: AppConfig, ingest_client: httpx.Client | None = None):
             metrics_needed = ["cpu", "mem"]
             if any(task.peer_bandwidths for task in tasks_to_schedule.values()):
                 metrics_needed.append("net")
-            percentiles = [25, 50, 75, 90]
+            # Simplified: only query cumulative usage, no percentiles needed.
             if parallel_enabled and es_available:
                 sketch_start = time.perf_counter()
                 sketch_node_metrics, sketch_top_entities = fetch_node_usage(
                     node_ids=node_ids,
                     correlation_id=correlation_id,
                     metrics=metrics_needed,
-                    percentiles=percentiles,
                     current_time_ms=current_time_ms,
                     time_range_ms=query_time_range_ms,
                 )
@@ -382,7 +381,6 @@ def assign_tasks(args: AppConfig, ingest_client: httpx.Client | None = None):
                     use_es=True,
                     correlation_id=correlation_id,
                     metrics=metrics_needed,
-                    percentiles=percentiles,
                     current_time_ms=current_time_ms,
                     time_range_ms=query_time_range_ms,
                     time_field=ES_TIME_FIELD,
@@ -401,7 +399,6 @@ def assign_tasks(args: AppConfig, ingest_client: httpx.Client | None = None):
                     node_ids=node_ids,
                     correlation_id=correlation_id,
                     metrics=metrics_needed,
-                    percentiles=percentiles,
                     current_time_ms=current_time_ms,
                     time_range_ms=query_time_range_ms,
                 )
@@ -413,184 +410,213 @@ def assign_tasks(args: AppConfig, ingest_client: httpx.Client | None = None):
                         sketch_query_ms,
                     )
 
-                # Apply node usage from cumulative metrics before solving.
-                for node_id, snapshot in sketch_node_metrics.items():
-                    node = network.get_node(node_id)
-                    if snapshot.cumulative is not None:
-                        node.used_cpu = min(
-                            snapshot.cumulative.cpu_cores, node.cpu_capacity
+            # Apply node usage from cumulative metrics before solving.
+            # This runs for both parallel and sketch-only modes.
+            for node_id, snapshot in sketch_node_metrics.items():
+                node = network.get_node(node_id)
+                if snapshot.cumulative is not None:
+                    node.used_cpu = min(
+                        snapshot.cumulative.cpu_cores, node.cpu_capacity
+                    )
+                    node.used_memory = min(
+                        snapshot.cumulative.memory_gb, node.memory_capacity
+                    )
+                    if node.network_capacity is not None:
+                        node.used_network = min(
+                            snapshot.cumulative.network_mbps,
+                            node.network_capacity,
                         )
-                        node.used_memory = min(
-                            snapshot.cumulative.memory_gb, node.memory_capacity
-                        )
-                        if node.network_capacity is not None:
-                            node.used_network = min(
-                                snapshot.cumulative.network_mbps,
-                                node.network_capacity,
-                            )
 
-                # Solver Pass #1: Sketch
-                sk_solver_start = time.perf_counter()
-                assignments: dict[str, RunningTask] = {}
-                leftover_tasks: dict[str, Task] = {}
-                objective_value = None
-                status_code = None
+            # Log node usage to show feedback loop effect.
+            usage_summary = []
+            for node_id in sorted(sketch_node_metrics.keys()):
+                node = network.get_node(node_id)
+                cpu_pct = (node.used_cpu / node.cpu_capacity * 100) if node.cpu_capacity else 0
+                mem_pct = (node.used_memory / node.memory_capacity * 100) if node.memory_capacity else 0
+                usage_summary.append(f"{node_id}:CPU={cpu_pct:.0f}%,MEM={mem_pct:.0f}%")
+            if usage_summary:
+                logger.info(
+                    "Node usage at offset {:.1f}s: {}",
+                    curr_offset,
+                    " | ".join(usage_summary),
+                )
+
+            # Solver Pass #1: Sketch
+            sk_solver_start = time.perf_counter()
+            assignments: dict[str, RunningTask] = {}
+            leftover_tasks: dict[str, Task] = {}
+            objective_value = None
+            status_code = None
+            try:
+                logger.info(f"Scheduling {len(tasks_to_schedule)} tasks...")
+                assignments, leftover_tasks, objective_value, status_code = (
+                    solver.solve(
+                        tasks=tasks_to_schedule,
+                        task_graph=task_graph,
+                        running_tasks=running_tasks,
+                        paths=paths,
+                        time_limit=30,
+                        current_time_s=curr_offset,
+                    )
+                )
+                logger.debug(
+                    f"Solver status (sketch): {pulp.LpStatus[status_code]}"
+                )
+            finally:
+                if status_code is not None:
+                    logger.info(
+                        "Solver status: {} (code={})",
+                        pulp.LpStatus.get(status_code, "unknown"),
+                        status_code,
+                    )
+                sk_solver_ms = (time.perf_counter() - sk_solver_start) * 1000.0
+                sk_duration_ms = sketch_query_ms + sk_solver_ms
+                assignment_map = {
+                    task_id: rt.node_id for task_id, rt in assignments.items()
+                }
+                log_e2e(
+                    duration_ms=sk_duration_ms,
+                    curr_offset=curr_offset,
+                    tasks_to_schedule=len(tasks_to_schedule),
+                    ran_solver=True,
+                    metrics_source="sketch",
+                    assignment=assignment_map,
+                    correlation_id=correlation_id,
+                )
+
+            assignments_es: dict[str, RunningTask] = {}
+            status_code_es = None
+            if parallel_enabled and es_available:
+                # Solver Pass #2: ES-backed metrics for comparison.
+                es_solver_start = time.perf_counter()
+                es_error = None
                 try:
-                    logger.info(f"Scheduling {len(tasks_to_schedule)} tasks...")
-                    assignments, leftover_tasks, objective_value, status_code = (
-                        solver.solve(
-                            tasks=tasks_to_schedule,
-                            task_graph=task_graph,
-                            running_tasks=running_tasks,
-                            paths=paths,
-                            time_limit=30,
-                            current_time_s=curr_offset,
-                        )
+                    assignments_es, _, _, status_code_es = solver.solve(
+                        tasks=tasks_to_schedule_es,
+                        task_graph=task_graph,
+                        running_tasks=running_tasks_es,
+                        paths=paths,
+                        time_limit=30,
+                        current_time_s=curr_offset,
                     )
                     logger.debug(
-                        f"Solver status (sketch): {pulp.LpStatus[status_code]}"
+                        f"Solver status (es): {pulp.LpStatus[status_code_es]}"
                     )
+                except Exception as exc:
+                    es_error = exc
+                    logger.warning(f"ES assignment failed: {exc}")
                 finally:
-                    if status_code is not None:
-                        logger.info(
-                            "Solver status: {} (code={})",
-                            pulp.LpStatus.get(status_code, "unknown"),
-                            status_code,
-                        )
-                    sk_solver_ms = (time.perf_counter() - sk_solver_start) * 1000.0
-                    sk_duration_ms = sketch_query_ms + sk_solver_ms
-                    assignment_map = {
-                        task_id: rt.node_id for task_id, rt in assignments.items()
+                    es_solver_ms = (time.perf_counter() - es_solver_start) * 1000.0
+                    es_duration_ms = es_query_ms + es_solver_ms
+                    assignment_map_es = {
+                        task_id: rt.node_id for task_id, rt in assignments_es.items()
                     }
                     log_e2e(
-                        duration_ms=sk_duration_ms,
+                        duration_ms=es_duration_ms,
                         curr_offset=curr_offset,
-                        tasks_to_schedule=len(tasks_to_schedule),
-                        ran_solver=True,
-                        metrics_source="sketch",
-                        assignment=assignment_map,
+                        tasks_to_schedule=len(tasks_to_schedule_es),
+                        ran_solver=es_error is None,
+                        metrics_source="elasticsearch",
+                        assignment=assignment_map_es,
                         correlation_id=correlation_id,
                     )
 
-                assignments_es: dict[str, RunningTask] = {}
-                status_code_es = None
-                if parallel_enabled and es_available:
-                    # Solver Pass #2: ES-backed metrics for comparison.
-                    es_solver_start = time.perf_counter()
-                    es_error = None
-                    try:
-                        assignments_es, _, _, status_code_es = solver.solve(
-                            tasks=tasks_to_schedule_es,
-                            task_graph=task_graph,
-                            running_tasks=running_tasks_es,
-                            paths=paths,
-                            time_limit=30,
-                            current_time_s=curr_offset,
-                        )
-                        logger.debug(
-                            f"Solver status (es): {pulp.LpStatus[status_code_es]}"
-                        )
-                    except Exception as exc:
-                        es_error = exc
-                        logger.warning(f"ES assignment failed: {exc}")
-                    finally:
-                        es_solver_ms = (time.perf_counter() - es_solver_start) * 1000.0
-                        es_duration_ms = es_query_ms + es_solver_ms
-                        assignment_map_es = {
-                            task_id: rt.node_id for task_id, rt in assignments_es.items()
-                        }
-                        log_e2e(
-                            duration_ms=es_duration_ms,
-                            curr_offset=curr_offset,
-                            tasks_to_schedule=len(tasks_to_schedule_es),
-                            ran_solver=es_error is None,
-                            metrics_source="elasticsearch",
-                            assignment=assignment_map_es,
-                            correlation_id=correlation_id,
-                        )
-
-                    # Compare sketch vs ES metrics and log any discrepancies.
-                    discrepancies = compare_node_metrics(
-                        sketch_metrics=sketch_node_metrics,
-                        es_metrics=es_node_metrics,
-                        tolerance=consistency_tolerance,
-                    )
-                    if discrepancies:
-                        logger.warning(
-                            "Consistency check failed: {} discrepancies",
-                            len(discrepancies),
-                        )
-                        for item in discrepancies[:5]:
-                            logger.warning(f"  - {item}")
-                    log_node_metric_comparisons(
-                        correlation_id=correlation_id,
-                        sketch_metrics=sketch_node_metrics,
-                        es_metrics=es_node_metrics,
-                        sketch_top_entities=sketch_top_entities,
-                        es_top_entities=es_top_entities,
-                    )
-                    # Detect solver assignment differences between sketch and ES inputs.
-                    if assignments and assignments_es:
-                        sketch_assignment_map = {
-                            tid: rt.node_id for tid, rt in assignments.items()
-                        }
-                        es_assignment_map = {
-                            tid: rt.node_id for tid, rt in assignments_es.items()
-                        }
-                        if sketch_assignment_map != es_assignment_map:
-                            logger.info(
-                                "Solver assignments differ between Sketch and ES paths"
-                            )
-
-                # Carry over leftovers and any unscheduled overflow, keeping oldest tasks first.
-                if assignments:
-                    for task_id in assignments:
-                        retry_counts.pop(task_id, None)
-                for task_id in list(leftover_tasks.keys()):
-                    retry_counts[task_id] = retry_counts.get(task_id, 0) + 1
-                    if retry_counts[task_id] >= 5:
-                        failed_tasks[task_id] = leftover_tasks.pop(task_id)
-                        logger.warning(
-                            "Task {} exceeded retry limit; moving to failed list.",
-                            task_id,
-                        )
-                unassigned_tasks = dict(
-                    list(leftover_tasks.items()) + list(overflow_tasks.items())
+                # Compare sketch vs ES metrics and log any discrepancies.
+                discrepancies = compare_node_metrics(
+                    sketch_metrics=sketch_node_metrics,
+                    es_metrics=es_node_metrics,
+                    tolerance=consistency_tolerance,
                 )
-                running_tasks.update(assignments)
-
-                # Emit summary logging for each scheduling round.
-                logger.info(
-                    "Number of unassigned tasks after scheduling: {}",
-                    len(unassigned_tasks),
-                )
-                if pulp.LpStatus[status_code] == "Optimal" and assignments:
-                    assignment_repr = "Assignment: "
-                    for task, rt in sorted(assignments.items()):
-                        assignment_repr += f"{task} -> {rt.node_id}, "
-                    logger.info(assignment_repr.rstrip(", "))
-                    display_obj_value = (
-                        f"{objective_value:.2f}"
-                        if objective_value is not None
-                        else "N/A"
+                if discrepancies:
+                    logger.warning(
+                        "Consistency check failed: {} discrepancies",
+                        len(discrepancies),
                     )
-                    logger.debug(f"Objective Value: {display_obj_value}")
-                else:
-                    logger.info("Could not assign tasks.")
+                    for item in discrepancies[:5]:
+                        logger.warning(f"  - {item}")
+                log_node_metric_comparisons(
+                    correlation_id=correlation_id,
+                    sketch_metrics=sketch_node_metrics,
+                    es_metrics=es_node_metrics,
+                    sketch_top_entities=sketch_top_entities,
+                    es_top_entities=es_top_entities,
+                )
+                # Detect solver assignment differences between sketch and ES inputs.
+                if assignments and assignments_es:
+                    sketch_assignment_map = {
+                        tid: rt.node_id for tid, rt in assignments.items()
+                    }
+                    es_assignment_map = {
+                        tid: rt.node_id for tid, rt in assignments_es.items()
+                    }
+                    if sketch_assignment_map != es_assignment_map:
+                        logger.info(
+                            "Solver assignments differ between Sketch and ES paths"
+                        )
 
-                yield assignments
+            # Carry over leftovers and any unscheduled overflow, keeping oldest tasks first.
+            if assignments:
+                for task_id in assignments:
+                    retry_counts.pop(task_id, None)
+            for task_id in list(leftover_tasks.keys()):
+                retry_counts[task_id] = retry_counts.get(task_id, 0) + 1
+                if retry_counts[task_id] >= 5:
+                    failed_tasks[task_id] = leftover_tasks.pop(task_id)
+                    logger.warning(
+                        "Task {} exceeded retry limit; moving to failed list.",
+                        task_id,
+                    )
+            unassigned_tasks = dict(
+                list(leftover_tasks.items()) + list(overflow_tasks.items())
+            )
+            running_tasks.update(assignments)
+
+            # Emit summary logging for each scheduling round.
+            logger.info(
+                "Number of unassigned tasks after scheduling: {}",
+                len(unassigned_tasks),
+            )
+            if pulp.LpStatus[status_code] == "Optimal" and assignments:
+                assignment_repr = "Assignment: "
+                for task, rt in sorted(assignments.items()):
+                    assignment_repr += f"{task} -> {rt.node_id}, "
+                logger.info(assignment_repr.rstrip(", "))
+                display_obj_value = (
+                    f"{objective_value:.2f}"
+                    if objective_value is not None
+                    else "N/A"
+                )
+                logger.debug(f"Objective Value: {display_obj_value}")
+            else:
+                logger.info("Could not assign tasks.")
+
+            # Push assignments to emulator immediately so next query sees the metrics.
+            if assignments and ingest_client is not None:
+                running_tasks_payload = unstructure(
+                    list(assignments.values()), list[RunningTask]
+                )
+                _post_with_retry(
+                    ingest_client,
+                    "http://localhost:8000/ingest",
+                    running_tasks_payload,
+                )
+                logger.debug(
+                    "Pushed {} assignments to emulator before next task arrival",
+                    len(assignments),
+                )
+
+            yield assignments
 
 
 def main(args: argparse.Namespace):
-    # Convert CLI args to config and post assignments to the emulator.
+    # Convert CLI args to config and run the scheduling loop.
+    # Assignments are pushed to the emulator inside assign_tasks() immediately
+    # after each scheduling decision, ensuring the next query sees the metrics.
     config = structure(vars(args), AppConfig)
     with httpx.Client(timeout=5) as client:
         for assignments in assign_tasks(config, ingest_client=client):
-            running_tasks = unstructure(assignments.values(), list[RunningTask])
-            if running_tasks:
-                _post_with_retry(
-                    client, "http://localhost:8000/ingest", running_tasks
-                )
+            # Assignments already pushed inside assign_tasks(); just consume the generator.
+            pass
 
 
 if __name__ == "__main__":
