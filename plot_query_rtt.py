@@ -20,7 +20,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    path = Path("solver_experimental/query_rtt.csv")
+    root = Path(__file__).resolve().parent
+    path = root / "solver_experimental" / "query_rtt.csv"
     server_ms = []
     es_ms = []
     x_server = []
@@ -46,7 +47,7 @@ def main() -> None:
     plt.figure(figsize=(10, 4))
     plt.plot(x_server, server_ms, label="server", linewidth=1)
     plt.plot(x_es, es_ms, label="es", linewidth=1)
-    plt.xlabel("row index")
+    plt.xlabel("index")
     plt.ylabel("duration_ms")
     plt.title(
         f"Query RTT (row order) | nodes={args.nodes}, rows/sec={args.rows_per_second}"
