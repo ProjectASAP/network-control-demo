@@ -1470,6 +1470,7 @@ dependencies = [
  "rmp-serde",
  "serde",
  "serde-big-array",
+ "smallvec",
  "twox-hash",
 ]
 

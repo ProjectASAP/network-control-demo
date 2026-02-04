@@ -192,13 +192,21 @@ pub(crate) fn handle_cumulative(
     if cum.key.trim().is_empty() {
         return Err("cumulative key is required".to_string());
     }
-    let time_window = extract_time_window(cum.current_time_ms, cum.time_range_ms)?;
-    let value = match time_window {
-        Some((current_time_ms, time_range_ms)) => state
+    let value = match (cum.current_time_ms, cum.time_range_ms) {
+        (Some(current_time_ms), Some(time_range_ms)) => state
             .store
             .cumulative_value_time(field, cum.key.trim(), current_time_ms, time_range_ms)
             .unwrap_or(0),
-        None => state.store.cumulative_value(field, cum.key.trim()),
+        (Some(current_time_ms), None) => state
+            .store
+            .cumulative_value_at_time(field, cum.key.trim(), current_time_ms)
+            .unwrap_or(0),
+        (None, None) => state.store.cumulative_value(field, cum.key.trim()),
+        _ => {
+            return Err(
+                "current_time_ms and time_range_ms must be provided together".to_string(),
+            )
+        }
     };
     Ok(value)
 }

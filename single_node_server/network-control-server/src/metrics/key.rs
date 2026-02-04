@@ -1,4 +1,4 @@
-use sketchlib_rust::{SketchInput, hash_it_to_128};
+use sketchlib_rust::{SketchInput, hash128_seeded};
 
 pub(super) fn split_key(key: &str) -> Option<Vec<&str>> {
     let parts: Vec<&str> = key.split(';').filter(|part| !part.is_empty()).collect();
@@ -7,5 +7,5 @@ pub(super) fn split_key(key: &str) -> Option<Vec<&str>> {
 
 #[inline(always)]
 pub(super) fn hash_key_128(key: &str) -> u128 {
-    hash_it_to_128(0, &SketchInput::Str(key))
+    hash128_seeded(0, &SketchInput::Str(key))
 }

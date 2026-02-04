@@ -1,6 +1,8 @@
 use std::sync::RwLock;
 
-use sketchlib_rust::{FastPath, XLCountMin};
+use sketchlib_rust::{CountMin, FastPath, MatrixHashType, Vector2D};
+
+type XLCountMin = CountMin<Vector2D<i128>, FastPath>;
 
 use super::util::clamp_i128_to_i32;
 use super::{EntityEstimate, MetricField};
@@ -12,14 +14,14 @@ struct TopEntityState {
 }
 
 pub(super) struct MetricCumulativeAndTop {
-    cpu_top: RwLock<XLCountMin<FastPath>>,
-    cpu_cumulative: RwLock<XLCountMin<FastPath>>,
+    cpu_top: RwLock<XLCountMin>,
+    cpu_cumulative: RwLock<XLCountMin>,
     cpu_top_state: RwLock<TopEntityState>,
-    mem_top: RwLock<XLCountMin<FastPath>>,
-    mem_cumulative: RwLock<XLCountMin<FastPath>>,
+    mem_top: RwLock<XLCountMin>,
+    mem_cumulative: RwLock<XLCountMin>,
     mem_top_state: RwLock<TopEntityState>,
-    net_top: RwLock<XLCountMin<FastPath>>,
-    net_cumulative: RwLock<XLCountMin<FastPath>>,
+    net_top: RwLock<XLCountMin>,
+    net_cumulative: RwLock<XLCountMin>,
     net_top_state: RwLock<TopEntityState>,
 }
 
@@ -48,8 +50,8 @@ impl MetricCumulativeAndTop {
         mem_value: i128,
         net_value: i128,
     ) {
-        let update_field = |top: &RwLock<XLCountMin<FastPath>>,
-                            cumulative: &RwLock<XLCountMin<FastPath>>,
+        let update_field = |top: &RwLock<XLCountMin>,
+                            cumulative: &RwLock<XLCountMin>,
                             top_state: &RwLock<TopEntityState>,
                             value: i128| {
             if value <= 0 {
@@ -115,7 +117,7 @@ impl MetricCumulativeAndTop {
 }
 
 #[inline(always)]
-fn insert_many_with_hash(inner: &RwLock<XLCountMin<FastPath>>, hashed_val: u128, many: i128) {
+fn insert_many_with_hash(inner: &RwLock<XLCountMin>, hashed_val: u128, many: i128) {
     if many == 0 {
         return;
     }
@@ -123,24 +125,27 @@ fn insert_many_with_hash(inner: &RwLock<XLCountMin<FastPath>>, hashed_val: u128,
         Ok(inner) => inner,
         Err(poisoned) => poisoned.into_inner(),
     };
-    inner.fast_insert_many_with_hash_value(hashed_val, many);
+    let hashed_val = MatrixHashType::Packed128(hashed_val);
+    inner.fast_insert_many_with_hash_value(&hashed_val, many);
 }
 
 #[inline(always)]
-fn estimate_with_hash(inner: &RwLock<XLCountMin<FastPath>>, hashed_val: u128) -> i128 {
+fn estimate_with_hash(inner: &RwLock<XLCountMin>, hashed_val: u128) -> i128 {
     let inner = match inner.read() {
         Ok(inner) => inner,
         Err(poisoned) => poisoned.into_inner(),
     };
-    inner.fast_estimate_with_hash(hashed_val)
+    let hashed_val = MatrixHashType::Packed128(hashed_val);
+    inner.fast_estimate_with_hash(&hashed_val)
 }
 
 #[inline(always)]
-fn update_max_with_hash(inner: &RwLock<XLCountMin<FastPath>>, hashed_val: u128, next: i128) {
+fn update_max_with_hash(inner: &RwLock<XLCountMin>, hashed_val: u128, next: i128) {
     let mut inner = match inner.write() {
         Ok(inner) => inner,
         Err(poisoned) => poisoned.into_inner(),
     };
+    let hashed_val = MatrixHashType::Packed128(hashed_val);
     inner.as_storage_mut().fast_insert(
         |counter, value, _| {
             if *value > *counter {
@@ -148,6 +153,6 @@ fn update_max_with_hash(inner: &RwLock<XLCountMin<FastPath>>, hashed_val: u128, 
             }
         },
         next,
-        hashed_val,
+        &hashed_val,
     );
 }

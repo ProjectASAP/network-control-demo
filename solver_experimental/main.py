@@ -1,4 +1,5 @@
 import sys
+import os
 import yaml
 import time
 import argparse
@@ -41,6 +42,8 @@ from es_query import (
     check_es_available,
     NodeMetricsSnapshot,
 )
+
+INGEST_POST_TIMEOUT = float(os.getenv("INGEST_POST_TIMEOUT_SECONDS", "30"))
 
 
 @dataclass
@@ -135,7 +138,7 @@ def _post_with_retry(
 ) -> None:
     for attempt in range(1, retries + 1):
         try:
-            response = client.post(url, json=payload)
+            response = client.post(url, json=payload, timeout=INGEST_POST_TIMEOUT)
             response.raise_for_status()
             return
         except httpx.HTTPError as exc:
@@ -150,6 +153,12 @@ def _post_with_retry(
             time.sleep(delay_s)
 
 
+def _chunk_rows(rows: list[dict], chunk_size: int) -> list[list[dict]]:
+    if chunk_size <= 0:
+        return [rows]
+    return [rows[i : i + chunk_size] for i in range(0, len(rows), chunk_size)]
+
+
 def assign_tasks(args: AppConfig, ingest_client: httpx.Client | None = None):
     logger.info("Loading network information and initializing solver...")
     # Load network topology from disk.
@@ -158,7 +167,19 @@ def assign_tasks(args: AppConfig, ingest_client: httpx.Client | None = None):
     logger.debug(f"Edge path: {args.edge_path}")
     edges = load_edges(args.edge_path)
     network = NetworkTopology(nodes.values(), edges.values())
-    node_ids = list(nodes.keys())
+    node_ids = sorted(nodes.keys())
+    node_limit_raw = os.getenv("NODE_QUERY_LIMIT")
+    if node_limit_raw:
+        try:
+            node_limit = int(node_limit_raw)
+        except ValueError:
+            logger.warning(
+                "Invalid NODE_QUERY_LIMIT '{}'; ignoring.", node_limit_raw
+            )
+            node_limit = None
+        if node_limit is not None and node_limit > 0:
+            node_ids = node_ids[:node_limit]
+            logger.info("Limiting node queries to first {} nodes.", node_limit)
 
     # Precompute shortest paths between all node pairs.
     paths = {}
@@ -261,11 +282,12 @@ def assign_tasks(args: AppConfig, ingest_client: httpx.Client | None = None):
                     ) / 1000.0
                     current_time_s = max(current_time_s, latest_batch_s)
                     if ingest_client is not None:
-                        _post_with_retry(
-                            ingest_client,
-                            "http://localhost:8000/ingest_rows",
-                            batch_rows,
-                        )
+                        for chunk in _chunk_rows(batch_rows, 1000):
+                            _post_with_retry(
+                                ingest_client,
+                                "http://localhost:8000/ingest_rows",
+                                chunk,
+                            )
                     continue
                 if (
                     next_task_time == float("inf")

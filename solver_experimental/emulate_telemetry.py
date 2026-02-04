@@ -1,4 +1,5 @@
 import sys
+import os
 import time
 import json
 import jsonlines
@@ -32,7 +33,7 @@ from config import (
 # Paramters for sending metrics to server.
 SERVER_URL = SKETCH_URL
 INTERVAL = 1  # seconds
-TIMEOUT = 5  # seconds
+TIMEOUT = int(os.getenv("INGEST_TIMEOUT_SECONDS", "30"))  # seconds
 
 
 def build_es_bulk_payload(records: list[dict]) -> str:
@@ -44,6 +45,7 @@ def build_es_bulk_payload(records: list[dict]) -> str:
         cpu = record.get("cpu_cores", [])
         memory = record.get("memory_gb", [])
         network = record.get("network_mbps", [])
+        durations = record.get("estimated_duration", [])
         timestamps_ms = record.get("timestamp_ms", [])
         count = min(len(tasks), len(clusters), len(cpu), len(memory), len(network))
         for idx in range(count):
@@ -61,6 +63,11 @@ def build_es_bulk_payload(records: list[dict]) -> str:
                 "cpu_cores": cpu[idx],
                 "memory_gb": memory[idx],
                 "network_mbps": network[idx],
+                "estimated_duration": (
+                    durations[idx]
+                    if isinstance(durations, list) and idx < len(durations)
+                    else 0.0
+                ),
                 # Include both time fields so ES range filters can use either.
                 "timestamp": ts_str,
                 "@timestamp": ts_str,
@@ -90,30 +97,64 @@ def _latest_timestamp_ms_from_csv(path: str) -> int:
     return int(latest.timestamp() * 1000)
 
 
+def _split_record(record: dict, max_rows: int) -> list[dict]:
+    if max_rows <= 0:
+        return [record]
+    row_count = len(record.get("task", []))
+    if row_count <= max_rows:
+        return [record]
+    split_records: list[dict] = []
+    for start in range(0, row_count, max_rows):
+        end = min(start + max_rows, row_count)
+        chunk: dict = {}
+        for key, value in record.items():
+            if isinstance(value, list):
+                chunk[key] = value[start:end]
+            else:
+                chunk[key] = value
+        split_records.append(chunk)
+    return split_records
+
+
+def _split_records(records: list[dict], max_rows: int) -> list[dict]:
+    if max_rows <= 0:
+        return records
+    chunks: list[dict] = []
+    for record in records:
+        chunks.extend(_split_record(record, max_rows))
+    return chunks
+
+
 async def send_es_bulk(
     client: httpx.AsyncClient, records: list[dict], refresh: str | None = None
 ) -> None:
     # Send batched telemetry records to Elasticsearch using the bulk API.
     if not ES_INGEST_ENABLED or not ES_URL:
         return
-    payload = build_es_bulk_payload(records)
-    if not payload:
-        return
     headers = {"Content-Type": "application/x-ndjson"}
     if ES_API_KEY:
         headers["Authorization"] = f"ApiKey {ES_API_KEY}"
     endpoint = f"{ES_URL.rstrip('/')}/{ES_INDEX_NAME}/_bulk"
     params = {"refresh": refresh} if refresh else None
-    try:
-        response = await client.post(
-            endpoint, content=payload, headers=headers, params=params, timeout=TIMEOUT
-        )
-        response.raise_for_status()
-        data = response.json()
-        if data.get("errors"):
-            logger.warning("Bulk ingest reported errors from Elasticsearch.")
-    except Exception as exc:
-        logger.error(f"Error sending metrics to Elasticsearch {ES_URL}: {exc}")
+    for chunk in _split_records(records, 1000):
+        payload = build_es_bulk_payload([chunk])
+        if not payload:
+            continue
+        try:
+            response = await client.post(
+                endpoint, content=payload, headers=headers, params=params, timeout=TIMEOUT
+            )
+            response.raise_for_status()
+            data = response.json()
+            if data.get("errors"):
+                logger.warning("Bulk ingest reported errors from Elasticsearch.")
+        except Exception as exc:
+            logger.error(
+                "Error sending metrics to Elasticsearch {}: {} ({})",
+                ES_URL,
+                exc,
+                type(exc).__name__,
+            )
 
 
 def _record_from_rows(rows: list[dict]) -> dict:
@@ -123,6 +164,7 @@ def _record_from_rows(rows: list[dict]) -> dict:
     cpu: list[float] = []
     memory: list[float] = []
     network: list[float] = []
+    durations: list[float] = []
     timestamp_ms: list[int] = []
     timestamps: list[str] = []
 
@@ -136,6 +178,7 @@ def _record_from_rows(rows: list[dict]) -> dict:
         cpu.append(float(row.get("cpu_cores", 0.0)))
         memory.append(float(row.get("memory_gb", 0.0)))
         network.append(float(row.get("network_mbps", 0.0)))
+        durations.append(float(row.get("estimated_duration", 0.0)))
 
         ts_ms = row.get("timestamp_ms")
         ts = row.get("timestamp") or row.get("@timestamp")
@@ -159,6 +202,7 @@ def _record_from_rows(rows: list[dict]) -> dict:
         "cpu_cores": cpu,
         "memory_gb": memory,
         "network_mbps": network,
+        "estimated_duration": durations,
         "timestamp_ms": timestamp_ms,
         "timestamp": timestamps,
         "@timestamp": timestamps,
@@ -172,7 +216,7 @@ async def send_records(records: list[dict], refresh: str | None = None) -> None:
     async with httpx.AsyncClient() as client:
         if SKETCH_INGEST_ENABLED:
             posts = []
-            for record in records:
+            for record in _split_records(records, 1000):
                 logger.trace(f"Sending record: {record}")
                 posts.append(client.post(SERVER_URL, json=record, timeout=TIMEOUT))
             for record in asyncio.as_completed(posts):
@@ -180,7 +224,12 @@ async def send_records(records: list[dict], refresh: str | None = None) -> None:
                     response = await record
                     response.raise_for_status()
                 except Exception as e:
-                    logger.error(f"Error sending metrics to {SERVER_URL}: {e}")
+                    logger.error(
+                        "Error sending metrics to {}: {} ({})",
+                        SERVER_URL,
+                        e,
+                        type(e).__name__,
+                    )
         if ES_INGEST_ENABLED:
             await send_es_bulk(client, records, refresh=refresh)
 
@@ -402,6 +451,8 @@ class MetricsEmulator:
                 "memory_gb": task_metrics.memory_usage.tolist(),
                 "network_mbps": [0]
                 * len(task_metrics.cpu_usage),  # Ignore network for now.
+                "estimated_duration": [float(running_task.task.duration_s)]
+                * len(task_metrics.cpu_usage),
                 "timestamp_ms": timestamp_ms,
                 "timestamp": timestamps,
                 "@timestamp": timestamps,

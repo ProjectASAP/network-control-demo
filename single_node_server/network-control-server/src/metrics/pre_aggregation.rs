@@ -225,6 +225,16 @@ impl MetricStore {
         window.cumulative_value(field, key, current_time_ms, time_range_ms)
     }
 
+    pub fn cumulative_value_at_time(
+        &self,
+        field: MetricField,
+        key: &str,
+        current_time_ms: u64,
+    ) -> Option<i32> {
+        let mut window = self.minute_window.lock().ok()?;
+        window.cumulative_value_at(field, key, current_time_ms)
+    }
+
     pub fn insert(
         &self,
         cluster: &str,
@@ -275,8 +285,6 @@ impl MetricStore {
                 timestamp_ms,
                 timestamp_ms,
                 cluster,
-                task,
-                &key,
                 cpu_value,
                 memory_value,
                 network_value,
@@ -364,19 +372,14 @@ impl MetricPreAggregation {
         start_time_ms: u64,
         end_time_ms: u64,
         cluster: &str,
-        task: &str,
         cpu_value: f64,
         memory_value: f64,
         network_value: f64,
     ) {
-        self.build_key_buffer(cluster, task);
-        let full_key = self.key_buffer.as_str();
         self.minute_window.insert_range(
             start_time_ms,
             end_time_ms,
             cluster,
-            task,
-            full_key,
             cpu_value,
             memory_value,
             network_value,

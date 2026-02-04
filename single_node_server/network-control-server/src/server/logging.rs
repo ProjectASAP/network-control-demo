@@ -87,31 +87,9 @@ fn log_request_details(
     }
 
     if body.is_empty() {
-        eprintln!("body (0 bytes): <empty>");
-        eprintln!("end request");
-        return;
-    }
-
-    let total_len = body.len();
-    if total_len > MAX_LOG_BODY_BYTES {
-        eprintln!(
-            "body ({} bytes, showing first {}):",
-            total_len, MAX_LOG_BODY_BYTES
-        );
-        let preview = &body[..MAX_LOG_BODY_BYTES];
-        eprintln!("{}", String::from_utf8_lossy(preview));
-        eprintln!("body truncated");
-        eprintln!("end request");
-        return;
-    }
-
-    eprintln!("body ({} bytes):", total_len);
-    match serde_json::from_slice::<Value>(&body) {
-        Ok(value) => match serde_json::to_string_pretty(&value) {
-            Ok(pretty) => eprintln!("{pretty}"),
-            Err(_) => eprintln!("{value}"),
-        },
-        Err(_) => eprintln!("{}", String::from_utf8_lossy(&body)),
+        eprintln!("body: <empty>");
+    } else {
+        eprintln!("body: <redacted>");
     }
     eprintln!("end request");
 }

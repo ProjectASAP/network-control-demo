@@ -5,7 +5,7 @@ use std::time::Instant;
 use axum::{
     Json, Router,
     body::Bytes,
-    extract::{Path, State},
+    extract::{DefaultBodyLimit, Path, State},
     http::HeaderMap,
     middleware::from_fn_with_state,
     response::IntoResponse,
@@ -48,6 +48,7 @@ pub async fn run_http_server(
         .route("/cluster-metrics/_batch", post(batch_query_handler))
         .route("/metrics/:field", post(metrics_handler))
         .with_state(state)
+        .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
         .layer(from_fn_with_state(log_state, log_request_middleware));
 
     let listener = TcpListener::bind("0.0.0.0:10101").await?;
@@ -120,44 +121,43 @@ async fn ingest_handler(
         }
     }
 
-    // Ingest is currently disabled; we only validate payload shape and acknowledge receipt.
-    // let mut inserted = 0usize;
-    // for idx in 0..len {
-    //     let cluster = record.cluster[idx].trim();
-    //     let task = record.task[idx].trim();
-    //     if cluster.is_empty() || task.is_empty() {
-    //         continue;
-    //     }
-    //     let timestamp_ms = record
-    //         .timestamp_ms
-    //         .as_ref()
-    //         .and_then(|values| values.get(idx).copied())
-    //         .or_else(|| {
-    //             record
-    //                 .at_timestamp
-    //                 .as_ref()
-    //                 .and_then(|values| values.get(idx))
-    //                 .and_then(|value| parse_rfc3339_millis(value))
-    //         })
-    //         .or_else(|| {
-    //             record
-    //                 .timestamp
-    //                 .as_ref()
-    //                 .and_then(|values| values.get(idx))
-    //                 .and_then(|value| parse_rfc3339_millis(value))
-    //         });
-    //     if let Err(message) = state.store.insert(
-    //         cluster,
-    //         task,
-    //         record.cpu_cores[idx],
-    //         record.memory_gb[idx],
-    //         record.network_mbps[idx],
-    //         timestamp_ms,
-    //     ) {
-    //         return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, message).into_response();
-    //     }
-    //     inserted += 1;
-    // }
+    let mut inserted = 0usize;
+    for idx in 0..len {
+        let cluster = record.cluster[idx].trim();
+        let task = record.task[idx].trim();
+        if cluster.is_empty() || task.is_empty() {
+            continue;
+        }
+        let timestamp_ms = record
+            .timestamp_ms
+            .as_ref()
+            .and_then(|values| values.get(idx).copied())
+            .or_else(|| {
+                record
+                    .at_timestamp
+                    .as_ref()
+                    .and_then(|values| values.get(idx))
+                    .and_then(|value| parse_rfc3339_millis(value))
+            })
+            .or_else(|| {
+                record
+                    .timestamp
+                    .as_ref()
+                    .and_then(|values| values.get(idx))
+                    .and_then(|value| parse_rfc3339_millis(value))
+            });
+        if let Err(message) = state.store.insert(
+            cluster,
+            task,
+            record.cpu_cores[idx],
+            record.memory_gb[idx],
+            record.network_mbps[idx],
+            timestamp_ms,
+        ) {
+            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, message).into_response();
+        }
+        inserted += 1;
+    }
 
     Json(json!({ "inserted": 0 })).into_response()
 }

@@ -45,7 +45,7 @@ CLUSTER_METRICS_CSV = os.path.expanduser(
 )
 # Emulator ingests ES docs with "@timestamp", so default the ES time filter to match.
 ES_TIME_FIELD = os.getenv("ES_TIME_FIELD", "@timestamp")
-TIME_RANGE_MS = _env_int("TIME_RANGE_MS", 180_000)
+TIME_RANGE_MS = _env_int("TIME_RANGE_MS", 3_000_000)
 
 QUERY_RTT_CSV = os.getenv("QUERY_RTT_CSV", "query_rtt.csv")
 QUERY_COMPARE_CSV = os.getenv("QUERY_COMPARE_CSV", "query_compare.csv")

@@ -183,10 +183,9 @@ def build_sketch_node_metrics_payload(
     metric_fields = _normalize_metrics(metrics)
     aggs: dict[str, dict] = {}
     time_range = None
-    if current_time_ms is not None and time_range_ms is not None:
+    if current_time_ms is not None:
         time_range = {
             "current_time_ms": int(current_time_ms),
-            "time_range_ms": int(time_range_ms),
             **({"time_field": time_field} if time_field else {}),
         }
     for node_id in node_ids:
@@ -319,18 +318,38 @@ def build_es_node_metrics_payload(
     #     }
 
     payload: dict = {"size": 0, "aggs": aggs}
-    if current_time_ms is not None and time_range_ms is not None:
-        field = time_field or "timestamp"
-        start_ms = max(0, int(current_time_ms) - int(time_range_ms))
-        payload["query"] = {
-            "range": {
-                field: {
-                    "gte": start_ms,
-                    "lte": int(current_time_ms),
-                    "format": "epoch_millis",
+    if current_time_ms is not None:
+        field = time_field or "@timestamp"
+        filters: list[dict] = [
+            {
+                "script": {
+                    "script": {
+                        "lang": "painless",
+                        "source": (
+                            "doc['%s'].size()!=0 && doc['estimated_duration'].size()!=0 && "
+                            "(doc['%s'].value.toInstant().toEpochMilli() + "
+                            "(doc['estimated_duration'].value * 1000)) > params.current_time_ms"
+                        )
+                        % (field, field),
+                        "params": {"current_time_ms": int(current_time_ms)},
+                    }
                 }
             }
-        }
+        ]
+        if time_range_ms is not None:
+            start_ms = max(0, int(current_time_ms) - int(time_range_ms))
+            filters.append(
+                {
+                    "range": {
+                        field: {
+                            "gte": start_ms,
+                            "lte": int(current_time_ms),
+                            "format": "epoch_millis",
+                        }
+                    }
+                }
+            )
+        payload["query"] = {"bool": {"filter": filters}}
     return payload
 
 
