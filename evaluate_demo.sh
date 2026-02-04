@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT=10101
+NODE_QUERY_LIMIT_ARG="${1:-}"
+NODE_QUERY_LIMIT="${NODE_QUERY_LIMIT_ARG:-${NODE_QUERY_LIMIT:-}}"
 
 kill -9 $(cat server_10101.pid )
 
@@ -88,4 +90,4 @@ SERVER_PID="$(cat "$ROOT_DIR/server_10101.pid")"
 wait_for_port "$SERVER_PID"
 
 cd solver_experimental
-bash run_main.sh
+NODE_QUERY_LIMIT="${NODE_QUERY_LIMIT}" bash run_main.sh

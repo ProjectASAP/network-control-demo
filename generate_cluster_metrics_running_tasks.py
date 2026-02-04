@@ -49,6 +49,12 @@ def parse_args() -> argparse.Namespace:
         help="Total cluster count (clusters named N000..N030 by default)",
     )
     parser.add_argument(
+        "--rows-per-second",
+        type=int,
+        default=100,
+        help="How many rows share the same timestamp (1 second step)",
+    )
+    parser.add_argument(
         "--min-duration",
         type=float,
         default=300.0,
@@ -173,7 +179,11 @@ def main() -> None:
         while written < total:
             n = min(chunk, total - written)
             for i in range(n):
-                ts = (start_dt + timedelta(seconds=written + i)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                rows_per_second = max(1, int(args.rows_per_second))
+                offset_seconds = (written + i) // rows_per_second
+                ts = (start_dt + timedelta(seconds=offset_seconds)).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
                 cluster, task = assignments[written + i]
                 node_idx = int(cluster[1:]) if cluster[1:].isdigit() else 0
                 source_node = nodes[node_idx % len(nodes)]

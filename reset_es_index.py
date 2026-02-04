@@ -50,6 +50,7 @@ mapping_body = {
             "cpu_cores": {"type": "float"},
             "memory_gb": {"type": "float"},
             "network_mbps": {"type": "float"},
+            "estimated_duration": {"type": "float"},
             "cluster": {"type": "keyword"},
             "task": {"type": "keyword"},
         }
