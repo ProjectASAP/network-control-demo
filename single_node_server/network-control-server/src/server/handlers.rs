@@ -14,20 +14,15 @@ use axum::{
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio::task::JoinSet;
-use chrono::DateTime;
 
 use crate::metrics::MetricField;
 
 use super::logging::log_request_middleware;
-use super::query::{
-    extract_query_key, handle_cumulative, handle_percentiles, handle_top_entities,
-    parse_quantile_spec,
-};
+use super::query::{handle_cumulative, handle_percentiles, parse_quantile_spec};
 use super::timing::{QueryTiming, write_timing_log};
 use super::types::{
     AggregationKind, AppState, BatchQueryRequest, BatchQueryResponse, BatchQueryResult,
-    IngestRecord, MetricsQuery, PercentileAggregation, QueryKeyStatus, RootResponse, SearchRequest,
-    TopEntitiesResult,
+    IngestRecord, MetricsQuery, PercentileAggregation, RootResponse, SearchRequest,
 };
 use super::upstream::{forward_to_upstream, merge_aggregations};
 
@@ -58,11 +53,11 @@ pub async fn run_http_server(
 
 async fn root_handler() -> Json<RootResponse<'static>> {
     Json(RootResponse {
-        message: "POST /cluster-metrics/_search with aggs for percentiles, top_entities, or cumulative (cumulative requires a key). Other aggs (e.g. avg) are forwarded to Elasticsearch.",
+        message: "POST /cluster-metrics/_search with aggs for percentiles or cumulative (cumulative requires a key). Other aggs (e.g. avg) are forwarded to Elasticsearch.",
         examples: [
             "POST /cluster-metrics/_search {\"aggs\":{\"cpu_quantiles\":{\"percentiles\":{\"field\":\"cpu_cores\",\"percents\":[10,50]}}}}",
-            "POST /cluster-metrics/_search {\"aggs\":{\"top_cpu\":{\"top_entities\":{\"field\":\"cpu_cores\"}}}}",
             "POST /cluster-metrics/_search {\"aggs\":{\"cpu_cumulative\":{\"cumulative\":{\"field\":\"cpu_cores\",\"key\":\"cluster-c;cache\"}}}}",
+            "POST /cluster-metrics/_search {\"aggs\":{\"mem_quantiles\":{\"percentiles\":{\"field\":\"memory_gb\",\"percents\":[25,75]}}}}",
         ],
     })
 }
@@ -71,9 +66,6 @@ async fn ingest_handler(
     State(state): State<AppState>,
     Json(record): Json<IngestRecord>,
 ) -> impl IntoResponse {
-    if state.no_ingest {
-        return Json(json!({ "inserted": 0 })).into_response();
-    }
     let len = record.cpu_cores.len();
     if len == 0 {
         return (
@@ -93,34 +85,6 @@ async fn ingest_handler(
         )
             .into_response();
     }
-    if let Some(timestamps) = record.timestamp_ms.as_ref() {
-        if timestamps.len() != len {
-            return (
-                axum::http::StatusCode::BAD_REQUEST,
-                "timestamp_ms must match metrics length".to_string(),
-            )
-                .into_response();
-        }
-    }
-    if let Some(timestamps) = record.timestamp.as_ref() {
-        if timestamps.len() != len {
-            return (
-                axum::http::StatusCode::BAD_REQUEST,
-                "timestamp must match metrics length".to_string(),
-            )
-                .into_response();
-        }
-    }
-    if let Some(timestamps) = record.at_timestamp.as_ref() {
-        if timestamps.len() != len {
-            return (
-                axum::http::StatusCode::BAD_REQUEST,
-                "@timestamp must match metrics length".to_string(),
-            )
-                .into_response();
-        }
-    }
-
     let mut inserted = 0usize;
     for idx in 0..len {
         let cluster = record.cluster[idx].trim();
@@ -128,52 +92,18 @@ async fn ingest_handler(
         if cluster.is_empty() || task.is_empty() {
             continue;
         }
-        let timestamp_ms = record
-            .timestamp_ms
-            .as_ref()
-            .and_then(|values| values.get(idx).copied())
-            .or_else(|| {
-                record
-                    .at_timestamp
-                    .as_ref()
-                    .and_then(|values| values.get(idx))
-                    .and_then(|value| parse_rfc3339_millis(value))
-            })
-            .or_else(|| {
-                record
-                    .timestamp
-                    .as_ref()
-                    .and_then(|values| values.get(idx))
-                    .and_then(|value| parse_rfc3339_millis(value))
-            });
-        if let Err(message) = state.store.insert(
+        if let Err(message) = state.node_store.insert_sample(
             cluster,
-            task,
             record.cpu_cores[idx],
             record.memory_gb[idx],
             record.network_mbps[idx],
-            timestamp_ms,
         ) {
             return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, message).into_response();
         }
         inserted += 1;
     }
 
-    Json(json!({ "inserted": 0 })).into_response()
-}
-
-fn parse_rfc3339_millis(value: &str) -> Option<u64> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    let parsed = DateTime::parse_from_rfc3339(trimmed).ok()?;
-    let millis = parsed.timestamp_millis();
-    if millis < 0 {
-        None
-    } else {
-        Some(millis as u64)
-    }
+    Json(json!({ "inserted": inserted })).into_response()
 }
 
 async fn search_handler(
@@ -206,14 +136,9 @@ async fn search_handler(
     let mut handled = BTreeMap::new();
     let mut handled_names = HashSet::new();
     let mut has_unhandled = false;
-    let query_status = extract_query_key(request._other.get("query"));
-    let query_supported = !matches!(query_status, QueryKeyStatus::Unsupported);
-    let query_key = match &query_status {
-        QueryKeyStatus::Key(key) => Some(key.as_str()),
-        _ => None,
-    };
-    let has_other = request._other.keys().any(|key| key.as_str() != "query")
-        || matches!(query_status, QueryKeyStatus::Unsupported);
+    let query_supported = true;
+    let query_key = None;
+    let has_other = request._other.keys().any(|key| key.as_str() != "query");
 
     if let Some(aggs) = request.aggs.as_ref() {
         for (name, agg) in aggs {
@@ -239,33 +164,6 @@ async fn search_handler(
                             }
                         }
 
-                        AggregationKind::TopEntities(top) => {
-                            if query_key.is_some() {
-                                None
-                            } else {
-                                let t0 = Instant::now();
-                                let res = handle_top_entities(&state, &top);
-                                let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
-                                if let Some(t) = &mut timing {
-                                    t.record("sketch_estimate", elapsed_ms);
-                                }
-                                match res {
-                                    Ok(TopEntitiesResult::Single(entity)) => Some(json!({
-                                        "key": entity.key,
-                                        "value": entity.value
-                                    })),
-                                    Ok(TopEntitiesResult::Multi(entities)) => Some(json!(entities)),
-                                    Err(message) => {
-                                        if message == "no top entity available" {
-                                            Some(json!({}))
-                                        } else {
-                                            return (axum::http::StatusCode::BAD_REQUEST, message)
-                                                .into_response();
-                                        }
-                                    }
-                                }
-                            }
-                        }
                         AggregationKind::Cumulative(cum) => {
                             let t0 = Instant::now();
                             let res = handle_cumulative(&state, &cum);
@@ -427,8 +325,6 @@ async fn batch_query_handler(
                 field: field_name.clone(),
                 percents: percents.clone(),
                 key: None,
-                current_time_ms: None,
-                time_range_ms: None,
             })
             .collect()
     };
@@ -487,7 +383,8 @@ async fn batch_query_handler(
                         for pct in pct_aggs.iter() {
                             match handle_percentiles(&state, pct, key_for_query_ref) {
                                 Ok(Some(values)) => {
-                                    let pct_map: HashMap<String, f64> = values.into_iter().collect();
+                                    let pct_map: HashMap<String, f64> =
+                                        values.into_iter().collect();
                                     if !pct_map.is_empty() {
                                         field_percentiles.insert(pct.field.clone(), pct_map);
                                     }
@@ -511,7 +408,10 @@ async fn batch_query_handler(
                         }
                         let mut field_cumulative = HashMap::new();
                         for (field_name, field) in cumulative_fields.iter() {
-                            let value = state.store.cumulative_value(*field, key_value);
+                            let value = state
+                                .node_store
+                                .cumulative_value(key_value, *field)
+                                .map_err(|message| message)?;
                             field_cumulative.insert(field_name.clone(), value);
                         }
                         if !field_cumulative.is_empty() {
@@ -525,7 +425,8 @@ async fn batch_query_handler(
         });
     }
 
-    let mut results: Vec<Option<BatchQueryResult>> = (0..request.keys.len()).map(|_| None).collect();
+    let mut results: Vec<Option<BatchQueryResult>> =
+        (0..request.keys.len()).map(|_| None).collect();
     let mut error_message: Option<String> = None;
     while let Some(joined) = join_set.join_next().await {
         match joined {
@@ -592,6 +493,21 @@ async fn metrics_handler(
         t.step("validate");
     }
 
+    let node_id = query
+        .node_id
+        .as_ref()
+        .map(|id| id.trim())
+        .filter(|id| !id.is_empty());
+    let node_id = match node_id {
+        Some(id) => id.to_string(),
+        None => {
+            return (
+                axum::http::StatusCode::BAD_REQUEST,
+                "node_id is required".to_string(),
+            )
+                .into_response();
+        }
+    };
     // Step 3: Query percentiles
     let mut results = BTreeMap::new();
     for spec in query.quantiles {
@@ -613,8 +529,17 @@ async fn metrics_handler(
             }
         };
 
-        if let Some(value) = state.store.query_percentile(field, percent) {
-            results.insert(format!("p{percent}"), value);
+        let values = match state
+            .node_store
+            .query_percentiles(&node_id, field, &[percent])
+        {
+            Ok(values) => values,
+            Err(message) => {
+                return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
+            }
+        };
+        if let Some(Some(value)) = values.get(0) {
+            results.insert(format!("p{percent}"), *value);
         }
     }
     if let Some(t) = &mut timing {

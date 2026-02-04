@@ -5,7 +5,7 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use serde_json::Value;
+// use serde_json::Value;
 use tokio::sync::mpsc;
 
 use super::types::AppState;
@@ -61,8 +61,6 @@ fn log_request_details(
     headers: HeaderMap,
     body: Bytes,
 ) {
-    const MAX_LOG_BODY_BYTES: usize = 1024 * 1024;
-
     eprintln!("incoming request: {method} {uri}");
 
     let mut header_pairs: Vec<(String, String)> = headers

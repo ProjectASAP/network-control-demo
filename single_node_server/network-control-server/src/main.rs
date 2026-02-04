@@ -13,23 +13,19 @@ use std::{
     time::Instant,
 };
 
-use config::AggregationConfig;
-use ingest::load_metric_store;
-use metrics::MetricPreAggregation;
+use config::{AggregationConfig, NodesConfig};
+// use ingest::load_metric_store;
+use metrics::NodeStore;
 use reqwest::Client;
-use server::{AppState, QueryCache, TimingSender, run_http_server, start_request_logger};
+use server::{AppState, TimingSender, run_http_server, start_request_logger};
 
 #[tokio::main]
 async fn main() {
     // Parse CLI flags
     let args: Vec<String> = env::args().collect();
     let timing_enabled = args.iter().any(|arg| arg == "--timing");
-    let no_ingest = args.iter().any(|arg| arg == "--no-ingest");
     if timing_enabled {
         eprintln!("timing enabled via --timing flag");
-    }
-    if no_ingest {
-        eprintln!("ingest disabled via --no-ingest flag");
     }
 
     let startup_start = Instant::now();
@@ -46,6 +42,26 @@ async fn main() {
         config_start.elapsed()
     );
 
+    let nodes_config_start = Instant::now();
+    let nodes_config = match NodesConfig::load() {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            eprintln!("failed to load nodes config: {err}");
+            return;
+        }
+    };
+    let node_store = match NodeStore::from_config(nodes_config) {
+        Ok(store) => store,
+        Err(err) => {
+            eprintln!("failed to build node store: {err}");
+            return;
+        }
+    };
+    eprintln!(
+        "nodes config loaded in {:.2?}",
+        nodes_config_start.elapsed()
+    );
+
     // Startup ingestion is disabled; start with an empty store.
     // eprintln!("loading metrics from CSV...");
     // let store = match tokio::task::spawn_blocking(move || load_metric_store(timing_enabled)).await {
@@ -59,10 +75,9 @@ async fn main() {
     //         return;
     //     }
     // };
-    let store = MetricPreAggregation::new().finish();
 
     let state = AppState {
-        store: Arc::new(store),
+        node_store: Arc::new(node_store),
         agg_config: Arc::new(agg_config),
         http_client: Client::new(),
         upstream_url: env::var("UPSTREAM_URL")
@@ -73,13 +88,6 @@ async fn main() {
         } else {
             None
         },
-        no_ingest,
-        cache: Arc::new(QueryCache::new(
-            env::var("QUERY_CACHE_TTL_MS")
-                .ok()
-                .and_then(|value| value.parse::<u64>().ok())
-                .unwrap_or(500),
-        )),
         log_tx: Some(start_request_logger(1000)),
     };
 
