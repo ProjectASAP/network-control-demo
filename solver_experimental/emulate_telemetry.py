@@ -29,7 +29,7 @@ from config import (
 
 # Paramters for sending metrics to server.
 SERVER_URL = SKETCH_URL
-INTERVAL = 60  # seconds
+INTERVAL = 5  # seconds
 TIMEOUT = 5  # seconds
 
 
@@ -169,6 +169,49 @@ class TaskMetrics:
     network_usage: "MetricGenerator"
     projected_duration: float
 
+    def generate_buffers(
+            self, 
+            start_time,
+            allocated_cpu: float,
+            allocated_memory: float,
+            allocated_network: float,
+            interval: int = 60,
+        ) -> "MetricBuffers | None":
+        # Create empty buffers for the task metrics.
+        elapsed_time = time.time() - start_time
+        offset = min(elapsed_time, self.projected_duration)
+
+        if offset >= self.projected_duration:
+            return None
+        
+        size = int(min(interval, self.projected_duration - offset))
+        start = offset / self.projected_duration
+        stop = (offset + size) / self.projected_duration
+
+        cpu_slice, cpu_duration_factor = self.cpu_usage.generate(start=start, stop=stop, num=size, value=allocated_cpu)
+        memory_slice, memory_duration_factor = self.memory_usage.generate(start=start, stop=stop, num=size, value=allocated_memory)
+        network_slice, network_duration_factor = self.network_usage.generate(start=start, stop=stop, num=size, value=allocated_network)
+
+        # Pad to same length to send to server and maintain temporal consistency.
+        padded_cpu_slice = np.pad(
+            cpu_slice, (0, interval - len(cpu_slice)), "constant"
+        )
+        padded_memory_slice = np.pad(
+            memory_slice, (0, interval - len(memory_slice)), "constant"
+        )
+        padded_network_slice = np.pad(
+            network_slice, (0, interval - len(network_slice)), "constant"
+        )
+
+        buffers = MetricBuffers(
+            cpu_usage=padded_cpu_slice, memory_usage=padded_memory_slice, network_usage=padded_network_slice
+        )
+
+        # Adjust task's projected duration based on speed-up factors.
+        logger.debug(f"Duration adjust factors - CPU: {cpu_duration_factor}, Memory: {memory_duration_factor}, Network: {network_duration_factor}")
+        new_duration = self.projected_duration * max(cpu_duration_factor, memory_duration_factor, network_duration_factor)
+        self.projected_duration = new_duration
+        return buffers
 
 @dataclass
 class MetricBuffers:
@@ -236,38 +279,43 @@ class MetricGenerator:
             start: Start time (in [0, 1]) of the metric duration.
             stop: Stop time (in [0, 1]) of the metric duration.
             num: Number of samples to generate.
-            value: Target value to scale the generated metric values. Represents the nominal amount of resources allocated to the task.
+            value: Represents the nominal amount of resources allocated to the task.
         Returns:
             Array of emulated metric values and the adjusted duration factor.
         """
         if self.base_value == 0:
             return np.zeros(num), 1.0
         rng = _RNG
-        value_scale = value / self.base_value
+        # value_scale = value / self.base_value
 
-        speed_up = amdahl_factor(self.p_scalable, value_scale)
+        # speed_up = amdahl_factor(self.p_scalable, value_scale)
         a = self.a
         # Compress timeseries by corresponding factor.
-        b = self.b * speed_up
+        b = self.b
         c = self.c
         
-        t = np.linspace(start / speed_up, stop / speed_up, num=num)
+        t = np.linspace(start, stop, num=num)
     
         scale_factor = 1 + a * np.sin(b * t - c)
         noise = rng.normal(loc=0, scale=self.noise_scale, size=len(scale_factor))
-        buffer = speed_up * self.base_value * (scale_factor + noise)
+        buffer = self.base_value * (scale_factor + noise)
 
-        # Re-calculate speed-up using Amdahl's law with the observed value scale. Use for duration adjustment.
-        empirical_speed_up = amdahl_factor(self.p_scalable, buffer.mean() / self.base_value)
-        duration_adjust_factor = self.duration_adjust_factor(speed_up=empirical_speed_up, start=start)
+        # Reduce projected duration when usage is higher than allocated value.
+        clipped = np.clip(buffer, a_min=value, a_max=None)
+        weight = clipped.mean() * (stop - start) + value * (1.0 - (stop - start))
+        resource_usage = value / weight
+
+        # Calculate slow down using Amdahl's law with the observed value scale. Use for duration adjustment.
+        empirical_speed_up = amdahl_factor(self.p_scalable, resource_usage)
+        duration_adjust_factor = self.duration_adjust_factor(speed_up=empirical_speed_up, stop=stop)
 
         return buffer, duration_adjust_factor
     
-    def duration_adjust_factor(self, speed_up: float = 1.0, start: float = 0.0) -> float:
+    def duration_adjust_factor(self, speed_up: float = 1.0, stop: float = 1.0) -> float:
         # Compute scale factor to adjust the projected duration for remainder of task based on the speed-up factor.
-        interval = 1.0 - start
+        interval = 1.0 - stop
         adjusted_interval = interval / speed_up
-        adjusted_duration = start + adjusted_interval
+        adjusted_duration = stop + adjusted_interval
         return adjusted_duration
 
 
@@ -354,48 +402,29 @@ class TaskMetricsEmulator:
             for t_id in task_ids:
                 task_metrics = self.task_metrics[t_id]
                 start_time = self.running_tasks[t_id].start_time_s
-                elapsed_time = time.time() - start_time
-                offset = min(elapsed_time, task_metrics.projected_duration)
+                old_duration = task_metrics.projected_duration
 
-                if offset >= task_metrics.projected_duration:
+                metrics_buffers = task_metrics.generate_buffers(
+                    start_time=start_time, 
+                    allocated_cpu=self.running_tasks[t_id].task.initial_cpu,
+                    allocated_memory=self.running_tasks[t_id].task.initial_memory,
+                    allocated_network=sum(self.running_tasks[t_id].task.peer_bandwidths.values()),
+                    interval=interval)
+                
+                if metrics_buffers is None:
                     logger.warning(
                         f"Task {t_id} has completed its duration. Skipping metric emission."
                     )
                     continue
-                
-                size = int(min(interval, task_metrics.projected_duration - offset))
-                start = offset / task_metrics.projected_duration
-                stop = (offset + size) / task_metrics.projected_duration
+                metrics[t_id] = metrics_buffers
 
-                cpu_slice, cpu_duration_factor = task_metrics.cpu_usage.generate(start=start, stop=stop, num=size, value=self.running_tasks[t_id].task.initial_cpu)
-                memory_slice, memory_duration_factor = task_metrics.memory_usage.generate(start=start, stop=stop, num=size, value=self.running_tasks[t_id].task.initial_memory)
-                network_slice, network_duration_factor = task_metrics.network_usage.generate(start=start, stop=stop, num=size, value=sum(self.running_tasks[t_id].task.peer_bandwidths.values()))
-
-                # Pad to same length to send to server and maintain temporal consistency.
-                padded_cpu_slice = np.pad(
-                    cpu_slice, (0, interval - len(cpu_slice)), "constant"
-                )
-                padded_memory_slice = np.pad(
-                    memory_slice, (0, interval - len(memory_slice)), "constant"
-                )
-                padded_network_slice = np.pad(
-                    network_slice, (0, interval - len(network_slice)), "constant"
-                )
-
-                metrics[t_id] = MetricBuffers(
-                    cpu_usage=padded_cpu_slice, memory_usage=padded_memory_slice, network_usage=padded_network_slice
-                )
-
-                total_cpu_usage += padded_cpu_slice
-                total_memory_usage += padded_memory_slice
-                total_network_usage += padded_network_slice
+                total_cpu_usage += metrics_buffers.cpu_usage
+                total_memory_usage += metrics_buffers.memory_usage
+                total_network_usage += metrics_buffers.network_usage
 
                 # # Adjust task's projected duration based on speed-up factors.
-                old_duration = task_metrics.projected_duration
-                new_duration = old_duration * max(cpu_duration_factor, memory_duration_factor, network_duration_factor)
+                new_duration = task_metrics.projected_duration
                 logger.info(f'Updated projected duration for task {t_id}: {old_duration} -> {new_duration} s')
-                logger.debug(f"Duration adjust factors - CPU: {cpu_duration_factor}, Memory: {memory_duration_factor}, Network: {network_duration_factor}")
-                task_metrics.projected_duration = new_duration
 
             # Update node used resources (for demonstration purposes).
             node.used_cpu = np.median(total_cpu_usage)
