@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run ingestion/query RTT sweep for server + Elasticsearch."""
+"""Run epoch-based ingestion/query RTT sweep for server + Elasticsearch."""
 
 from __future__ import annotations
 
@@ -28,6 +28,9 @@ DEFAULT_ES_API_KEY = os.getenv(
 )
 DEFAULT_SERVER_URL = "http://localhost:10101"
 DEFAULT_BATCH_SIZE = 1000
+DEFAULT_ROWS_PER_EPOCH = 1_000_000
+DEFAULT_START_EPOCH = 1
+DEFAULT_END_EPOCH = 10
 DEFAULT_CONNECT_TIMEOUT = 5.0
 DEFAULT_INGEST_TIMEOUT = 60.0
 DEFAULT_QUERY_TIMEOUT = 60.0
@@ -35,24 +38,23 @@ DEFAULT_ES_TIMEOUT = 60.0
 DEFAULT_SERVER_READY_TIMEOUT = 30.0
 DEFAULT_INGEST_RETRIES = 2
 DEFAULT_INGEST_RETRY_BACKOFF = 2.0
-DEFAULT_SERVER_LOG = "logs/server.log"
+DEFAULT_SERVER_LOG = "logs/server_epoch.log"
 DEFAULT_TRUNCATE_CSV = False
 DEFAULT_TRUNCATE_SERVER_LOG = False
 
 
 @dataclass
 class SweepResult:
-    rows: int
+    epoch: int
     server_rtt_ms: float
     es_rtt_ms: float
-    max_pct_diff: float
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--start", type=int, default=10_000, help="Start row count")
-    parser.add_argument("--end", type=int, default=1_000_000, help="End row count")
-    parser.add_argument("--step", type=int, default=10_000, help="Row count step")
+    parser.add_argument("--start-epoch", type=int, default=DEFAULT_START_EPOCH, help="Start epoch id")
+    parser.add_argument("--end-epoch", type=int, default=DEFAULT_END_EPOCH, help="End epoch id (inclusive)")
+    parser.add_argument("--rows-per-epoch", type=int, default=DEFAULT_ROWS_PER_EPOCH, help="Rows per epoch")
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE, help="Rows per ingest batch")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--server-url", type=str, default=DEFAULT_SERVER_URL, help="Server base URL")
@@ -114,7 +116,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-plot",
         type=str,
-        default="query_rtt_plot.png",
+        default="query_rtt_plot_epoch.png",
         help="Output plot filename",
     )
     return parser.parse_args()
@@ -141,7 +143,11 @@ def parse_nodes_config(path: str) -> List[str]:
 
 
 def iter_batches(
-    total_rows: int, nodes: List[str], rng: random.Random, batch_size: int
+    total_rows: int,
+    nodes: List[str],
+    rng: random.Random,
+    batch_size: int,
+    epoch: int,
 ) -> Iterable[List[Dict[str, object]]]:
     tasks = [f"T{i:03d}" for i in range(1, 201)]
     for start in range(0, total_rows, batch_size):
@@ -155,7 +161,7 @@ def iter_batches(
             net = rng.uniform(0.1, 10_000.0)
             batch.append(
                 {
-                    "epoch": 0,
+                    "epoch": epoch,
                     "node": node,
                     "task": task,
                     "cpu": cpu,
@@ -245,6 +251,7 @@ def bulk_ingest_es(
 def ingest_server(
     server_url: str,
     batch: List[Dict[str, object]],
+    epoch: int,
     connect_timeout: float,
     read_timeout: float,
     retries: int,
@@ -252,7 +259,7 @@ def ingest_server(
 ) -> None:
     ingest_url = f"{server_url}/"
     payload = {
-        "epoch": 0,
+        "epoch": epoch,
         "task": [row["task"] for row in batch],
         "cluster": [row["node"] for row in batch],
         "cpu_cores": [row["cpu"] for row in batch],
@@ -382,6 +389,7 @@ def query_es_nodes(
     nodes: List[str],
     connect_timeout: float,
     read_timeout: float,
+    epoch: int,
 ) -> Tuple[dict, float]:
     headers = es_headers(api_key)
     url = f"{es_url}/{es_index}/_search"
@@ -390,7 +398,14 @@ def query_es_nodes(
     for node in nodes:
         payload = {
             "size": 0,
-            "query": {"term": {"node": node}},
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"term": {"node": node}},
+                        {"term": {"epoch": epoch}},
+                    ]
+                }
+            },
             "aggs": {
                 "cpu_pct": {"percentiles": {"field": "cpu", "percents": [0, 50, 90, 100]}},
                 "mem_pct": {"percentiles": {"field": "mem", "percents": [0, 50, 90, 100]}},
@@ -509,16 +524,16 @@ def format_compact(
 def plot_results(results: List[SweepResult], out_path: Path) -> None:
     import matplotlib.pyplot as plt
 
-    xs = [r.rows for r in results]
+    xs = [r.epoch for r in results]
     server = [r.server_rtt_ms for r in results]
     es = [r.es_rtt_ms for r in results]
 
     plt.figure(figsize=(10, 6))
     plt.plot(xs, server, label="Server RTT (ms)")
     plt.plot(xs, es, label="ES RTT (ms)")
-    plt.xlabel("Rows")
+    plt.xlabel("Epoch")
     plt.ylabel("RTT (ms)")
-    plt.title("Query RTT vs Data Size")
+    plt.title("Query RTT vs Epoch")
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
@@ -541,36 +556,39 @@ def main() -> None:
     csv_file = open(out_csv, csv_mode, newline="")
     writer = csv.writer(csv_file)
     if args.truncate_csv or not csv_exists:
-        writer.writerow(["timestamp_utc", "rows", "server_rtt_ms", "es_rtt_ms"])
+        writer.writerow(["timestamp_utc", "epoch", "server_rtt_ms", "es_rtt_ms"])
         csv_file.flush()
 
-    for rows in range(args.start, args.end + 1, args.step):
-        print(f"\n=== Sweep rows={rows} ===")
-        reset_es_index(
-            args.es_url,
-            args.es_index,
-            args.es_api_key,
+    reset_es_index(
+        args.es_url,
+        args.es_index,
+        args.es_api_key,
+        args.connect_timeout,
+        args.es_timeout,
+    )
+
+    server_log_path = None if args.server_log == "-" else Path(args.server_log)
+    proc = start_server(server_log_path, truncate_log=args.truncate_server_log)
+    try:
+        wait_for_server(
+            args.server_url,
+            args.server_ready_timeout,
             args.connect_timeout,
-            args.es_timeout,
+            args.query_timeout,
         )
 
-        server_log_path = None if args.server_log == "-" else Path(args.server_log)
-        proc = start_server(server_log_path, truncate_log=args.truncate_server_log)
-        try:
-            wait_for_server(
-                args.server_url,
-                args.server_ready_timeout,
-                args.connect_timeout,
-                args.query_timeout,
-            )
-            total_batches = (rows + args.batch_size - 1) // args.batch_size
+        for epoch in range(args.start_epoch, args.end_epoch + 1):
+            print(f"\n=== Epoch {epoch} ===")
+            total_rows = args.rows_per_epoch
+            total_batches = (total_rows + args.batch_size - 1) // args.batch_size
             log_every = max(1, total_batches // 10)
             for batch_idx, batch in enumerate(
-                iter_batches(rows, nodes, rng, args.batch_size), start=1
+                iter_batches(total_rows, nodes, rng, args.batch_size, epoch), start=1
             ):
                 ingest_server(
                     args.server_url,
                     batch,
+                    epoch,
                     args.connect_timeout,
                     args.ingest_timeout,
                     args.ingest_retries,
@@ -605,29 +623,30 @@ def main() -> None:
                 nodes,
                 args.connect_timeout,
                 args.es_timeout,
+                epoch,
             )
 
             max_diff = compare_results(server_json, es_json)
-            results.append(
-                SweepResult(rows=rows, server_rtt_ms=server_rtt, es_rtt_ms=es_rtt, max_pct_diff=max_diff)
+            results.append(SweepResult(epoch=epoch, server_rtt_ms=server_rtt, es_rtt_ms=es_rtt))
+            print(
+                f"server RTT: {server_rtt:.2f} ms | ES RTT: {es_rtt:.2f} ms | "
+                f"max diff >=2%: {max_diff:.2f}%"
             )
-            print(f"server RTT: {server_rtt:.2f} ms | ES RTT: {es_rtt:.2f} ms | max diff >=2%: {max_diff:.2f}%")
             print("comparisons:")
             for line in format_compact(server_json, es_json, nodes):
                 print(line)
             writer.writerow(
                 [
                     datetime.now(timezone.utc).isoformat(),
-                    rows,
+                    epoch,
                     f"{server_rtt:.4f}",
                     f"{es_rtt:.4f}",
                 ]
             )
             csv_file.flush()
-        finally:
-            stop_server(proc)
-
-    csv_file.close()
+    finally:
+        stop_server(proc)
+        csv_file.close()
 
     plot_results(results, out_plot)
     print(f"\nWrote {out_csv} and {out_plot}")

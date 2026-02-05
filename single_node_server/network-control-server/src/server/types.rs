@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,7 @@ use super::logging::LogSender;
 pub struct AppState {
     // pub store: Arc<MetricStore>,
     pub node_store: Arc<NodeStore>,
+    pub current_epoch: Arc<Mutex<Option<u64>>>,
     pub agg_config: Arc<AggregationConfig>,
     pub http_client: Client,
     pub upstream_url: String,
@@ -89,6 +90,8 @@ pub(crate) struct BatchQueryResponse {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct IngestRecord {
+    #[serde(default)]
+    pub(crate) epoch: Option<u64>,
     pub(crate) task: Vec<String>,
     pub(crate) cluster: Vec<String>,
     pub(crate) cpu_cores: Vec<f64>,

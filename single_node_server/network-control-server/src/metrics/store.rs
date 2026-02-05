@@ -159,6 +159,45 @@ impl NodeStore {
         }
         Ok(results)
     }
+
+    pub fn clear_all(&self) -> Result<(), String> {
+        for node in self.nodes.values() {
+            {
+                let mut cpu = node.cpu_kll.write().map_err(|_| "failed to lock cpu kll")?;
+                *cpu = KLL::default();
+            }
+            {
+                let mut mem = node.mem_kll.write().map_err(|_| "failed to lock mem kll")?;
+                *mem = KLL::default();
+            }
+            {
+                let mut net = node.net_kll.write().map_err(|_| "failed to lock net kll")?;
+                *net = KLL::default();
+            }
+            {
+                let mut cpu = node
+                    .cpu_cumulative
+                    .write()
+                    .map_err(|_| "failed to lock cpu cumulative")?;
+                *cpu = 0.0;
+            }
+            {
+                let mut mem = node
+                    .mem_cumulative
+                    .write()
+                    .map_err(|_| "failed to lock mem cumulative")?;
+                *mem = 0.0;
+            }
+            {
+                let mut net = node
+                    .net_cumulative
+                    .write()
+                    .map_err(|_| "failed to lock net cumulative")?;
+                *net = 0.0;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl NodeData {

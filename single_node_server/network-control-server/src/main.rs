@@ -78,6 +78,7 @@ async fn main() {
 
     let state = AppState {
         node_store: Arc::new(node_store),
+        current_epoch: Arc::new(std::sync::Mutex::new(None)),
         agg_config: Arc::new(agg_config),
         http_client: Client::new(),
         upstream_url: env::var("UPSTREAM_URL")

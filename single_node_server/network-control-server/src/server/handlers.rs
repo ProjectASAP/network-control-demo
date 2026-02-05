@@ -85,6 +85,35 @@ async fn ingest_handler(
         )
             .into_response();
     }
+    if let Some(epoch) = record.epoch {
+        let mut should_clear = false;
+        match state.current_epoch.lock() {
+            Ok(mut guard) => {
+                if guard.map_or(true, |current| current != epoch) {
+                    *guard = Some(epoch);
+                    should_clear = true;
+                }
+            }
+            Err(_) => {
+                return (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    "failed to lock epoch state".to_string(),
+                )
+                    .into_response();
+            }
+        }
+        if should_clear {
+            if let Err(message) = state.node_store.clear_all() {
+                return (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    message,
+                )
+                    .into_response();
+            }
+            eprintln!("epoch switch detected: cleared in-memory store for epoch {epoch}");
+        }
+    }
+
     let mut inserted = 0usize;
     for idx in 0..len {
         let cluster = record.cluster[idx].trim();
