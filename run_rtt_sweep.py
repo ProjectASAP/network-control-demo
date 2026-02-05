@@ -12,6 +12,7 @@ import signal
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
@@ -27,6 +28,16 @@ DEFAULT_ES_API_KEY = os.getenv(
 )
 DEFAULT_SERVER_URL = "http://localhost:10101"
 DEFAULT_BATCH_SIZE = 1000
+DEFAULT_CONNECT_TIMEOUT = 5.0
+DEFAULT_INGEST_TIMEOUT = 60.0
+DEFAULT_QUERY_TIMEOUT = 60.0
+DEFAULT_ES_TIMEOUT = 60.0
+DEFAULT_SERVER_READY_TIMEOUT = 30.0
+DEFAULT_INGEST_RETRIES = 2
+DEFAULT_INGEST_RETRY_BACKOFF = 2.0
+DEFAULT_SERVER_LOG = "logs/server.log"
+DEFAULT_TRUNCATE_CSV = False
+DEFAULT_TRUNCATE_SERVER_LOG = False
 
 
 @dataclass
@@ -45,6 +56,46 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE, help="Rows per ingest batch")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--server-url", type=str, default=DEFAULT_SERVER_URL, help="Server base URL")
+    parser.add_argument(
+        "--server-log",
+        type=str,
+        default=DEFAULT_SERVER_LOG,
+        help="Server stdout/stderr log file (use '-' to disable)",
+    )
+    parser.add_argument(
+        "--truncate-csv",
+        action="store_true",
+        default=DEFAULT_TRUNCATE_CSV,
+        help="Truncate output CSV before writing",
+    )
+    parser.add_argument(
+        "--truncate-server-log",
+        action="store_true",
+        default=DEFAULT_TRUNCATE_SERVER_LOG,
+        help="Truncate server log before writing",
+    )
+    parser.add_argument("--connect-timeout", type=float, default=DEFAULT_CONNECT_TIMEOUT, help="HTTP connect timeout (s)")
+    parser.add_argument("--ingest-timeout", type=float, default=DEFAULT_INGEST_TIMEOUT, help="Server ingest read timeout (s)")
+    parser.add_argument("--query-timeout", type=float, default=DEFAULT_QUERY_TIMEOUT, help="Server query read timeout (s)")
+    parser.add_argument("--es-timeout", type=float, default=DEFAULT_ES_TIMEOUT, help="Elasticsearch read timeout (s)")
+    parser.add_argument(
+        "--server-ready-timeout",
+        type=float,
+        default=DEFAULT_SERVER_READY_TIMEOUT,
+        help="Wait for server readiness (s)",
+    )
+    parser.add_argument(
+        "--ingest-retries",
+        type=int,
+        default=DEFAULT_INGEST_RETRIES,
+        help="Retries for server ingest on timeout/connection error",
+    )
+    parser.add_argument(
+        "--ingest-retry-backoff",
+        type=float,
+        default=DEFAULT_INGEST_RETRY_BACKOFF,
+        help="Base backoff (s) between ingest retries",
+    )
     parser.add_argument("--es-url", type=str, default=DEFAULT_ES_URL, help="Elasticsearch URL")
     parser.add_argument("--es-index", type=str, default=DEFAULT_ES_INDEX, help="Elasticsearch index")
     parser.add_argument("--es-api-key", type=str, default=DEFAULT_ES_API_KEY, help="Elasticsearch API key")
@@ -122,9 +173,19 @@ def es_headers(api_key: str | None) -> Dict[str, str]:
     return headers
 
 
-def reset_es_index(es_url: str, es_index: str, api_key: str | None) -> None:
+def reset_es_index(
+    es_url: str,
+    es_index: str,
+    api_key: str | None,
+    connect_timeout: float,
+    read_timeout: float,
+) -> None:
     headers = es_headers(api_key)
-    requests.delete(f"{es_url}/{es_index}", headers=headers, timeout=30)
+    requests.delete(
+        f"{es_url}/{es_index}",
+        headers=headers,
+        timeout=(connect_timeout, read_timeout),
+    )
     mapping = {
         "mappings": {
             "properties": {
@@ -137,7 +198,12 @@ def reset_es_index(es_url: str, es_index: str, api_key: str | None) -> None:
             }
         }
     }
-    resp = requests.put(f"{es_url}/{es_index}", headers=headers, json=mapping, timeout=30)
+    resp = requests.put(
+        f"{es_url}/{es_index}",
+        headers=headers,
+        json=mapping,
+        timeout=(connect_timeout, read_timeout),
+    )
     resp.raise_for_status()
 
 
@@ -146,15 +212,25 @@ def bulk_ingest_es(
     es_index: str,
     api_key: str | None,
     batch: List[Dict[str, object]],
+    connect_timeout: float,
+    read_timeout: float,
+    refresh: str | None,
 ) -> None:
     headers = es_headers(api_key)
-    bulk_url = f"{es_url}/{es_index}/_bulk?refresh=wait_for"
+    bulk_url = f"{es_url}/{es_index}/_bulk"
     lines = []
     for row in batch:
         lines.append(json.dumps({"index": {}}))
         lines.append(json.dumps(row))
     payload = "\n".join(lines) + "\n"
-    resp = requests.post(bulk_url, headers=headers, data=payload, timeout=60)
+    params = {"refresh": refresh} if refresh else None
+    resp = requests.post(
+        bulk_url,
+        headers=headers,
+        data=payload,
+        params=params,
+        timeout=(connect_timeout, read_timeout),
+    )
     resp.raise_for_status()
     data = resp.json()
     if data.get("errors"):
@@ -166,7 +242,14 @@ def bulk_ingest_es(
         )
 
 
-def ingest_server(server_url: str, batch: List[Dict[str, object]]) -> None:
+def ingest_server(
+    server_url: str,
+    batch: List[Dict[str, object]],
+    connect_timeout: float,
+    read_timeout: float,
+    retries: int,
+    retry_backoff_s: float,
+) -> None:
     ingest_url = f"{server_url}/"
     payload = {
         "task": [row["task"] for row in batch],
@@ -175,34 +258,65 @@ def ingest_server(server_url: str, batch: List[Dict[str, object]]) -> None:
         "memory_gb": [row["mem"] for row in batch],
         "network_mbps": [row["net"] for row in batch],
     }
-    resp = requests.post(ingest_url, json=payload, timeout=60)
-    resp.raise_for_status()
-    data = resp.json()
-    inserted = data.get("inserted")
-    if inserted is None:
-        raise RuntimeError("Server ingest response missing 'inserted'")
-    if inserted != len(batch):
-        raise RuntimeError(f"Server ingest count mismatch: {inserted} != {len(batch)}")
+    last_err: Exception | None = None
+    for attempt in range(retries + 1):
+        try:
+            resp = requests.post(
+                ingest_url,
+                json=payload,
+                timeout=(connect_timeout, read_timeout),
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            inserted = data.get("inserted")
+            if inserted is None:
+                raise RuntimeError("Server ingest response missing 'inserted'")
+            if inserted != len(batch):
+                raise RuntimeError(f"Server ingest count mismatch: {inserted} != {len(batch)}")
+            return
+        except (requests.ReadTimeout, requests.ConnectionError) as err:
+            last_err = err
+            if attempt >= retries:
+                raise
+            sleep_s = retry_backoff_s * (2 ** attempt)
+            time.sleep(sleep_s)
+    if last_err:
+        raise last_err
 
 
-def start_server() -> subprocess.Popen:
+def start_server(log_path: Path | None = None, truncate_log: bool = False) -> subprocess.Popen:
     server_dir = Path("single_node_server/network-control-server")
+    stdout_target = None
+    if log_path is not None:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        mode = "w" if truncate_log else "a"
+        stdout_target = open(log_path, mode, encoding="utf-8")
     proc = subprocess.Popen(
         ["cargo", "run"],
         cwd=server_dir,
-        stdout=subprocess.PIPE,
+        stdout=stdout_target or subprocess.PIPE,
         stderr=subprocess.STDOUT,
         start_new_session=True,
         text=True,
     )
+    if stdout_target is not None:
+        proc._log_fh = stdout_target
     return proc
 
 
-def wait_for_server(server_url: str, timeout_s: float = 30.0) -> None:
+def wait_for_server(
+    server_url: str,
+    timeout_s: float,
+    connect_timeout: float,
+    read_timeout: float,
+) -> None:
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         try:
-            resp = requests.get(server_url, timeout=2)
+            resp = requests.get(
+                server_url,
+                timeout=(connect_timeout, read_timeout),
+            )
             if resp.status_code == 200:
                 return
         except requests.RequestException:
@@ -213,10 +327,16 @@ def wait_for_server(server_url: str, timeout_s: float = 30.0) -> None:
 
 def stop_server(proc: subprocess.Popen) -> None:
     if proc.poll() is not None:
+        log_fh = getattr(proc, "_log_fh", None)
+        if log_fh:
+            log_fh.close()
         return
     try:
         os.killpg(proc.pid, signal.SIGTERM)
     except ProcessLookupError:
+        log_fh = getattr(proc, "_log_fh", None)
+        if log_fh:
+            log_fh.close()
         return
     try:
         proc.wait(timeout=10)
@@ -225,9 +345,17 @@ def stop_server(proc: subprocess.Popen) -> None:
             os.killpg(proc.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
+    log_fh = getattr(proc, "_log_fh", None)
+    if log_fh:
+        log_fh.close()
 
 
-def query_server_batch(server_url: str, nodes: List[str]) -> Tuple[dict, float]:
+def query_server_batch(
+    server_url: str,
+    nodes: List[str],
+    connect_timeout: float,
+    read_timeout: float,
+) -> Tuple[dict, float]:
     url = f"{server_url}/cluster-metrics/_batch"
     payload = {
         "keys": nodes,
@@ -236,13 +364,24 @@ def query_server_batch(server_url: str, nodes: List[str]) -> Tuple[dict, float]:
         "percents": [0, 50, 90, 100],
     }
     t0 = time.perf_counter()
-    resp = requests.post(url, json=payload, timeout=60)
+    resp = requests.post(
+        url,
+        json=payload,
+        timeout=(connect_timeout, read_timeout),
+    )
     resp.raise_for_status()
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
     return resp.json(), elapsed_ms
 
 
-def query_es_nodes(es_url: str, es_index: str, api_key: str | None, nodes: List[str]) -> Tuple[dict, float]:
+def query_es_nodes(
+    es_url: str,
+    es_index: str,
+    api_key: str | None,
+    nodes: List[str],
+    connect_timeout: float,
+    read_timeout: float,
+) -> Tuple[dict, float]:
     headers = es_headers(api_key)
     url = f"{es_url}/{es_index}/_search"
     results: Dict[str, Dict[str, object]] = {}
@@ -260,7 +399,12 @@ def query_es_nodes(es_url: str, es_index: str, api_key: str | None, nodes: List[
                 "net_sum": {"sum": {"field": "net"}},
             },
         }
-        resp = requests.post(url, headers=headers, json=payload, timeout=60)
+        resp = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=(connect_timeout, read_timeout),
+        )
         resp.raise_for_status()
         results[node] = resp.json()
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
@@ -390,43 +534,99 @@ def main() -> None:
 
     results: List[SweepResult] = []
 
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    csv_exists = out_csv.exists()
+    csv_mode = "w" if args.truncate_csv else "a"
+    csv_file = open(out_csv, csv_mode, newline="")
+    writer = csv.writer(csv_file)
+    if args.truncate_csv or not csv_exists:
+        writer.writerow(["timestamp_utc", "rows", "server_rtt_ms", "es_rtt_ms"])
+        csv_file.flush()
+
     for rows in range(args.start, args.end + 1, args.step):
         print(f"\n=== Sweep rows={rows} ===")
-        reset_es_index(args.es_url, args.es_index, args.es_api_key)
+        reset_es_index(
+            args.es_url,
+            args.es_index,
+            args.es_api_key,
+            args.connect_timeout,
+            args.es_timeout,
+        )
 
-        proc = start_server()
+        server_log_path = None if args.server_log == "-" else Path(args.server_log)
+        proc = start_server(server_log_path, truncate_log=args.truncate_server_log)
         try:
-            wait_for_server(args.server_url)
+            wait_for_server(
+                args.server_url,
+                args.server_ready_timeout,
+                args.connect_timeout,
+                args.query_timeout,
+            )
             total_batches = (rows + args.batch_size - 1) // args.batch_size
             log_every = max(1, total_batches // 10)
             for batch_idx, batch in enumerate(
                 iter_batches(rows, nodes, rng, args.batch_size), start=1
             ):
-                ingest_server(args.server_url, batch)
-                bulk_ingest_es(args.es_url, args.es_index, args.es_api_key, batch)
+                ingest_server(
+                    args.server_url,
+                    batch,
+                    args.connect_timeout,
+                    args.ingest_timeout,
+                    args.ingest_retries,
+                    args.ingest_retry_backoff,
+                )
+                is_last_batch = batch_idx == total_batches
+                bulk_ingest_es(
+                    args.es_url,
+                    args.es_index,
+                    args.es_api_key,
+                    batch,
+                    args.connect_timeout,
+                    args.es_timeout,
+                    "wait_for" if is_last_batch else None,
+                )
                 if batch_idx % log_every == 0 or batch_idx == total_batches:
                     print(
                         f"  ingest progress: {batch_idx}/{total_batches} batches "
                         f"({batch_idx * 100 // total_batches}%)"
                     )
 
-            server_json, server_rtt = query_server_batch(args.server_url, nodes)
-            es_json, es_rtt = query_es_nodes(args.es_url, args.es_index, args.es_api_key, nodes)
+            server_json, server_rtt = query_server_batch(
+                args.server_url,
+                nodes,
+                args.connect_timeout,
+                args.query_timeout,
+            )
+            es_json, es_rtt = query_es_nodes(
+                args.es_url,
+                args.es_index,
+                args.es_api_key,
+                nodes,
+                args.connect_timeout,
+                args.es_timeout,
+            )
 
             max_diff = compare_results(server_json, es_json)
-            results.append(SweepResult(rows=rows, server_rtt_ms=server_rtt, es_rtt_ms=es_rtt, max_pct_diff=max_diff))
+            results.append(
+                SweepResult(rows=rows, server_rtt_ms=server_rtt, es_rtt_ms=es_rtt, max_pct_diff=max_diff)
+            )
             print(f"server RTT: {server_rtt:.2f} ms | ES RTT: {es_rtt:.2f} ms | max diff >=2%: {max_diff:.2f}%")
             print("comparisons:")
             for line in format_compact(server_json, es_json, nodes):
                 print(line)
+            writer.writerow(
+                [
+                    datetime.now(timezone.utc).isoformat(),
+                    rows,
+                    f"{server_rtt:.4f}",
+                    f"{es_rtt:.4f}",
+                ]
+            )
+            csv_file.flush()
         finally:
             stop_server(proc)
 
-    with open(out_csv, "w", newline="") as fh:
-        writer = csv.writer(fh)
-        writer.writerow(["rows", "server_rtt_ms", "es_rtt_ms", "max_pct_diff"])
-        for r in results:
-            writer.writerow([r.rows, f"{r.server_rtt_ms:.4f}", f"{r.es_rtt_ms:.4f}", f"{r.max_pct_diff:.4f}"])
+    csv_file.close()
 
     plot_results(results, out_plot)
     print(f"\nWrote {out_csv} and {out_plot}")
