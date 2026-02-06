@@ -54,6 +54,7 @@ class AppConfig:
     task_path: str
     query_manager_config: str
     emulator_url: str = "http://localhost:8000"
+    epoch_length_s: float = 300.0
     interval: float = 10.0
     log_level: str = "INFO"
 
@@ -81,78 +82,6 @@ def filter_completed_tasks(client: httpx.Client, running_tasks: dict[str, Runnin
     return active_tasks
 
 
-def _csv_time_bounds_ms(path: str) -> tuple[int, int]:
-    earliest: dt.datetime | None = None
-    latest: dt.datetime | None = None
-    with open(path, "r", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        for row in reader:
-            ts = row.get("timestamp")
-            if not ts:
-                continue
-            try:
-                parsed = dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            except ValueError:
-                continue
-            if earliest is None or parsed < earliest:
-                earliest = parsed
-            if latest is None or parsed > latest:
-                latest = parsed
-    if earliest is None or latest is None:
-        raise ValueError(f"No valid timestamp rows found in {path}")
-    return int(earliest.timestamp() * 1000), int(latest.timestamp() * 1000)
-
-
-def _instantiate_epoch_tasks(
-    template_tasks: dict[str, Task], epoch_index: int, epoch_length_s: int
-) -> dict[str, Task]:
-    # Clone tasks with epoch-scoped ids and absolute arrival offsets.
-    id_map = {task_id: f"{task_id}_e{epoch_index}" for task_id in template_tasks}
-    epoch_start_s = epoch_index * epoch_length_s
-    epoch_tasks: dict[str, Task] = {}
-    for task_id, task in template_tasks.items():
-        peer_bandwidths = {
-            id_map[peer_id]: bw
-            for peer_id, bw in task.peer_bandwidths.items()
-            if peer_id in id_map
-        }
-        epoch_tasks[id_map[task_id]] = Task(
-            task_id=id_map[task_id],
-            arrival_offset_s=epoch_start_s + task.arrival_offset_s,
-            duration_s=task.duration_s,
-            initial_cpu=task.initial_cpu,
-            initial_memory=task.initial_memory,
-            peer_bandwidths=peer_bandwidths,
-        )
-    return epoch_tasks
-
-
-def _iter_csv_rows(path: str):
-    with open(path, "r", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        for row in reader:
-            ts = row.get("timestamp")
-            if not ts:
-                continue
-            try:
-                parsed = dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            except ValueError:
-                continue
-            ts_ms = int(parsed.timestamp() * 1000)
-            ts_iso = parsed.astimezone(dt.timezone.utc).isoformat(timespec="milliseconds")
-            if ts_iso.endswith("+00:00"):
-                ts_iso = ts_iso.replace("+00:00", "Z")
-            yield {
-                "timestamp": ts_iso,
-                "timestamp_ms": ts_ms,
-                "cluster": row.get("cluster"),
-                "task": row.get("task"),
-                "cpu_cores": float(row.get("cpu_cores", 0.0) or 0.0),
-                "memory_gb": float(row.get("memory_gb", 0.0) or 0.0),
-                "network_mbps": float(row.get("network_mbps", 0.0) or 0.0),
-            }
-
-
 def _post_with_retry(
     client: httpx.Client,
     url: str,
@@ -175,12 +104,6 @@ def _post_with_retry(
                 exc,
             )
             time.sleep(delay_s)
-
-
-def _chunk_rows(rows: list[dict], chunk_size: int) -> list[list[dict]]:
-    if chunk_size <= 0:
-        return [rows]
-    return [rows[i : i + chunk_size] for i in range(0, len(rows), chunk_size)]
 
 
 def assign_tasks(args: AppConfig):
@@ -233,21 +156,10 @@ def assign_tasks(args: AppConfig):
     if not parallel_enabled:
         logger.info("Parallel benchmark disabled; running sketch-only benchmark.")
 
-    epoch_length_s = 3000
-    query_time_range_ms = TIME_RANGE_MS
-    base_epoch_ms, latest_epoch_ms = _csv_time_bounds_ms(CLUSTER_METRICS_CSV)
-    dataset_duration_s = max(0.0, (latest_epoch_ms - base_epoch_ms) / 1000.0)
-    max_epochs = max(1, int(dataset_duration_s // epoch_length_s) + 1)
-    logger.info(
-        "Using base epoch {} ms from {} (duration {:.1f}s, epochs={}, epoch_len={}s)",
-        base_epoch_ms,
-        CLUSTER_METRICS_CSV,
-        dataset_duration_s,
-        max_epochs,
-        epoch_length_s,
-    )
+    epoch_length_s = args.epoch_length_s
+    query_time_range_ms = epoch_length_s * 1000
 
-    with httpx.Client(timeout=5) as client:
+    with httpx.Client(timeout=5, base_url=args.emulator_url) as client:
         # Track running and unassigned tasks across iterations.
         running_tasks: dict[str, RunningTask] = {}
         unassigned_tasks: dict[str, Task] = {}
@@ -255,85 +167,29 @@ def assign_tasks(args: AppConfig):
         failed_tasks: dict[str, Task] = {}
         if not template_tasks_sorted:
             logger.info("No template tasks found; ingestion-only mode.")
-        epoch_index = 0
-        task_queue: deque[Task] = deque()
-        next_row_iter = _iter_csv_rows(CLUSTER_METRICS_CSV)
-        next_row = next(next_row_iter, None)
+
+        task_queue: deque[Task] = deque(template_tasks_sorted)
         current_time_s = 0.0
+        epoch_index = -1
 
-        def _load_epoch_tasks(index: int) -> deque[Task]:
-            epoch_tasks = _instantiate_epoch_tasks(
-                template_tasks, index, epoch_length_s
-            )
-            return deque(
-                sorted(epoch_tasks.values(), key=lambda task: task.arrival_offset_s)
-            )
-
-        if template_tasks_sorted and max_epochs > 0:
-            task_queue = _load_epoch_tasks(epoch_index)
-
+        base_time_s = time.time()
         while True:
-            if not task_queue and template_tasks_sorted and epoch_index + 1 < max_epochs:
-                epoch_index += 1
-                task_queue = _load_epoch_tasks(epoch_index)
-                continue
-
-            next_task_time = (
-                task_queue[0].arrival_offset_s if task_queue else float("inf")
-            )
-            next_row_time = (
-                (next_row["timestamp_ms"] - base_epoch_ms) / 1000.0
-                if next_row
-                else float("inf")
-            )
-
-            if next_task_time == float("inf") and next_row_time == float("inf"):
-                break
-
-            if next_row_time <= next_task_time:
-                current_epoch_end_s = (epoch_index + 1) * epoch_length_s
-                cutoff_s = min(next_task_time, current_epoch_end_s)
-                batch_rows: list[dict] = []
-                while next_row is not None:
-                    next_row_time = (next_row["timestamp_ms"] - base_epoch_ms) / 1000.0
-                    if next_row_time > cutoff_s:
-                        break
-                    batch_rows.append(next_row)
-                    next_row = next(next_row_iter, None)
-                if batch_rows:
-                    latest_batch_s = (
-                        batch_rows[-1]["timestamp_ms"] - base_epoch_ms
-                    ) / 1000.0
-                    current_time_s = max(current_time_s, latest_batch_s)
-                    for chunk in _chunk_rows(batch_rows, 1000):
-                        _post_with_retry(
-                            client,
-                            "http://localhost:8000/ingest_rows",
-                            chunk,
-                        )
-                    continue
-                if (
-                    next_task_time == float("inf")
-                    and next_row is not None
-                    and next_row_time > current_epoch_end_s
-                    and epoch_index + 1 < max_epochs
-                ):
-                    epoch_index += 1
-                    if template_tasks_sorted:
-                        task_queue = _load_epoch_tasks(epoch_index)
-                    continue
+            # Add delay between iterations to give time for task assignment and metric feedback loop to take effect.
+            # This delay is independent of the internal clock used for task arrival offsets and metric querying, which is based on the base_time_s + offset.
+            time.sleep(args.interval)
+            epoch_index += 1
 
             # Advance simulated time to the next arrival.
-            curr_offset = max(current_time_s, next_task_time)
-            current_time_s = curr_offset
-            logger.debug(f"Current time offset: {curr_offset:.2f} s")
+            curr_offset_s = epoch_index * epoch_length_s
+            current_time_s = base_time_s + curr_offset_s
+            logger.debug(f"Current time offset: {curr_offset_s:.2f} s")
             # Prune tasks whose duration has elapsed.
             running_tasks = filter_completed_tasks(client, running_tasks, current_time_s)
             logger.debug(f"Currently running tasks ({len(running_tasks)}): {list(running_tasks.keys())}")
 
             arrived_tasks: dict[str, Task] = {}
             # Pull all tasks that have arrived at this simulated time.
-            while task_queue and task_queue[0].arrival_offset_s <= curr_offset:
+            while task_queue and task_queue[0].arrival_offset_s <= curr_offset_s:
                 task = task_queue.popleft()
                 arrived_tasks[task.task_id] = task
             logger.debug(f"Arrived tasks ({len(arrived_tasks)}): {list(arrived_tasks.keys())}")
@@ -354,7 +210,7 @@ def assign_tasks(args: AppConfig):
             if not tasks_to_schedule_pool:
                 log_e2e(
                     duration_ms=-1.0,
-                    curr_offset=curr_offset,
+                    curr_offset=curr_offset_s,
                     tasks_to_schedule=0,
                     ran_solver=False,
                     metrics_source="none",
@@ -385,7 +241,7 @@ def assign_tasks(args: AppConfig):
             # TODO: Execute PromQL queries and do something with results (e.g. update task spec estimates).
             # query_manager.update_task_metrics(running_tasks=query_tasks)
 
-            current_time_ms = base_epoch_ms + int(curr_offset * 1000.0)
+            current_time_ms = int((base_time_s + curr_offset_s) * 1000.0)
             window_start_ms = max(0, current_time_ms - query_time_range_ms)
             logger.debug(
                 "Time window epoch={} current={} start={} field={}",
@@ -477,7 +333,7 @@ def assign_tasks(args: AppConfig):
             if usage_summary:
                 logger.info(
                     "Node usage at offset {:.1f}s: {}",
-                    curr_offset,
+                    curr_offset_s,
                     " | ".join(usage_summary),
                 )
 
@@ -496,7 +352,7 @@ def assign_tasks(args: AppConfig):
                         running_tasks=running_tasks,
                         paths=paths,
                         time_limit=30,
-                        current_time_s=curr_offset,
+                        current_time_s=current_time_s,
                     )
                 )
                 logger.debug(
@@ -516,7 +372,7 @@ def assign_tasks(args: AppConfig):
                 }
                 log_e2e(
                     duration_ms=sk_duration_ms,
-                    curr_offset=curr_offset,
+                    curr_offset=curr_offset_s,
                     tasks_to_schedule=len(tasks_to_schedule),
                     ran_solver=True,
                     metrics_source="sketch",
@@ -537,7 +393,7 @@ def assign_tasks(args: AppConfig):
                         running_tasks=running_tasks_es,
                         paths=paths,
                         time_limit=30,
-                        current_time_s=curr_offset,
+                        current_time_s=current_time_s,
                     )
                     logger.debug(
                         f"Solver status (es): {pulp.LpStatus[status_code_es]}"
@@ -553,7 +409,7 @@ def assign_tasks(args: AppConfig):
                     }
                     log_e2e(
                         duration_ms=es_duration_ms,
-                        curr_offset=curr_offset,
+                        curr_offset=curr_offset_s,
                         tasks_to_schedule=len(tasks_to_schedule_es),
                         ran_solver=es_error is None,
                         metrics_source="elasticsearch",
@@ -649,10 +505,9 @@ def main(args: argparse.Namespace):
     # Assignments are pushed to the emulator inside assign_tasks() immediately
     # after each scheduling decision, ensuring the next query sees the metrics.
     config = structure(vars(args), AppConfig)
-    with httpx.Client(timeout=5) as client:
-        for assignments in assign_tasks(config):
-            # Assignments already pushed inside assign_tasks(); just consume the generator.
-            pass
+    for assignments in assign_tasks(config):
+        # Assignments already pushed inside assign_tasks(); just consume the generator.
+        pass
 
 
 if __name__ == "__main__":
@@ -663,6 +518,7 @@ if __name__ == "__main__":
     parser.add_argument("--task-path", type=str, default="dummy_data/tasks.jsonl")
     parser.add_argument("--emulator-url", type=str, default="http://localhost:8000")
     parser.add_argument("--interval", type=float, default=30.0)
+    parser.add_argument("--epoch-length-s", type=float, default=300.0)
     parser.add_argument("--query-manager-config", type=str, required=True)
     parser.add_argument("--log-level", type=str, default="INFO")
     args = parser.parse_args()
