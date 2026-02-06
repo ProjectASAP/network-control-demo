@@ -1,0 +1,5 @@
+nodes:
+  count: 30
+  range:
+    start: N001
+    end: N030

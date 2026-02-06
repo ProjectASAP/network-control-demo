@@ -1,27 +1,27 @@
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::config::AggregationConfig;
-use crate::metrics::{EntityEstimate, MetricStore};
+// use crate::metrics::{EntityEstimate, MetricStore, NodeStore};
+use crate::metrics::NodeStore;
 
 use super::TimingSender;
-use super::cache::QueryCache;
 use super::logging::LogSender;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub store: Arc<MetricStore>,
+    // pub store: Arc<MetricStore>,
+    pub node_store: Arc<NodeStore>,
+    pub current_epoch: Arc<Mutex<Option<u64>>>,
     pub agg_config: Arc<AggregationConfig>,
     pub http_client: Client,
     pub upstream_url: String,
     pub timing_enabled: bool,
     pub timing_sender: Option<TimingSender>,
-    pub no_ingest: bool,
-    pub cache: Arc<QueryCache>,
     pub log_tx: Option<LogSender>,
 }
 
@@ -43,8 +43,6 @@ pub(crate) struct AggregationRequest {
     #[serde(default)]
     pub(crate) percentiles: Option<PercentileAggregation>,
     #[serde(default)]
-    pub(crate) top_entities: Option<TopEntitiesAggregation>,
-    #[serde(default)]
     pub(crate) cumulative: Option<CumulativeAggregation>,
     #[serde(flatten, default)]
     pub(crate) other: BTreeMap<String, Value>,
@@ -59,14 +57,6 @@ pub(crate) struct PercentileAggregation {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct TopEntitiesAggregation {
-    #[serde(default)]
-    pub(crate) field: Option<String>,
-    #[serde(default)]
-    pub(crate) fields: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct CumulativeAggregation {
     pub(crate) field: String,
     pub(crate) key: String,
@@ -75,6 +65,7 @@ pub(crate) struct CumulativeAggregation {
 #[derive(Debug, Deserialize)]
 pub(crate) struct MetricsQuery {
     pub(crate) quantiles: Vec<String>,
+    pub(crate) node_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -89,7 +80,7 @@ pub(crate) struct BatchQueryRequest {
 pub(crate) struct BatchQueryResult {
     pub(crate) key: String,
     pub(crate) percentiles: Option<HashMap<String, HashMap<String, f64>>>,
-    pub(crate) cumulative: Option<HashMap<String, i32>>,
+    pub(crate) cumulative: Option<HashMap<String, f64>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -99,6 +90,8 @@ pub(crate) struct BatchQueryResponse {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct IngestRecord {
+    #[serde(default)]
+    pub(crate) epoch: Option<u64>,
     pub(crate) task: Vec<String>,
     pub(crate) cluster: Vec<String>,
     pub(crate) cpu_cores: Vec<f64>,
@@ -108,37 +101,24 @@ pub(crate) struct IngestRecord {
 
 pub(crate) enum AggregationKind {
     Percentiles(PercentileAggregation),
-    TopEntities(TopEntitiesAggregation),
     Cumulative(CumulativeAggregation),
 }
 
-pub(crate) enum QueryKeyStatus {
-    None,
-    Key(String),
-    Unsupported,
-}
-
-pub(crate) enum TopEntitiesResult {
-    Single(EntityEstimate),
-    Multi(HashMap<String, EntityEstimate>),
-}
+// pub(crate) enum TopEntitiesResult {
+//     Single(EntityEstimate),
+//     Multi(HashMap<String, EntityEstimate>),
+// }
 
 impl AggregationRequest {
     pub(crate) fn kind(&self) -> Option<AggregationKind> {
         let percentiles = self.percentiles.as_ref();
-        let top_entities = self.top_entities.as_ref();
         let cumulative = self.cumulative.as_ref();
-        let count = usize::from(percentiles.is_some())
-            + usize::from(top_entities.is_some())
-            + usize::from(cumulative.is_some());
+        let count = usize::from(percentiles.is_some()) + usize::from(cumulative.is_some());
         if count != 1 || !self.other.is_empty() {
             return None;
         }
         if let Some(pct) = percentiles {
             return Some(AggregationKind::Percentiles(pct.clone()));
-        }
-        if let Some(top) = top_entities {
-            return Some(AggregationKind::TopEntities(top.clone()));
         }
         cumulative.map(|cum| AggregationKind::Cumulative(cum.clone()))
     }

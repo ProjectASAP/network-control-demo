@@ -3,13 +3,17 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT=10101
+NODE_QUERY_LIMIT_ARG="${1:-}"
+NODE_QUERY_LIMIT="${NODE_QUERY_LIMIT_ARG:-${NODE_QUERY_LIMIT:-}}"
+
+kill -9 $(cat server_10101.pid ) 2>/dev/null || true
 
 rm -f solver_experimental/query_rtt.csv \
       single_node_server/network-control-server/server_request_timing.csv \
       solver_experimental/e2e.csv \
       solver_experimental/query_compare.csv && sync
 
-python3 "$ROOT_DIR/reset_and_ingest.py"
+python3 "$ROOT_DIR/reset_es_index.py"
 
 find_pids() {
   if command -v lsof >/dev/null 2>&1; then
@@ -86,4 +90,4 @@ SERVER_PID="$(cat "$ROOT_DIR/server_10101.pid")"
 wait_for_port "$SERVER_PID"
 
 cd solver_experimental
-bash run_main.sh
+NODE_QUERY_LIMIT="${NODE_QUERY_LIMIT}" bash run_main.sh

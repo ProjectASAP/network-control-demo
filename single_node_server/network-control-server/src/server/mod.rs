@@ -1,4 +1,3 @@
-mod cache;
 mod handlers;
 mod logging;
 mod query;
@@ -6,7 +5,6 @@ mod timing;
 mod types;
 mod upstream;
 
-pub use cache::QueryCache;
 pub use handlers::run_http_server;
 #[allow(unused_imports)]
 pub use logging::LogEntry;

@@ -9,9 +9,6 @@ pub struct AggregationConfig {
     pub percentile_fields: HashSet<String>,
     pub percentile_label_fields: HashSet<String>,
     pub percentile_labels: HashSet<String>,
-    pub top_entities_metrics: HashSet<String>,
-    pub top_entities_label_metrics: HashSet<String>,
-    pub top_entities_labels: HashSet<String>,
     pub cumulative_metrics: HashSet<String>,
     pub cumulative_label_metrics: HashSet<String>,
     pub cumulative_labels: HashSet<String>,
@@ -25,7 +22,6 @@ struct RawAggregationConfig {
 #[derive(Debug, Deserialize)]
 struct SupportedAggs {
     percentiles: AggSupport,
-    top_entities: AggSupport,
     cumulative: AggSupport,
 }
 
@@ -57,13 +53,6 @@ impl AggregationConfig {
             percentile_labels: normalize_vec(
                 raw.supported_aggs.percentiles.metrics_with_labels.labels,
             ),
-            top_entities_metrics: normalize_vec(raw.supported_aggs.top_entities.metrics),
-            top_entities_label_metrics: normalize_vec(
-                raw.supported_aggs.top_entities.metrics_with_labels.metrics,
-            ),
-            top_entities_labels: normalize_vec(
-                raw.supported_aggs.top_entities.metrics_with_labels.labels,
-            ),
             cumulative_metrics: normalize_vec(raw.supported_aggs.cumulative.metrics),
             cumulative_label_metrics: normalize_vec(
                 raw.supported_aggs.cumulative.metrics_with_labels.metrics,
@@ -72,6 +61,33 @@ impl AggregationConfig {
                 raw.supported_aggs.cumulative.metrics_with_labels.labels,
             ),
         })
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NodesConfig {
+    pub nodes: NodesConfigBody,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NodesConfigBody {
+    pub count: usize,
+    pub range: NodesConfigRange,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NodesConfigRange {
+    pub start: String,
+    pub end: String,
+}
+
+impl NodesConfig {
+    pub fn load() -> Result<Self, Box<dyn Error + Send + Sync>> {
+        let path =
+            env::var("NODES_CONFIG_PATH").unwrap_or_else(|_| "nodes-config.yaml".to_string());
+        let contents = fs::read_to_string(&path)?;
+        let raw: NodesConfig = serde_yaml::from_str(&contents)?;
+        Ok(raw)
     }
 }
 

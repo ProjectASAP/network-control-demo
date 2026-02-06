@@ -1,8 +1,11 @@
 import sys
+import os
 import time
 import json
 import jsonlines
 import datetime
+import csv
+import datetime as dt
 import numpy as np
 import networkx as nx
 from dataclasses import dataclass, field
@@ -25,34 +28,50 @@ from config import (
     ES_URL,
     SKETCH_INGEST_ENABLED,
     SKETCH_URL,
+    CLUSTER_METRICS_CSV,
 )
 
 # Paramters for sending metrics to server.
 SERVER_URL = SKETCH_URL
-INTERVAL = 5  # seconds
-TIMEOUT = 5  # seconds
+INTERVAL = 1  # seconds
+TIMEOUT = int(os.getenv("INGEST_TIMEOUT_SECONDS", "30"))  # seconds
 
 
 def build_es_bulk_payload(records: list[dict]) -> str:
     # Build an NDJSON bulk payload for Elasticsearch indexing.
     lines = []
-    timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds") + "Z"
     for record in records:
         tasks = record.get("task", [])
         clusters = record.get("cluster", [])
         cpu = record.get("cpu_cores", [])
         memory = record.get("memory_gb", [])
         network = record.get("network_mbps", [])
+        durations = record.get("estimated_duration", [])
+        timestamps_ms = record.get("timestamp_ms", [])
         count = min(len(tasks), len(clusters), len(cpu), len(memory), len(network))
         for idx in range(count):
             lines.append(json.dumps({"index": {}}))
+            ts_ms = None
+            if isinstance(timestamps_ms, list) and idx < len(timestamps_ms):
+                ts_ms = int(timestamps_ms[idx])
+            if ts_ms is None:
+                ts_ms = int(time.time() * 1000)
+            ts_iso = dt.datetime.fromtimestamp(ts_ms / 1000, tz=dt.timezone.utc)
+            ts_str = ts_iso.isoformat(timespec="milliseconds").replace("+00:00", "Z")
             doc = {
                 "task": tasks[idx],
                 "cluster": clusters[idx],
                 "cpu_cores": cpu[idx],
                 "memory_gb": memory[idx],
                 "network_mbps": network[idx],
-                "@timestamp": timestamp,
+                "estimated_duration": (
+                    durations[idx]
+                    if isinstance(durations, list) and idx < len(durations)
+                    else 0.0
+                ),
+                # Include both time fields so ES range filters can use either.
+                "timestamp": ts_str,
+                "@timestamp": ts_str,
             }
             lines.append(json.dumps(doc))
     if not lines:
@@ -60,27 +79,160 @@ def build_es_bulk_payload(records: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
-async def send_es_bulk(client: httpx.AsyncClient, records: list[dict]) -> None:
+def _latest_timestamp_ms_from_csv(path: str) -> int:
+    latest: dt.datetime | None = None
+    with open(path, "r", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            ts = row.get("timestamp")
+            if not ts:
+                continue
+            try:
+                parsed = dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if latest is None or parsed > latest:
+                latest = parsed
+    if latest is None:
+        raise ValueError(f"No valid timestamp rows found in {path}")
+    return int(latest.timestamp() * 1000)
+
+
+def _split_record(record: dict, max_rows: int) -> list[dict]:
+    if max_rows <= 0:
+        return [record]
+    row_count = len(record.get("task", []))
+    if row_count <= max_rows:
+        return [record]
+    split_records: list[dict] = []
+    for start in range(0, row_count, max_rows):
+        end = min(start + max_rows, row_count)
+        chunk: dict = {}
+        for key, value in record.items():
+            if isinstance(value, list):
+                chunk[key] = value[start:end]
+            else:
+                chunk[key] = value
+        split_records.append(chunk)
+    return split_records
+
+
+def _split_records(records: list[dict], max_rows: int) -> list[dict]:
+    if max_rows <= 0:
+        return records
+    chunks: list[dict] = []
+    for record in records:
+        chunks.extend(_split_record(record, max_rows))
+    return chunks
+
+
+async def send_es_bulk(
+    client: httpx.AsyncClient, records: list[dict], refresh: str | None = None
+) -> None:
     # Send batched telemetry records to Elasticsearch using the bulk API.
     if not ES_INGEST_ENABLED or not ES_URL:
-        return
-    payload = build_es_bulk_payload(records)
-    if not payload:
         return
     headers = {"Content-Type": "application/x-ndjson"}
     if ES_API_KEY:
         headers["Authorization"] = f"ApiKey {ES_API_KEY}"
     endpoint = f"{ES_URL.rstrip('/')}/{ES_INDEX_NAME}/_bulk"
-    try:
-        response = await client.post(
-            endpoint, content=payload, headers=headers, timeout=TIMEOUT
+    params = {"refresh": refresh} if refresh else None
+    for chunk in _split_records(records, 1000):
+        payload = build_es_bulk_payload([chunk])
+        if not payload:
+            continue
+        try:
+            response = await client.post(
+                endpoint, content=payload, headers=headers, params=params, timeout=TIMEOUT
+            )
+            response.raise_for_status()
+            data = response.json()
+            if data.get("errors"):
+                logger.warning("Bulk ingest reported errors from Elasticsearch.")
+        except Exception as exc:
+            logger.error(
+                "Error sending metrics to Elasticsearch {}: {} ({})",
+                ES_URL,
+                exc,
+                type(exc).__name__,
+            )
+
+
+def _record_from_rows(rows: list[dict]) -> dict:
+    # Convert row dictionaries into the sketch/ES record schema.
+    tasks: list[str] = []
+    clusters: list[str] = []
+    cpu: list[float] = []
+    memory: list[float] = []
+    network: list[float] = []
+    durations: list[float] = []
+    timestamp_ms: list[int] = []
+    timestamps: list[str] = []
+
+    for row in rows:
+        task_id = row.get("task")
+        cluster_id = row.get("cluster")
+        if task_id is None or cluster_id is None:
+            continue
+        tasks.append(str(task_id))
+        clusters.append(str(cluster_id))
+        cpu.append(float(row.get("cpu_cores", 0.0)))
+        memory.append(float(row.get("memory_gb", 0.0)))
+        network.append(float(row.get("network_mbps", 0.0)))
+        durations.append(float(row.get("estimated_duration", 0.0)))
+
+        ts_ms = row.get("timestamp_ms")
+        ts = row.get("timestamp") or row.get("@timestamp")
+        if ts_ms is None and ts:
+            try:
+                parsed = dt.datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                ts_ms = int(parsed.timestamp() * 1000)
+            except ValueError:
+                ts_ms = None
+        if ts_ms is None:
+            ts_ms = int(time.time() * 1000)
+        timestamp_ms.append(int(ts_ms))
+        ts_iso = dt.datetime.fromtimestamp(ts_ms / 1000.0, tz=dt.timezone.utc)
+        timestamps.append(
+            ts_iso.isoformat(timespec="milliseconds").replace("+00:00", "Z")
         )
-        response.raise_for_status()
-        data = response.json()
-        if data.get("errors"):
-            logger.warning("Bulk ingest reported errors from Elasticsearch.")
-    except Exception as exc:
-        logger.error(f"Error sending metrics to Elasticsearch {ES_URL}: {exc}")
+
+    return {
+        "task": tasks,
+        "cluster": clusters,
+        "cpu_cores": cpu,
+        "memory_gb": memory,
+        "network_mbps": network,
+        "estimated_duration": durations,
+        "timestamp_ms": timestamp_ms,
+        "timestamp": timestamps,
+        "@timestamp": timestamps,
+    }
+
+
+async def send_records(records: list[dict], refresh: str | None = None) -> None:
+    # Push records to sketch and ES (optionally waiting for refresh).
+    if not records:
+        return
+    async with httpx.AsyncClient() as client:
+        if SKETCH_INGEST_ENABLED:
+            posts = []
+            for record in _split_records(records, 1000):
+                logger.trace(f"Sending record: {record}")
+                posts.append(client.post(SERVER_URL, json=record, timeout=TIMEOUT))
+            for record in asyncio.as_completed(posts):
+                try:
+                    response = await record
+                    response.raise_for_status()
+                except Exception as e:
+                    logger.error(
+                        "Error sending metrics to {}: {} ({})",
+                        SERVER_URL,
+                        e,
+                        type(e).__name__,
+                    )
+        if ES_INGEST_ENABLED:
+            await send_es_bulk(client, records, refresh=refresh)
 
 # Random seed for reproducibility.
 SEED = 42
@@ -135,30 +287,37 @@ async def ingest(assignments: list[dict]):
 
     running_tasks = {rt.task.task_id: rt for rt in running_tasks}
     emulator.emulate_metrics(running_tasks=running_tasks)
+    await force_es_refresh()
 
     return {"message": "Tasks ingested successfully."}
 
 
 async def periodically_send_metrics():
     # Periodically push emulated metrics to sketch server and ES.
-    async with httpx.AsyncClient() as client:
-        while True:
-            records = list(emulator.create_metrics_records())
-            logger.info(f"Generated {len(records)} metrics records to send.")
-            if SKETCH_INGEST_ENABLED:
-                posts = []
-                for record in records:
-                    logger.trace(f"Sending record: {pformat(record, indent=2)}")
-                    posts.append(client.post(SERVER_URL, json=record, timeout=TIMEOUT))
-                for record in asyncio.as_completed(posts):
-                    try:
-                        response = await record
-                        response.raise_for_status()
-                    except Exception as e:
-                        logger.error(f"Error sending metrics to {SERVER_URL}: {e}")
-            if ES_INGEST_ENABLED:
-                await send_es_bulk(client, records)
-            await asyncio.sleep(INTERVAL)
+    while True:
+        records = list(emulator.create_metrics_records())
+        await send_records(records)
+        await asyncio.sleep(INTERVAL)
+
+
+@app.post("/ingest_rows")
+async def ingest_rows(rows: list[dict]):
+    # Receive raw metric rows and forward to sketch/ES immediately.
+    if not rows:
+        return {"message": "No rows provided.", "count": 0}
+    record = _record_from_rows(rows)
+    await send_records([record], refresh="wait_for")
+    return {"message": "Rows ingested successfully.", "count": len(rows)}
+
+
+async def force_es_refresh() -> None:
+    # Push metrics immediately and wait for ES refresh so queries can see them.
+    if not ES_INGEST_ENABLED or not ES_URL:
+        return
+    records = list(emulator.create_metrics_records())
+    if not records:
+        return
+    await send_records(records, refresh="wait_for")
 
 
 @dataclass
@@ -333,9 +492,13 @@ class TaskMetricsEmulator:
     def __init__(self, network: NetworkTopology) -> None:
         # Hold network topology and the current task time series buffers.
         self.network = network
+        # self.base_epoch_ms = base_epoch_ms
         self.task_metrics: dict[str, TaskMetrics] = {}
         self.running_tasks: dict[str, RunningTask] = {}
         self.completed_tasks: dict[str, RunningTask] = {}
+
+        self.ingest_wall_time_s: dict[str, float] = {}
+        self.ingest_offset_s: dict[str, float] = {}
 
     @classmethod
     def create_emulator(cls, node_path: str = "dummy_data/nodes.jsonl", edge_path: str = "dummy_data/edges.jsonl") -> "TaskMetricsEmulator":
@@ -377,9 +540,13 @@ class TaskMetricsEmulator:
             task = running_task.task
             if t_id not in self.task_metrics:
                 self.task_metrics[t_id] = self.create_task_metrics(task)
+                # NOTE: Tracks actual task arrival time on assigned node. This assumes tasks can be suspended and resumed when reassigned.
+                self.ingest_wall_time_s[t_id] = time.time()
         return self.task_metrics
 
-    def _emit_metrics(self, interval=60) -> dict[str, MetricBuffers]:
+    def _emit_metrics(
+        self, interval: int = 60
+    ) -> tuple[dict[str, MetricBuffers], dict[str, float]]:
         """
         Emit emulated metrics for running tasks over a specified interval.
         """
@@ -392,6 +559,7 @@ class TaskMetricsEmulator:
 
         # Emulate node resource usage based on assigned tasks.
         metrics: dict[str, MetricBuffers] = {}
+        current_offsets_s: dict[str, float] = {}
         for node_id, task_ids in nodes_to_tasks.items():
             node = self.network.get_node(node_id)
 
@@ -401,7 +569,10 @@ class TaskMetricsEmulator:
             # Aggregate task metrics to get node usage and per-task slices.
             for t_id in task_ids:
                 task_metrics = self.task_metrics[t_id]
-                start_time = self.running_tasks[t_id].start_time_s
+                running_task = self.running_tasks[t_id]
+
+                # NOTE: Ingest time is when the task actually started running on the node (not start time on the task).
+                start_time = self.ingest_wall_time_s.get(t_id, time.time())
                 old_duration = task_metrics.projected_duration
 
                 metrics_buffers = task_metrics.generate_buffers(
@@ -443,7 +614,7 @@ class TaskMetricsEmulator:
                 f"Node {node_id} used CPU: {node.used_cpu} ({node.used_cpu / node.cpu_capacity}), used Memory: {node.used_memory} ({node.used_memory / node.memory_capacity}), used Network: {node.used_network} ({node.used_network / network_capacity})"
             )
 
-        return metrics
+        return metrics, current_offsets_s
 
     def create_metrics_records(self, interval=INTERVAL) -> Iterable[dict]:
         """
@@ -455,15 +626,34 @@ class TaskMetricsEmulator:
             List of dictionaries representing the metrics records.
         """
         # Convert slices into the schema expected by sketch/ES ingestion.
-        metrics = self._emit_metrics(interval=interval)
+        metrics, current_offsets_s = self._emit_metrics(interval=interval)
         for task_id, task_metrics in metrics.items():
             running_task = self.running_tasks[task_id]
+            current_offset_s = current_offsets_s.get(
+                task_id,
+                self.ingest_offset_s.get(task_id, running_task.start_time_s),
+            )
+            timestamp_ms = [
+                int((current_offset_s + i) * 1000.0)
+                for i in range(len(task_metrics.cpu_usage))
+            ]
+            timestamps = [
+                dt.datetime.fromtimestamp(ts / 1000.0, tz=dt.timezone.utc)
+                .isoformat(timespec="milliseconds")
+                .replace("+00:00", "Z")
+                for ts in timestamp_ms
+            ]
+            # TODO: Remove time fields from record if not needed. Maybe replace with epoch index based on task start time?
             record = {
                 "task": [task_id] * len(task_metrics.cpu_usage),
                 "cluster": [running_task.node_id] * len(task_metrics.cpu_usage),
                 "cpu_cores": task_metrics.cpu_usage.tolist(),
                 "memory_gb": task_metrics.memory_usage.tolist(),
                 "network_mbps": task_metrics.network_usage.tolist(),
+                "estimated_duration": [float(running_task.task.duration_s)] * len(task_metrics.cpu_usage),
+                "timestamp_ms": timestamp_ms,
+                "timestamp": timestamps,
+                "@timestamp": timestamps,
             }
             yield record
 
