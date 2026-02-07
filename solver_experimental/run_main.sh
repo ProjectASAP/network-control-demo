@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-INTERVAL=5.0
+INTERVAL=1.0
 EPOCH_LENGTH_S=300.0
 
 uv run emulate_telemetry.py --epoch-length-s "${EPOCH_LENGTH_S}" --interval "${INTERVAL}" --log-level "DEBUG" &

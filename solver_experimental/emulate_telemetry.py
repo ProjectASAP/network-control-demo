@@ -221,22 +221,7 @@ SEED = 42
 _RNG = np.random.default_rng(SEED)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Launch background metric emission while the API is running.
-    # Load the ML model
-    background_loop = asyncio.create_task(
-        periodically_send_metrics()
-    )  # Adjust the sleep duration as needed
-    yield
-    background_loop.cancel()
-    try:
-        await background_loop
-    except asyncio.CancelledError:
-        logger.info("Application shutdown initiated. Background task cancelled.")
-
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 
 @app.get("/active_tasks")
@@ -273,14 +258,6 @@ async def ingest(assignments: list[dict]):
     await force_es_refresh()
 
     return {"message": "Tasks ingested successfully."}
-
-
-async def periodically_send_metrics():
-    # Periodically push emulated metrics to sketch server and ES.
-    while True:
-        records = list(emulator.create_metrics_records())
-        await send_records(records)
-        await asyncio.sleep(INTERVAL)
 
 
 @app.post("/ingest_rows")
@@ -322,11 +299,15 @@ class TaskMetrics:
             epoch_length_s: float = 60.0,
             data_rate: int = 1
         ) -> "MetricBuffers | None":
+        """
+        Generates timeseries buffers for the task metrics based on the elapsed time since the task was ingested, the allocated resources, and the projected duration.
+        Also adjusts the projected duration based on the observed speed-up from the allocated resources.
+        """
         # Create empty buffers for the task metrics.
         elapsed_time = current_time_s - self.ingest_wall_time_s
-        offset = min(elapsed_time, self.projected_duration)
+        offset = elapsed_time
 
-        if offset >= self.projected_duration:
+        if elapsed_time >= self.projected_duration:
             return None
         
         size_s = int(min(epoch_length_s, self.projected_duration - offset))
@@ -357,7 +338,7 @@ class TaskMetrics:
         # Adjust task's projected duration based on speed-up factors.
         logger.debug(f"Duration adjust factors - CPU: {cpu_duration_factor}, Memory: {memory_duration_factor}, Network: {network_duration_factor}")
         new_duration = self.projected_duration * max(cpu_duration_factor, memory_duration_factor, network_duration_factor)
-        self.projected_duration = new_duration
+        self.projected_duration = round(new_duration, 3) # Round for nicer logging and numerical stability.
         return buffers
 
 @dataclass
@@ -448,22 +429,24 @@ class MetricGenerator:
         buffer = self.base_value * (scale_factor + noise)
 
         # Reduce projected duration when usage is higher than allocated value.
-        clipped = np.clip(buffer, a_min=value, a_max=None)
-        weight = clipped.mean() * (stop - start) + value * (1.0 - (stop - start))
+        min_arr = np.clip(buffer, a_min=value, a_max=None)
+        weight = min_arr.mean() * (stop - start) + value * (1.0 - (stop - start))
         resource_usage = value / weight
 
         # Calculate slow down using Amdahl's law with the observed value scale. Use for duration adjustment.
         empirical_speed_up = amdahl_factor(self.p_scalable, resource_usage)
         duration_adjust_factor = self.duration_adjust_factor(speed_up=empirical_speed_up, stop=stop)
 
-        return buffer, duration_adjust_factor
+        clipped_buffer = np.clip(buffer, a_min=0, a_max=value)
+
+        return clipped_buffer, duration_adjust_factor
     
     def duration_adjust_factor(self, speed_up: float = 1.0, stop: float = 1.0) -> float:
         # Compute scale factor to adjust the projected duration for remainder of task based on the speed-up factor.
         interval = 1.0 - stop
-        adjusted_interval = interval / speed_up
+        adjusted_interval = interval / round(speed_up, 3)
         adjusted_duration = stop + adjusted_interval
-        return adjusted_duration
+        return round(adjusted_duration, 3) # Round for nicer logging and numerical stability.
 
 
 def amdahl_factor(p: float, n: float):
@@ -605,7 +588,7 @@ class TaskMetricsEmulator:
                     network_capacity += edge.capacity
 
             logger.info(
-                f"Node {node_id} used CPU: {node.used_cpu} ({node.used_cpu / node.cpu_capacity}), used Memory: {node.used_memory} ({node.used_memory / node.memory_capacity}), used Network: {node.used_network} ({node.used_network / network_capacity})"
+                f"Node {node_id} used CPU: {node.used_cpu} ({node.used_cpu / node.cpu_capacity}), used Memory: {node.used_memory} ({node.used_memory / node.memory_capacity}), used Network: {node.used_network} ({node.used_network / network_capacity if network_capacity != 0.0 else 'NA'})"
             )
 
         return metrics, current_offsets_s
