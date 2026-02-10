@@ -358,12 +358,8 @@ class MetricGenerator:
     p_scalable: float = 0
 
     def __post_init__(self):
-        num = 1000
-        # Precompute the proportion of the metric that is scalable (for Amdahl's law).
-        # Estimate p_scalable as the fraction of generated values above the base value (indicates that they scale with resource allocation).
-        values, _ = self.generate(num=num, value=self.base_value)
-        p = (values > self.base_value).sum() / num
-        self.p_scalable = p
+        # Randomly assign a portion of the task as scalable to resources for more realistic variability.
+        self.p_scalable = np.random.uniform(0.1, 0.9)
 
     @classmethod
     def create(cls, base_value: float = 1.0) -> "MetricGenerator":
@@ -378,7 +374,7 @@ class MetricGenerator:
         """
         rng = _RNG
         period = rng.uniform(0, 10)
-        a = rng.uniform(0.05, 0.95)
+        a = rng.uniform(0.05, 0.65)
         b = 2 * np.pi / period
         c = b * rng.uniform(0, 10)
     
