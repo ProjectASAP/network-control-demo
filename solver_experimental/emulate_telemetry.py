@@ -3,9 +3,6 @@ import sys
 import os
 import time
 import json
-import jsonlines
-import datetime
-import csv
 import datetime as dt
 import numpy as np
 import networkx as nx
@@ -34,50 +31,34 @@ from config import (
 
 # Paramters for sending metrics to server.
 SERVER_URL = SKETCH_URL
-INTERVAL = 1  # seconds
 TIMEOUT = int(os.getenv("INGEST_TIMEOUT_SECONDS", "30"))  # seconds
 
 
+global_epoch = 0
+
+
 def build_es_bulk_payload(records: list[dict]) -> str:
-    # Build an NDJSON bulk payload for Elasticsearch indexing.
+    # Build an NDJSON bulk payload for Elasticsearch indexing from column oriented records.
     lines = []
     for record in records:
-        tasks = record.get("task", [])
-        clusters = record.get("cluster", [])
-        cpu = record.get("cpu_cores", [])
-        memory = record.get("memory_gb", [])
-        network = record.get("network_mbps", [])
-        durations = record.get("estimated_duration", [])
-        timestamps_ms = record.get("timestamp_ms", [])
-        count = min(len(tasks), len(clusters), len(cpu), len(memory), len(network))
-        for idx in range(count):
+        row_records = _column_to_row_orient(record)
+        for doc in row_records:
             lines.append(json.dumps({"index": {}}))
-            ts_ms = None
-            if isinstance(timestamps_ms, list) and idx < len(timestamps_ms):
-                ts_ms = int(timestamps_ms[idx])
-            if ts_ms is None:
-                ts_ms = int(time.time() * 1000)
-            ts_iso = dt.datetime.fromtimestamp(ts_ms / 1000, tz=dt.timezone.utc)
-            ts_str = ts_iso.isoformat(timespec="milliseconds").replace("+00:00", "Z")
-            doc = {
-                "task": tasks[idx],
-                "cluster": clusters[idx],
-                "cpu_cores": cpu[idx],
-                "memory_gb": memory[idx],
-                "network_mbps": network[idx],
-                "estimated_duration": (
-                    durations[idx]
-                    if isinstance(durations, list) and idx < len(durations)
-                    else 0.0
-                ),
-                # Include both time fields so ES range filters can use either.
-                "timestamp": ts_str,
-                "@timestamp": ts_str,
-            }
             lines.append(json.dumps(doc))
     if not lines:
         return ""
     return "\n".join(lines) + "\n"
+
+
+def _column_to_row_orient(data: dict):
+    # Convert column-oriented data to row-oriented format.
+    rows = []
+    for col, values in data.items():
+        for idx, value in enumerate(values):
+            if idx >= len(rows):
+                rows.append({})
+            rows[idx][col] = value
+    return rows
 
 
 def _split_record(record: dict, max_rows: int) -> list[dict]:
@@ -119,6 +100,11 @@ async def send_es_bulk(
         headers["Authorization"] = f"ApiKey {ES_API_KEY}"
     endpoint = f"{ES_URL.rstrip('/')}/{ES_INDEX_NAME}/_bulk"
     params = {"refresh": refresh} if refresh else None
+
+    # ES expects a single record per line, so convert from column-oriented format and split into batches if needed.
+    for record in records:
+        record['epoch'] = [record['epoch']] * len(record.get('task', [])) # Ensure epoch is included as a column for ES indexing.
+
     for chunk in _split_records(records, 1000):
         payload = build_es_bulk_payload([chunk])
         if not payload:
@@ -184,11 +170,7 @@ def _record_from_rows(rows: list[dict]) -> dict:
         "cluster": clusters,
         "cpu_cores": cpu,
         "memory_gb": memory,
-        "network_mbps": network,
-        "estimated_duration": durations,
-        "timestamp_ms": timestamp_ms,
-        "timestamp": timestamps,
-        "@timestamp": timestamps,
+        "network_mbps": network
     }
 
 
@@ -230,7 +212,8 @@ async def active_tasks():
     completed_tasks: dict[str, RunningTask] = {}
     for tid, rt in emulator.running_tasks.items():
         curr_time = get_current_time()
-        elapsed = curr_time - rt.start_time_s
+        start_time = emulator.ingest_wall_time_s.get(tid, curr_time)
+        elapsed = curr_time - start_time
         metrics = emulator.task_metrics[tid]
         if elapsed >= metrics.projected_duration:
             rt.end_time_s = rt.start_time_s + metrics.projected_duration
@@ -256,6 +239,10 @@ async def ingest(assignments: list[dict]):
     running_tasks = {rt.task.task_id: rt for rt in running_tasks}
     emulator.emulate_metrics(running_tasks=running_tasks)
     await force_es_refresh()
+
+    # Increment epoch after processing each batch of assignments to simulate time progression in the emulator.
+    global global_epoch
+    global_epoch += 1
 
     return {"message": "Tasks ingested successfully."}
 
@@ -495,12 +482,13 @@ class TaskMetricsEmulator:
         cpu_usage = MetricGenerator.create(base_value=task.initial_cpu)
         memory_usage = MetricGenerator.create(base_value=task.initial_memory)
         network_usage = MetricGenerator.create(base_value=sum(task.peer_bandwidths.values()))
+        current_time_s = get_current_time()
         return TaskMetrics(
             cpu_usage=cpu_usage, 
             memory_usage=memory_usage, 
             network_usage=network_usage, 
             projected_duration=size,
-            ingest_wall_time_s=get_current_time(),
+            ingest_wall_time_s=current_time_s,
         )
 
     def emulate_metrics(
@@ -520,9 +508,10 @@ class TaskMetricsEmulator:
             task = running_task.task
             if t_id not in self.task_metrics:
                 self.task_metrics[t_id] = self.create_task_metrics(task)
+                self.ingest_wall_time_s[t_id] = get_current_time()
         return self.task_metrics
 
-    def _emit_metrics(self) -> tuple[dict[str, MetricBuffers], dict[str, float]]:
+    def _emit_metrics(self) -> dict[str, MetricBuffers]:
         """
         Emit emulated metrics for running tasks over a specified interval.
         """
@@ -535,7 +524,6 @@ class TaskMetricsEmulator:
 
         # Emulate node resource usage based on assigned tasks.
         metrics: dict[str, MetricBuffers] = {}
-        current_offsets_s: dict[str, float] = {}
         for node_id, task_ids in nodes_to_tasks.items():
             node = self.network.get_node(node_id)
 
@@ -550,9 +538,9 @@ class TaskMetricsEmulator:
                 running_task = self.running_tasks[t_id]
 
                 old_duration = task_metrics.projected_duration
-
+                current_time_s = get_current_time()
                 metrics_buffers = task_metrics.generate_buffers(
-                    current_time_s=get_current_time(),
+                    current_time_s=current_time_s,
                     allocated_cpu=self.running_tasks[t_id].task.initial_cpu,
                     allocated_memory=self.running_tasks[t_id].task.initial_memory,
                     allocated_network=sum(self.running_tasks[t_id].task.peer_bandwidths.values()),
@@ -591,7 +579,7 @@ class TaskMetricsEmulator:
                 f"Node {node_id} used CPU: {node.used_cpu} ({node.used_cpu / node.cpu_capacity}), used Memory: {node.used_memory} ({node.used_memory / node.memory_capacity}), used Network: {node.used_network} ({node.used_network / network_capacity if network_capacity != 0.0 else 'NA'})"
             )
 
-        return metrics, current_offsets_s
+        return metrics
 
     def create_metrics_records(self) -> Iterable[dict]:
         """
@@ -603,56 +591,48 @@ class TaskMetricsEmulator:
             List of dictionaries representing the metrics records.
         """
         # Convert slices into the schema expected by sketch/ES ingestion.
-        metrics, current_offsets_s = self._emit_metrics()
+        global global_epoch
+        metrics = self._emit_metrics()
+        epoch = global_epoch
         for task_id, task_metrics in metrics.items():
             running_task = self.running_tasks[task_id]
-            current_offset_s = current_offsets_s.get(
-                task_id,
-                self.ingest_offset_s.get(task_id, running_task.start_time_s),
-            )
-            timestamp_ms = [
-                int((current_offset_s + i) * 1000.0)
-                for i in range(len(task_metrics.cpu_usage))
-            ]
-            timestamps = [
-                dt.datetime.fromtimestamp(ts / 1000.0, tz=dt.timezone.utc)
-                .isoformat(timespec="milliseconds")
-                .replace("+00:00", "Z")
-                for ts in timestamp_ms
-            ]
-            # TODO: Remove time fields from record if not needed. Maybe replace with epoch index based on task start time?
+            # NOTE: Sketch server wants a scalar for "epoch".
             record = {
+                "epoch": epoch,
                 "task": [task_id] * len(task_metrics.cpu_usage),
                 "cluster": [running_task.node_id] * len(task_metrics.cpu_usage),
                 "cpu_cores": task_metrics.cpu_usage.tolist(),
                 "memory_gb": task_metrics.memory_usage.tolist(),
-                "network_mbps": task_metrics.network_usage.tolist(),
-                "estimated_duration": [float(running_task.task.duration_s)] * len(task_metrics.cpu_usage),
-                "timestamp_ms": timestamp_ms,
-                "timestamp": timestamps,
-                "@timestamp": timestamps,
+                "network_mbps": task_metrics.network_usage.tolist()
             }
             yield record
 
 
 def create_virtual_clock(epoch_length_s: int = 60) -> Callable[[], float]:
+    """
+    Creates a virtual clock function that simulates time progression in the emulator. The clock returns the current time based on a specified epoch length.
+
+    Args:
+        epoch_length_s: The nominal duration of each epoch in seconds. Should be consistent with the epoch length used for the controller to maintain temporal consistency.
+    Returns:
+        A function that returns the current virtual time and epoch index when called.
+    """
     # Simple virtual clock to track time in the emulator.
     base_time_s = time.time()
 
     def get_time():
-        epochs_elapsed = (time.time() - base_time_s) / INTERVAL
-        return base_time_s + epochs_elapsed * epoch_length_s
+        global global_epoch
+        return base_time_s + global_epoch * epoch_length_s
 
     return get_time
 
 
 if __name__ == "__main__":
     # Parse CLI options.
-    parser = argparse.ArgumentParser(description="Network demo controller.")
+    parser = argparse.ArgumentParser(description="Generates synthetic telemetry data for testing the network control loop.")
     parser.add_argument("--host", type=str, default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--epoch-length-s", type=float, default=60.0)
-    parser.add_argument("--interval", type=float, default=1.0)
     parser.add_argument("--data-rate", type=int, default=1)
     parser.add_argument("--log-level", type=str, default="INFO")
     args = parser.parse_args()
@@ -660,7 +640,6 @@ if __name__ == "__main__":
     # Start the FastAPI telemetry emulator.
     emulator = TaskMetricsEmulator.create_emulator(epoch_length_s=args.epoch_length_s, data_rate=args.data_rate)
 
-    INTERVAL = args.interval
     get_current_time = create_virtual_clock(epoch_length_s=args.epoch_length_s)
 
     logger.remove()

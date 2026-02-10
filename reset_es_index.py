@@ -6,7 +6,7 @@ import urllib.request
 # --- CONFIGURATION ---
 INDEX_NAME = "cluster-metrics"
 ES_HOST = "http://localhost:9200"
-API_KEY = "TWg0S01wc0JhR1AxOFVUcUY5N2w6bGR0TjIySHRZTHVwdmZLTmtqcGtGQQ=="
+API_KEY = "UnI2NFA1d0JkMjVjRVA5bDBsQmU6Tkd6Y3pUajVPWjJhU2ZXQWdYUGpFdw=="
 # ---------------------
 
 
@@ -41,16 +41,10 @@ print("2. Creating empty index with timestamp mapping...", end=" ")
 mapping_body = {
     "mappings": {
         "properties": {
-            "timestamp": {
-                "type": "date",
-                "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd'T'HH:mm:ss"
-                "||strict_date_optional_time||epoch_millis",
-                "ignore_malformed": True,
-            },
             "cpu_cores": {"type": "float"},
             "memory_gb": {"type": "float"},
             "network_mbps": {"type": "float"},
-            "estimated_duration": {"type": "float"},
+            "epoch": {"type": "integer"},
             "cluster": {"type": "keyword"},
             "task": {"type": "keyword"},
         }

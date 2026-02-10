@@ -5,7 +5,7 @@ set -euo pipefail
 INTERVAL=1.0
 EPOCH_LENGTH_S=300.0
 
-uv run emulate_telemetry.py --epoch-length-s "${EPOCH_LENGTH_S}" --interval "${INTERVAL}" --log-level "DEBUG" &
+uv run emulate_telemetry.py --epoch-length-s "${EPOCH_LENGTH_S}" --log-level "DEBUG" &
 EMULATOR_PID=$!
 trap 'kill "$EMULATOR_PID"' EXIT
 
