@@ -19,6 +19,9 @@ from typing import Dict, Iterable, List, Tuple
 
 import requests
 
+SOLVER_DATA_DIR = Path("solver_experimental/python_solver/data")
+SOLVER_SRC_DIR = Path("solver_experimental/python_solver/src")
+
 
 DEFAULT_ES_URL = "http://localhost:9200"
 DEFAULT_ES_INDEX = "cluster-metrics"
@@ -119,7 +122,90 @@ def parse_args() -> argparse.Namespace:
         default="query_rtt_plot_epoch.png",
         help="Output plot filename",
     )
+    parser.add_argument(
+        "--run-solver",
+        action="store_true",
+        default=False,
+        help="Run the Python solver once before the epoch sweep",
+    )
+    parser.add_argument(
+        "--solver-data-dir",
+        type=str,
+        default=str(SOLVER_DATA_DIR),
+        help="Directory containing solver JSON inputs",
+    )
+    parser.add_argument(
+        "--solver-ilp-out",
+        type=str,
+        default="",
+        help="Optional path to write solver ILP (LP format); empty disables",
+    )
     return parser.parse_args()
+
+
+def run_solver_once(data_dir: Path, ilp_out: Path | None = None) -> float:
+    src_dir = SOLVER_SRC_DIR.resolve()
+    if str(src_dir) not in sys.path:
+        sys.path.insert(0, str(src_dir))
+
+    try:
+        from network_controller import (  # type: ignore
+            NetworkControllerSolver,
+            load_edges,
+            load_existing_assignments,
+            load_nodes,
+            load_previous_assignments,
+            load_tasks,
+        )
+    except ImportError as exc:
+        raise RuntimeError(
+            "Failed to import solver package. Ensure dependencies are installed "
+            "and solver_experimental/python_solver/src is present."
+        ) from exc
+
+    nodes = load_nodes(data_dir / "nodes.json")
+    edges = load_edges(data_dir / "edges.json")
+    tasks = load_tasks(data_dir / "tasks.json")
+
+    existing_assignments_path = data_dir / "existing_assignments.json"
+    existing_assignments = (
+        load_existing_assignments(existing_assignments_path)
+        if existing_assignments_path.exists()
+        else []
+    )
+
+    previous_assignments_path = data_dir / "previous_assignments.json"
+    previous_assignments = (
+        load_previous_assignments(previous_assignments_path)
+        if previous_assignments_path.exists()
+        else {}
+    )
+
+    config_path = data_dir / "solver_config.json"
+    config = {}
+    if config_path.exists():
+        with config_path.open("r", encoding="utf-8") as handle:
+            config = json.load(handle)
+
+    solver = NetworkControllerSolver(nodes, edges)
+    t0 = time.perf_counter()
+    result = solver.solve(
+        tasks,
+        existing_assignments=existing_assignments,
+        previous_assignments=previous_assignments,
+        max_task_movements=config.get("max_task_movements"),
+        ilp_output_path=ilp_out,
+    )
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+    print(
+        f"solver objective: {result.objective_value} | "
+        f"assignments: {len(result.decisions)} | "
+        f"unassigned: {len(result.unassigned_tasks)} | "
+        f"moves: {result.moves_used}"
+    )
+    print(f"solver time: {elapsed_ms:.2f} ms")
+    return elapsed_ms
 
 
 def parse_nodes_config(path: str) -> List[str]:
@@ -577,6 +663,13 @@ def main() -> None:
             args.query_timeout,
         )
 
+        solver_ms = 0.0
+        if args.run_solver:
+            solver_dir = Path(args.solver_data_dir)
+            ilp_out = Path(args.solver_ilp_out) if args.solver_ilp_out else None
+            print(f"Running solver once using {solver_dir} ...")
+            solver_ms = run_solver_once(solver_dir, ilp_out=ilp_out)
+
         for epoch in range(args.start_epoch, args.end_epoch + 1):
             print(f"\n=== Epoch {epoch} ===")
             total_rows = args.rows_per_epoch
@@ -627,9 +720,18 @@ def main() -> None:
             )
 
             max_diff = compare_results(server_json, es_json)
-            results.append(SweepResult(epoch=epoch, server_rtt_ms=server_rtt, es_rtt_ms=es_rtt))
+            server_rtt_total = server_rtt + solver_ms
+            es_rtt_total = es_rtt + solver_ms
+            results.append(
+                SweepResult(
+                    epoch=epoch,
+                    server_rtt_ms=server_rtt_total,
+                    es_rtt_ms=es_rtt_total,
+                )
+            )
             print(
-                f"server RTT: {server_rtt:.2f} ms | ES RTT: {es_rtt:.2f} ms | "
+                f"server+solver RTT: {server_rtt_total:.2f} ms | "
+                f"ES+solver RTT: {es_rtt_total:.2f} ms | "
                 f"max diff >=2%: {max_diff:.2f}%"
             )
             print("comparisons:")
@@ -639,8 +741,8 @@ def main() -> None:
                 [
                     datetime.now(timezone.utc).isoformat(),
                     epoch,
-                    f"{server_rtt:.4f}",
-                    f"{es_rtt:.4f}",
+                    f"{server_rtt_total:.4f}",
+                    f"{es_rtt_total:.4f}",
                 ]
             )
             csv_file.flush()
