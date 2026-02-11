@@ -19,8 +19,8 @@ from typing import Dict, Iterable, List, Tuple
 
 import requests
 
-SOLVER_DATA_DIR = Path("solver_experimental/python_solver/data")
-SOLVER_SRC_DIR = Path("solver_experimental/python_solver/src")
+SOLVER_DUMMY_DIR = Path("solver_experimental/dummy_data")
+SOLVER_ROOT = Path("solver_experimental")
 
 
 DEFAULT_ES_URL = "http://localhost:9200"
@@ -119,7 +119,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-plot",
         type=str,
-        default="query_rtt_plot_epoch.png",
+        default="query_rtt_plot_epoch_with_solver.png",
         help="Output plot filename",
     )
     parser.add_argument(
@@ -131,78 +131,148 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--solver-data-dir",
         type=str,
-        default=str(SOLVER_DATA_DIR),
-        help="Directory containing solver JSON inputs",
-    )
-    parser.add_argument(
-        "--solver-ilp-out",
-        type=str,
-        default="",
-        help="Optional path to write solver ILP (LP format); empty disables",
+        default=str(SOLVER_DUMMY_DIR),
+        help="Directory containing dummy_data JSONL inputs",
     )
     return parser.parse_args()
 
 
-def run_solver_once(data_dir: Path, ilp_out: Path | None = None) -> float:
-    src_dir = SOLVER_SRC_DIR.resolve()
-    if str(src_dir) not in sys.path:
-        sys.path.insert(0, str(src_dir))
+def _ensure_solver_path() -> None:
+    solver_root = SOLVER_ROOT.resolve()
+    if str(solver_root) not in sys.path:
+        sys.path.insert(0, str(solver_root))
 
+
+def _load_solver_assets(data_dir: Path):
+    _ensure_solver_path()
     try:
-        from network_controller import (  # type: ignore
-            NetworkControllerSolver,
+        from scheduler.entities import NetworkTopology, Node, Edge, Task  # type: ignore
+        from scheduler.load_info import (  # type: ignore
+            build_task_graph,
             load_edges,
-            load_existing_assignments,
             load_nodes,
-            load_previous_assignments,
             load_tasks,
         )
+        from scheduler.solver import TaskScheduler  # type: ignore
     except ImportError as exc:
         raise RuntimeError(
-            "Failed to import solver package. Ensure dependencies are installed "
-            "and solver_experimental/python_solver/src is present."
+            "Failed to import scheduler modules. Ensure solver_experimental is on PYTHONPATH "
+            "and dependencies are installed."
         ) from exc
 
-    nodes = load_nodes(data_dir / "nodes.json")
-    edges = load_edges(data_dir / "edges.json")
-    tasks = load_tasks(data_dir / "tasks.json")
+    nodes_path = data_dir / "nodes.jsonl"
+    edges_path = data_dir / "edges.jsonl"
+    tasks_path = data_dir / "tasks.jsonl"
+    if not (nodes_path.exists() and edges_path.exists() and tasks_path.exists()):
+        alt_nodes = data_dir / "nodes.json"
+        alt_edges = data_dir / "edges.json"
+        alt_tasks = data_dir / "tasks.json"
+        if alt_nodes.exists() or alt_edges.exists() or alt_tasks.exists():
+            raise RuntimeError(
+                "solver-data-dir must point to JSONL dummy_data (nodes.jsonl/edges.jsonl/tasks.jsonl). "
+                "The python_solver/data JSON files are in a different schema."
+            )
+        raise RuntimeError(
+            "solver-data-dir missing required JSONL files: nodes.jsonl, edges.jsonl, tasks.jsonl."
+        )
 
-    existing_assignments_path = data_dir / "existing_assignments.json"
-    existing_assignments = (
-        load_existing_assignments(existing_assignments_path)
-        if existing_assignments_path.exists()
-        else []
-    )
+    nodes = load_nodes(nodes_path)
+    edges = load_edges(edges_path)
+    tasks = load_tasks(tasks_path)
+    task_graph = build_task_graph(tasks)
 
-    previous_assignments_path = data_dir / "previous_assignments.json"
-    previous_assignments = (
-        load_previous_assignments(previous_assignments_path)
-        if previous_assignments_path.exists()
-        else {}
-    )
+    base_topology = NetworkTopology(nodes.values(), edges.values())
+    paths = {}
+    from itertools import combinations
 
-    config_path = data_dir / "solver_config.json"
-    config = {}
-    if config_path.exists():
-        with config_path.open("r", encoding="utf-8") as handle:
-            config = json.load(handle)
+    for n_i, n_j in combinations(base_topology.nodes, 2):
+        if base_topology.has_path(n_i, n_j):
+            paths[(n_i, n_j)] = [base_topology.find_shortest_path(n_i, n_j)]
 
-    solver = NetworkControllerSolver(nodes, edges)
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "tasks": tasks,
+        "task_graph": task_graph,
+        "paths": paths,
+        "NetworkTopology": NetworkTopology,
+        "TaskScheduler": TaskScheduler,
+        "Node": Node,
+        "Edge": Edge,
+        "Task": Task,
+    }
+
+
+def _extract_server_usage(server_json: dict) -> Dict[str, Dict[str, float]]:
+    usage: Dict[str, Dict[str, float]] = {}
+    for item in server_json.get("results", []):
+        node_id = item.get("key")
+        if not node_id:
+            continue
+        cumulative = item.get("cumulative") or {}
+        usage[str(node_id)] = {
+            "cpu": float(cumulative.get("cpu_cores", 0.0) or 0.0),
+            "memory": float(cumulative.get("memory_gb", 0.0) or 0.0),
+            "network": float(cumulative.get("network_mbps", 0.0) or 0.0),
+        }
+    return usage
+
+
+def _extract_es_usage(es_json: dict) -> Dict[str, Dict[str, float]]:
+    usage: Dict[str, Dict[str, float]] = {}
+    for node_id, payload in es_json.items():
+        aggs = payload.get("aggregations", {})
+        usage[str(node_id)] = {
+            "cpu": float(aggs.get("cpu_sum", {}).get("value", 0.0) or 0.0),
+            "memory": float(aggs.get("mem_sum", {}).get("value", 0.0) or 0.0),
+            "network": float(aggs.get("net_sum", {}).get("value", 0.0) or 0.0),
+        }
+    return usage
+
+
+def _build_nodes_with_usage(
+    base_nodes: Dict[str, object],
+    usage: Dict[str, Dict[str, float]],
+    NodeType: type,
+) -> Dict[str, object]:
+    updated: Dict[str, object] = {}
+    for node_id, node in base_nodes.items():
+        used = usage.get(node_id, {})
+        updated[node_id] = NodeType(
+            node_id=node.node_id,
+            cpu_capacity=node.cpu_capacity,
+            memory_capacity=node.memory_capacity,
+            network_capacity=node.network_capacity,
+            used_cpu=used.get("cpu", node.used_cpu),
+            used_memory=used.get("memory", node.used_memory),
+            used_network=used.get("network", node.used_network),
+        )
+    return updated
+
+
+def run_solver_for_usage(usage: Dict[str, Dict[str, float]], assets: dict) -> float:
+    nodes = _build_nodes_with_usage(assets["nodes"], usage, assets["Node"])
+    edges = assets["edges"]
+    tasks = assets["tasks"]
+    task_graph = assets["task_graph"]
+    paths = assets["paths"]
+
+    topology = assets["NetworkTopology"](nodes.values(), edges.values())
+    solver = assets["TaskScheduler"](network=topology)
+
     t0 = time.perf_counter()
-    result = solver.solve(
+    assignment, leftover, objective_value, status_code = solver.solve(
         tasks,
-        existing_assignments=existing_assignments,
-        previous_assignments=previous_assignments,
-        max_task_movements=config.get("max_task_movements"),
-        ilp_output_path=ilp_out,
+        running_tasks={},
+        paths=paths,
+        task_graph=task_graph,
     )
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
-
     print(
-        f"solver objective: {result.objective_value} | "
-        f"assignments: {len(result.decisions)} | "
-        f"unassigned: {len(result.unassigned_tasks)} | "
-        f"moves: {result.moves_used}"
+        f"solver objective: {objective_value} | "
+        f"assignments: {len(assignment)} | "
+        f"unassigned: {len(leftover)} | "
+        f"status: {status_code}"
     )
     print(f"solver time: {elapsed_ms:.2f} ms")
     return elapsed_ms
@@ -663,12 +733,14 @@ def main() -> None:
             args.query_timeout,
         )
 
-        solver_ms = 0.0
+        assets = None
         if args.run_solver:
             solver_dir = Path(args.solver_data_dir)
-            ilp_out = Path(args.solver_ilp_out) if args.solver_ilp_out else None
-            print(f"Running solver once using {solver_dir} ...")
-            solver_ms = run_solver_once(solver_dir, ilp_out=ilp_out)
+            print(f"Loading solver inputs from {solver_dir} ...")
+            assets = _load_solver_assets(solver_dir)
+
+        if args.run_solver:
+            print("Solver will run once per epoch after each query.")
 
         for epoch in range(args.start_epoch, args.end_epoch + 1):
             print(f"\n=== Epoch {epoch} ===")
@@ -719,9 +791,17 @@ def main() -> None:
                 epoch,
             )
 
+            server_solver_ms = 0.0
+            es_solver_ms = 0.0
+            if args.run_solver and assets is not None:
+                server_usage = _extract_server_usage(server_json)
+                es_usage = _extract_es_usage(es_json)
+                server_solver_ms = run_solver_for_usage(server_usage, assets)
+                es_solver_ms = run_solver_for_usage(es_usage, assets)
+
             max_diff = compare_results(server_json, es_json)
-            server_rtt_total = server_rtt + solver_ms
-            es_rtt_total = es_rtt + solver_ms
+            server_rtt_total = server_rtt + server_solver_ms
+            es_rtt_total = es_rtt + es_solver_ms
             results.append(
                 SweepResult(
                     epoch=epoch,
