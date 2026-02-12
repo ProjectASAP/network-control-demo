@@ -4,12 +4,33 @@ import json
 import os
 import threading
 from typing import Any
+from loguru import logger
 
 from config import E2E_LOG_CSV, QUERY_COMPARE_CSV, QUERY_RTT_CSV
 
 _RTT_LOG_LOCK = threading.Lock()
 _QUERY_COMPARE_LOG_LOCK = threading.Lock()
 _E2E_LOG_LOCK = threading.Lock()
+
+
+def log_record(log_path: str, **kwargs):
+    # Generic logging function that can be extended for different log types.
+    timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds") + "Z"
+    log_entry = {"timestamp": timestamp, **kwargs}
+    with _RTT_LOG_LOCK:
+        try:
+            needs_header = True
+            try:
+                needs_header = os.path.getsize(log_path) == 0
+            except OSError:
+                needs_header = True
+            with open(log_path, "a", newline="") as handle:
+                writer = csv.writer(handle)
+                if needs_header:
+                    writer.writerow(log_entry.keys())
+                writer.writerow(log_entry.values())
+        except Exception as exc:
+            logger.error(f"failed to write RTT log: {exc}")
 
 
 def log_rtt(
@@ -60,7 +81,7 @@ def log_rtt(
                     ]
                 )
         except Exception as exc:
-            print(f"failed to write RTT log: {exc}")
+            logger.error(f"failed to write RTT log: {exc}")
 
 
 def _format_result(value: Any) -> str:

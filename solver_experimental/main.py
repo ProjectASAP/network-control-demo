@@ -20,12 +20,6 @@ from cattrs import structure, unstructure
 from scheduler.entities import RunningTask, Task, NetworkTopology
 from scheduler.load_info import load_nodes, load_edges, load_tasks, build_task_graph
 from scheduler.solver import TaskScheduler
-from query_engine_utils.config import (
-    QueryManagerConfig,
-    QueryGroupConfig,
-    load_query_config,
-)
-from query_engine_utils.server_querying import QueryManager
 from config import (
     CONSISTENCY_CHECK_TOLERANCE,
     PARALLEL_BENCHMARK_ENABLED,
@@ -34,10 +28,11 @@ from config import (
     ES_TIME_FIELD,
     TIME_RANGE_MS,
 )
-from logging_utils import log_e2e, log_node_metric_comparisons
+from logging_utils import log_e2e, log_node_metric_comparisons, log_record
 
 from es_query import (
     fetch_node_usage,
+    fetch_task_usage,
     compare_node_metrics,
     check_es_available,
     NodeMetricsSnapshot,
@@ -56,7 +51,10 @@ class AppConfig:
     emulator_url: str = "http://localhost:8000"
     epoch_length_s: float = 300.0
     interval: float = 10.0
+    query_rtt_log_path: str = "fetch_tasks_rtt.csv"
+    loop_rtt_log_path: str = "loop_rtt.csv"
     log_level: str = "INFO"
+    use_es: bool = False
 
 
 def filter_completed_tasks(client: httpx.Client, running_tasks: dict[str, RunningTask], current_time: float | None = None) -> dict[str, RunningTask]:
@@ -156,8 +154,6 @@ def assign_tasks(args: AppConfig):
         logger.info("Parallel benchmark disabled; running sketch-only benchmark.")
 
     epoch_length_s = args.epoch_length_s
-    query_time_range_ms = epoch_length_s * 1000
-
     with httpx.Client(timeout=5, base_url=args.emulator_url) as client:
         # Track running and unassigned tasks across iterations.
         running_tasks: dict[str, RunningTask] = {}
@@ -168,18 +164,19 @@ def assign_tasks(args: AppConfig):
             logger.info("No template tasks found; ingestion-only mode.")
 
         task_queue: deque[Task] = deque(template_tasks_sorted)
-        epoch_index = -1
+        epoch_index = 0
 
         base_time_s = time.time()
         while True:
             # Add delay between iterations to give time for task assignment and metric feedback loop to take effect.
             # This delay is independent of the internal clock used for task arrival offsets and metric querying, which is based on the base_time_s + offset.
             time.sleep(args.interval)
-            epoch_index += 1
+            logger.info(f"--- Epoch {epoch_index} ---")
 
             # Advance simulated time to the next arrival.
             curr_offset_s = epoch_index * epoch_length_s
             current_time_s = base_time_s + curr_offset_s
+            epoch_index += 1
             logger.debug(f"Current time offset: {curr_offset_s:.2f} s")
             # Prune tasks whose duration has elapsed.
             running_tasks = filter_completed_tasks(client, running_tasks, current_time_s)
@@ -206,15 +203,6 @@ def assign_tasks(args: AppConfig):
                     if task_id not in failed_tasks
                 }
             if not tasks_to_schedule_pool:
-                log_e2e(
-                    duration_ms=-1.0,
-                    curr_offset=curr_offset_s,
-                    tasks_to_schedule=0,
-                    ran_solver=False,
-                    metrics_source="none",
-                    assignment=None,
-                    correlation_id=None,
-                )
                 logger.info(
                     "No pending tasks to schedule at this arrival time."
                 )
@@ -232,37 +220,26 @@ def assign_tasks(args: AppConfig):
                 len(tasks_to_schedule),
             )
 
-            current_time_ms = int((base_time_s + curr_offset_s) * 1000.0)
-            window_start_ms = max(0, current_time_ms - query_time_range_ms)
-            logger.debug(
-                "Time window epoch={} current={} start={} field={}",
-                epoch_index + 1,
-                current_time_ms,
-                window_start_ms,
-                ES_TIME_FIELD,
-            )
             # Fetch metrics from sketch and optionally from ES.
-            correlation_id = uuid.uuid4().hex[:8]
-            sketch_node_metrics: dict[str, NodeMetricsSnapshot] = {}
-            metrics_needed = ["cpu", "mem"]
+            metrics_needed = ["cpu_cores", "memory_gb"]
             if any(task.peer_bandwidths for task in tasks_to_schedule.values()):
-                metrics_needed.append("net")
+                metrics_needed.append("network_mbps")
 
             sketch_start = time.perf_counter()
-            sketch_node_metrics, sketch_top_entities = fetch_node_usage(
-                node_ids=node_ids,
-                correlation_id=correlation_id,
-                metrics=metrics_needed,
-                current_time_ms=current_time_ms,
-                time_range_ms=query_time_range_ms,
-            )
-            sketch_query_ms = (time.perf_counter() - sketch_start) * 1000.0
-            if sketch_node_metrics:
-                logger.debug(
-                    "Collected metrics for {} nodes in {:.2f} ms",
-                    len(sketch_node_metrics),
-                    sketch_query_ms,
+            ran_query = False
+            if running_tasks:
+                sketch_task_metrics = fetch_task_usage(
+                    task_ids=list(running_tasks.keys()),
+                    epoch=epoch_index - 1,
+                    use_es=args.use_es,
+                    metrics=metrics_needed,
+                    log_path=args.query_rtt_log_path,
                 )
+                ran_query = True
+                logger.debug(f'Queried data: {sketch_task_metrics}')
+            else:
+                logger.debug("No running tasks to query metrics for.")
+            sketch_query_ms = (time.perf_counter() - sketch_start) * 1000.0
 
             # Run solver on sketch metrics.
             sk_solver_start = time.perf_counter()
@@ -292,18 +269,19 @@ def assign_tasks(args: AppConfig):
             # Log total time for sketch query + solver, along with the assignments.
             sk_solver_ms = (time.perf_counter() - sk_solver_start) * 1000.0
             sk_duration_ms = sketch_query_ms + sk_solver_ms
-            assignment_map = {
-                task_id: rt.node_id for task_id, rt in assignments.items()
-            }
-            log_e2e(
-                duration_ms=sk_duration_ms,
-                curr_offset=curr_offset_s,
-                tasks_to_schedule=len(tasks_to_schedule),
-                ran_solver=True,
-                metrics_source="sketch",
-                assignment=assignment_map,
-                correlation_id=correlation_id,
-            )
+
+            if ran_query:
+                backend = "ES" if args.use_es else "sketch"
+                log_record(
+                    log_path=args.loop_rtt_log_path,
+                    epoch=epoch_index,
+                    backend=backend,
+                    solver_duration_ms=sk_solver_ms,
+                    total_duration_ms=sk_duration_ms,
+                    request_id="controller_loop",
+                    num_tasks_attempted=len(tasks_to_schedule),
+                    num_tasks_scheduled=len(assignments)
+                )
 
             # Carry over leftovers and any unscheduled overflow, keeping oldest tasks first.
             if assignments:
@@ -339,19 +317,18 @@ def assign_tasks(args: AppConfig):
                 logger.info("Could not assign tasks.")
 
             # Push assignments to emulator immediately so next query sees the metrics.
-            if assignments:
-                running_tasks_payload = unstructure(
-                    list(assignments.values()), list[RunningTask]
-                )
-                _post_with_retry(
-                    client,
-                    "/ingest",
-                    running_tasks_payload,
-                )
-                logger.debug(
-                    "Pushed {} assignments to emulator before next task arrival",
-                    len(assignments),
-                )
+            running_tasks_payload = unstructure(
+                list(assignments.values()), list[RunningTask]
+            )
+            _post_with_retry(
+                client,
+                "/ingest",
+                running_tasks_payload,
+            )
+            logger.debug(
+                "Pushed {} assignments to emulator before next task arrival",
+                len(assignments),
+            )
 
             yield assignments
 
@@ -373,6 +350,9 @@ if __name__ == "__main__":
     parser.add_argument("--edge-path", type=str, default="dummy_data/edges.jsonl")
     parser.add_argument("--task-path", type=str, default="dummy_data/tasks.jsonl")
     parser.add_argument("--emulator-url", type=str, default="http://localhost:8000")
+    parser.add_argument("--query-rtt-log-path", type=str, default="fetch_tasks_rtt.csv")
+    parser.add_argument("--loop-rtt-log-path", type=str, default="loop_rtt.csv")
+    parser.add_argument("--use-es", action="store_true", default=False)
     parser.add_argument("--interval", type=float, default=30.0)
     parser.add_argument("--epoch-length-s", type=float, default=300.0)
     parser.add_argument("--query-manager-config", type=str, required=True)

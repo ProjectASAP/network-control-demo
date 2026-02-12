@@ -22,17 +22,27 @@ from scheduler.load_info import load_nodes, load_edges
 from config import (
     ES_API_KEY,
     ES_INDEX_NAME,
-    ES_INGEST_ENABLED,
     ES_URL,
-    SKETCH_INGEST_ENABLED,
     SKETCH_URL,
-    CLUSTER_METRICS_CSV,
 )
+from logging_utils import log_record
 
 # Paramters for sending metrics to server.
 SERVER_URL = SKETCH_URL
 TIMEOUT = int(os.getenv("INGEST_TIMEOUT_SECONDS", "30"))  # seconds
 
+# Emulator instance (initialized in main).
+emulator: "TaskMetricsEmulator"
+# Function to get current time based on epoch (initialized in main).
+get_current_time: Callable[[], float]
+
+# Ingest parameters.
+SKETCH_INGEST_ENABLED = True
+ES_INGEST_ENABLED = True
+
+# Logging parameters.
+SKETCH_INGEST_LOG_PATH: str | None = None
+ES_INGEST_LOG_PATH: str | None = None
 
 global_epoch = 0
 
@@ -178,12 +188,22 @@ async def send_records(records: list[dict], refresh: str | None = None) -> None:
     # Push records to sketch and ES (optionally waiting for refresh).
     if not records:
         return
+    
+    global global_epoch
     async with httpx.AsyncClient() as client:
+        # Get number of rows.
+        num_rows = 0
+        for record in records:
+            if record:
+                key = next((k for k, v in record.items() if isinstance(v, list)), None)
+                if key:
+                    num_rows += len(record[key])
         if SKETCH_INGEST_ENABLED:
             posts = []
             for record in _split_records(records, 1000):
                 logger.trace(f"Sending record: {record}")
                 posts.append(client.post(SERVER_URL, json=record, timeout=TIMEOUT))
+            t0 = time.perf_counter()
             for record in asyncio.as_completed(posts):
                 try:
                     response = await record
@@ -195,8 +215,15 @@ async def send_records(records: list[dict], refresh: str | None = None) -> None:
                         e,
                         type(e).__name__,
                     )
+            elapsed = time.perf_counter() - t0
+            if SKETCH_INGEST_LOG_PATH:
+                log_record(log_path=SKETCH_INGEST_LOG_PATH, epoch=global_epoch, duration_ms=elapsed * 1000, num_rows_ingested=num_rows)
         if ES_INGEST_ENABLED:
+            t0 = time.perf_counter()
             await send_es_bulk(client, records, refresh=refresh)
+            elapsed = time.perf_counter() - t0
+            if ES_INGEST_LOG_PATH:
+                log_record(log_path=ES_INGEST_LOG_PATH, epoch=global_epoch, duration_ms=elapsed * 1000, num_rows_ingested=num_rows)
 
 # Random seed for reproducibility.
 SEED = 42
@@ -236,13 +263,17 @@ async def ingest(assignments: list[dict]):
     running_tasks = structure(assignments, list[RunningTask])
     logger.debug(f"Ingesting assignments: {running_tasks}")
 
-    running_tasks = {rt.task.task_id: rt for rt in running_tasks}
-    emulator.emulate_metrics(running_tasks=running_tasks)
-    await force_es_refresh()
+    if running_tasks:
+        running_tasks = {rt.task.task_id: rt for rt in running_tasks}
+        emulator.emulate_metrics(running_tasks=running_tasks)
+        await force_es_refresh()
+    else:
+        logger.warning("No running tasks ingested.")
 
     # Increment epoch after processing each batch of assignments to simulate time progression in the emulator.
     global global_epoch
     global_epoch += 1
+    logger.info(f"Advanced to epoch {global_epoch}. Ingested {len(running_tasks)} running tasks.")
 
     return {"message": "Tasks ingested successfully."}
 
@@ -259,8 +290,6 @@ async def ingest_rows(rows: list[dict]):
 
 async def force_es_refresh() -> None:
     # Push metrics immediately and wait for ES refresh so queries can see them.
-    if not ES_INGEST_ENABLED or not ES_URL:
-        return
     records = list(emulator.create_metrics_records())
     if not records:
         return
@@ -301,6 +330,9 @@ class TaskMetrics:
         size = size_s * data_rate # Actual number of datapoints to generate based on epoch length and data rate.
         start = offset / self.projected_duration
         stop = (offset + size_s) / self.projected_duration
+
+        if size <= 0:
+            return None
 
         cpu_slice, cpu_duration_factor = self.cpu_usage.generate(start=start, stop=stop, num=size, value=allocated_cpu)
         memory_slice, memory_duration_factor = self.memory_usage.generate(start=start, stop=stop, num=size, value=allocated_memory)
@@ -544,9 +576,6 @@ class TaskMetricsEmulator:
                     data_rate=self.data_rate)
                 
                 if metrics_buffers is None:
-                    logger.warning(
-                        f"Task {t_id} has completed its duration. Skipping metric emission."
-                    )
                     continue
                 metrics[t_id] = metrics_buffers
 
@@ -574,6 +603,8 @@ class TaskMetricsEmulator:
             logger.info(
                 f"Node {node_id} used CPU: {node.used_cpu} ({node.used_cpu / node.cpu_capacity}), used Memory: {node.used_memory} ({node.used_memory / node.memory_capacity}), used Network: {node.used_network} ({node.used_network / network_capacity if network_capacity != 0.0 else 'NA'})"
             )
+            
+        logger.info(f"Emitting metrics for {len(metrics)} tasks across {len(nodes_to_tasks)} nodes.")
 
         return metrics
 
@@ -631,12 +662,22 @@ if __name__ == "__main__":
     parser.add_argument("--epoch-length-s", type=float, default=60.0)
     parser.add_argument("--data-rate", type=int, default=1)
     parser.add_argument("--log-level", type=str, default="INFO")
+    parser.add_argument("--sketch-ingest-log-path", type=str, default=None)
+    parser.add_argument("--es-ingest-log-path", type=str, default=None)
+    parser.add_argument("--no-sketch-ingest", action='store_true')
+    parser.add_argument("--no-es-ingest", action='store_true')
+
     args = parser.parse_args()
 
     # Start the FastAPI telemetry emulator.
     emulator = TaskMetricsEmulator.create_emulator(epoch_length_s=args.epoch_length_s, data_rate=args.data_rate)
 
     get_current_time = create_virtual_clock(epoch_length_s=args.epoch_length_s)
+
+    SKETCH_INGEST_LOG_PATH = args.sketch_ingest_log_path
+    ES_INGEST_LOG_PATH = args.es_ingest_log_path
+    SKETCH_INGEST_ENABLED = not args.no_sketch_ingest
+    ES_INGEST_ENABLED = not args.no_es_ingest
 
     logger.remove()
     logger.add(sys.stderr, level=args.log_level.upper())
