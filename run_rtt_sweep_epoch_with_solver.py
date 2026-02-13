@@ -49,8 +49,12 @@ DEFAULT_TRUNCATE_SERVER_LOG = False
 @dataclass
 class SweepResult:
     epoch: int
-    server_rtt_ms: float
-    es_rtt_ms: float
+    server_query_ms: float
+    server_solver_ms: float
+    server_total_ms: float
+    es_query_ms: float
+    es_solver_ms: float
+    es_total_ms: float
 
 
 def parse_args() -> argparse.Namespace:
@@ -129,6 +133,24 @@ def parse_args() -> argparse.Namespace:
         help="Run the Python solver once before the epoch sweep",
     )
     parser.add_argument(
+        "--solver-task-count",
+        type=int,
+        default=0,
+        help="Number of solver tasks to include (0 means all)",
+    )
+    parser.add_argument(
+        "--solver-node-count",
+        type=int,
+        default=0,
+        help="Number of solver nodes to include (0 means all)",
+    )
+    parser.add_argument(
+        "--query-node-count",
+        type=int,
+        default=0,
+        help="Number of nodes to query (0 means all)",
+    )
+    parser.add_argument(
         "--solver-data-dir",
         type=str,
         default=str(SOLVER_DUMMY_DIR),
@@ -182,12 +204,7 @@ def _load_solver_assets(data_dir: Path):
     task_graph = build_task_graph(tasks)
 
     base_topology = NetworkTopology(nodes.values(), edges.values())
-    paths = {}
-    from itertools import combinations
-
-    for n_i, n_j in combinations(base_topology.nodes, 2):
-        if base_topology.has_path(n_i, n_j):
-            paths[(n_i, n_j)] = [base_topology.find_shortest_path(n_i, n_j)]
+    paths = _build_paths(base_topology)
 
     return {
         "nodes": nodes,
@@ -195,6 +212,7 @@ def _load_solver_assets(data_dir: Path):
         "tasks": tasks,
         "task_graph": task_graph,
         "paths": paths,
+        "build_task_graph": build_task_graph,
         "NetworkTopology": NetworkTopology,
         "TaskScheduler": TaskScheduler,
         "Node": Node,
@@ -230,6 +248,49 @@ def _extract_es_usage(es_json: dict) -> Dict[str, Dict[str, float]]:
     return usage
 
 
+def _build_paths(topology) -> dict:
+    paths = {}
+    from itertools import combinations
+
+    for n_i, n_j in combinations(topology.nodes, 2):
+        if topology.has_path(n_i, n_j):
+            paths[(n_i, n_j)] = [topology.find_shortest_path(n_i, n_j)]
+    return paths
+
+
+def _select_first_n(items: List[str], count: int) -> List[str]:
+    if count <= 0 or count >= len(items):
+        return list(items)
+    return list(items[:count])
+
+
+def _build_solver_context(assets: dict, task_count: int, node_count: int) -> dict:
+    node_ids = _select_first_n(sorted(assets["nodes"].keys()), node_count)
+    task_ids = _select_first_n(sorted(assets["tasks"].keys()), task_count)
+
+    nodes = {node_id: assets["nodes"][node_id] for node_id in node_ids}
+    tasks = {task_id: assets["tasks"][task_id] for task_id in task_ids}
+
+    node_set = set(nodes.keys())
+    edges = {
+        edge_id: edge
+        for edge_id, edge in assets["edges"].items()
+        if edge_id[0] in node_set and edge_id[1] in node_set
+    }
+
+    topology = assets["NetworkTopology"](nodes.values(), edges.values())
+    paths = _build_paths(topology)
+    task_graph = assets["build_task_graph"](tasks)
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "tasks": tasks,
+        "task_graph": task_graph,
+        "paths": paths,
+    }
+
+
 def _build_nodes_with_usage(
     base_nodes: Dict[str, object],
     usage: Dict[str, Dict[str, float]],
@@ -250,12 +311,12 @@ def _build_nodes_with_usage(
     return updated
 
 
-def run_solver_for_usage(usage: Dict[str, Dict[str, float]], assets: dict) -> float:
-    nodes = _build_nodes_with_usage(assets["nodes"], usage, assets["Node"])
-    edges = assets["edges"]
-    tasks = assets["tasks"]
-    task_graph = assets["task_graph"]
-    paths = assets["paths"]
+def run_solver_for_usage(usage: Dict[str, Dict[str, float]], assets: dict, context: dict) -> float:
+    nodes = _build_nodes_with_usage(context["nodes"], usage, assets["Node"])
+    edges = context["edges"]
+    tasks = context["tasks"]
+    task_graph = context["task_graph"]
+    paths = context["paths"]
 
     topology = assets["NetworkTopology"](nodes.values(), edges.values())
     solver = assets["TaskScheduler"](network=topology)
@@ -681,19 +742,37 @@ def plot_results(results: List[SweepResult], out_path: Path) -> None:
     import matplotlib.pyplot as plt
 
     xs = [r.epoch for r in results]
-    server = [r.server_rtt_ms for r in results]
-    es = [r.es_rtt_ms for r in results]
+    server_query = [r.server_query_ms for r in results]
+    server_solver = [r.server_solver_ms for r in results]
+    server_total = [r.server_total_ms for r in results]
+    es_query = [r.es_query_ms for r in results]
+    es_solver = [r.es_solver_ms for r in results]
+    es_total = [r.es_total_ms for r in results]
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(xs, server, label="Server RTT (ms)")
-    plt.plot(xs, es, label="ES RTT (ms)")
+    plt.figure(figsize=(11, 7))
+    plt.plot(xs, server_query, label="Server query (ms)")
+    plt.plot(xs, server_solver, label="Server solver (ms)")
+    plt.plot(xs, es_query, label="ES query (ms)")
+    plt.plot(xs, es_solver, label="ES solver (ms)")
     plt.xlabel("Epoch")
-    plt.ylabel("RTT (ms)")
-    plt.title("Query RTT vs Epoch")
+    plt.ylabel("Time (ms)")
+    plt.title("Query + Solver Time vs Epoch")
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(out_path)
+
+    total_plot = out_path.with_name(f"{out_path.stem}_total{out_path.suffix}")
+    plt.figure(figsize=(11, 7))
+    plt.plot(xs, server_total, label="Server total (ms)")
+    plt.plot(xs, es_total, label="ES total (ms)")
+    plt.xlabel("Epoch")
+    plt.ylabel("Time (ms)")
+    plt.title("Total Time vs Epoch")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(total_plot)
 
 
 def main() -> None:
@@ -712,7 +791,23 @@ def main() -> None:
     csv_file = open(out_csv, csv_mode, newline="")
     writer = csv.writer(csv_file)
     if args.truncate_csv or not csv_exists:
-        writer.writerow(["timestamp_utc", "epoch", "server_rtt_ms", "es_rtt_ms"])
+        writer.writerow(
+            [
+                "timestamp_utc",
+                "epoch",
+                "server_query_ms",
+                "server_solver_ms",
+                "server_total_ms",
+                "es_query_ms",
+                "es_solver_ms",
+                "es_total_ms",
+                "solver_task_count",
+                "solver_node_count",
+                "query_node_count",
+                "all_nodes_count",
+                "all_tasks_count",
+            ]
+        )
         csv_file.flush()
 
     reset_es_index(
@@ -734,6 +829,7 @@ def main() -> None:
         )
 
         assets = None
+        solver_context = None
         if args.run_solver:
             solver_dir = Path(args.solver_data_dir)
             print(f"Loading solver inputs from {solver_dir} ...")
@@ -741,6 +837,28 @@ def main() -> None:
 
         if args.run_solver:
             print("Solver will run once per epoch after each query.")
+
+            solver_context = _build_solver_context(
+                assets,
+                task_count=args.solver_task_count,
+                node_count=args.solver_node_count,
+            )
+            print(
+                "Solver setup: "
+                f"tasks={len(solver_context['tasks'])}/{len(assets['tasks'])} | "
+                f"nodes={len(solver_context['nodes'])}/{len(assets['nodes'])}"
+            )
+
+        query_nodes = _select_first_n(nodes, args.query_node_count)
+        if args.solver_node_count > 0 and args.query_node_count > 0:
+            if args.query_node_count > args.solver_node_count:
+                print(
+                    "Warning: query_node_count exceeds solver_node_count; "
+                    "clamping query_node_count to solver_node_count."
+                )
+                query_nodes = _select_first_n(nodes, args.solver_node_count)
+        if args.query_node_count > 0:
+            print(f"Query setup: nodes={len(query_nodes)}/{len(nodes)}")
 
         for epoch in range(args.start_epoch, args.end_epoch + 1):
             print(f"\n=== Epoch {epoch} ===")
@@ -777,7 +895,7 @@ def main() -> None:
 
             server_json, server_rtt = query_server_batch(
                 args.server_url,
-                nodes,
+                query_nodes,
                 args.connect_timeout,
                 args.query_timeout,
             )
@@ -785,7 +903,7 @@ def main() -> None:
                 args.es_url,
                 args.es_index,
                 args.es_api_key,
-                nodes,
+                query_nodes,
                 args.connect_timeout,
                 args.es_timeout,
                 epoch,
@@ -793,11 +911,11 @@ def main() -> None:
 
             server_solver_ms = 0.0
             es_solver_ms = 0.0
-            if args.run_solver and assets is not None:
+            if args.run_solver and assets is not None and solver_context is not None:
                 server_usage = _extract_server_usage(server_json)
                 es_usage = _extract_es_usage(es_json)
-                server_solver_ms = run_solver_for_usage(server_usage, assets)
-                es_solver_ms = run_solver_for_usage(es_usage, assets)
+                server_solver_ms = run_solver_for_usage(server_usage, assets, solver_context)
+                es_solver_ms = run_solver_for_usage(es_usage, assets, solver_context)
 
             max_diff = compare_results(server_json, es_json)
             server_rtt_total = server_rtt + server_solver_ms
@@ -805,8 +923,12 @@ def main() -> None:
             results.append(
                 SweepResult(
                     epoch=epoch,
-                    server_rtt_ms=server_rtt_total,
-                    es_rtt_ms=es_rtt_total,
+                    server_query_ms=server_rtt,
+                    server_solver_ms=server_solver_ms,
+                    server_total_ms=server_rtt_total,
+                    es_query_ms=es_rtt,
+                    es_solver_ms=es_solver_ms,
+                    es_total_ms=es_rtt_total,
                 )
             )
             print(
@@ -815,14 +937,23 @@ def main() -> None:
                 f"max diff >=2%: {max_diff:.2f}%"
             )
             print("comparisons:")
-            for line in format_compact(server_json, es_json, nodes):
+            for line in format_compact(server_json, es_json, query_nodes):
                 print(line)
             writer.writerow(
                 [
                     datetime.now(timezone.utc).isoformat(),
                     epoch,
+                    f"{server_rtt:.4f}",
+                    f"{server_solver_ms:.4f}",
                     f"{server_rtt_total:.4f}",
+                    f"{es_rtt:.4f}",
+                    f"{es_solver_ms:.4f}",
                     f"{es_rtt_total:.4f}",
+                    args.solver_task_count,
+                    args.solver_node_count,
+                    args.query_node_count,
+                    len(nodes),
+                    len(assets["tasks"]) if assets is not None else 0,
                 ]
             )
             csv_file.flush()
@@ -831,7 +962,8 @@ def main() -> None:
         csv_file.close()
 
     plot_results(results, out_plot)
-    print(f"\nWrote {out_csv} and {out_plot}")
+    total_plot = out_plot.with_name(f"{out_plot.stem}_total{out_plot.suffix}")
+    print(f"\nWrote {out_csv}, {out_plot}, and {total_plot}")
 
 
 if __name__ == "__main__":
