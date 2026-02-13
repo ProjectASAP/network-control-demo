@@ -57,6 +57,15 @@ class SweepResult:
     es_total_ms: float
 
 
+@dataclass
+class SolverResult:
+    elapsed_ms: float
+    objective_value: float
+    assignments: int
+    unassigned: int
+    status_code: int
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--start-epoch", type=int, default=DEFAULT_START_EPOCH, help="Start epoch id")
@@ -311,7 +320,11 @@ def _build_nodes_with_usage(
     return updated
 
 
-def run_solver_for_usage(usage: Dict[str, Dict[str, float]], assets: dict, context: dict) -> float:
+def run_solver_for_usage(
+    usage: Dict[str, Dict[str, float]],
+    assets: dict,
+    context: dict,
+) -> SolverResult:
     nodes = _build_nodes_with_usage(context["nodes"], usage, assets["Node"])
     edges = context["edges"]
     tasks = context["tasks"]
@@ -336,7 +349,20 @@ def run_solver_for_usage(usage: Dict[str, Dict[str, float]], assets: dict, conte
         f"status: {status_code}"
     )
     print(f"solver time: {elapsed_ms:.2f} ms")
-    return elapsed_ms
+    return SolverResult(
+        elapsed_ms=elapsed_ms,
+        objective_value=float(objective_value),
+        assignments=len(assignment),
+        unassigned=len(leftover),
+        status_code=int(status_code),
+    )
+
+
+def _solver_compare_csv_name(task_count: int, solver_node_count: int, query_node_count: int) -> str:
+    return (
+        "solver_compare_"
+        f"tasks{task_count}_solvernodes{solver_node_count}_querynodes{query_node_count}.csv"
+    )
 
 
 def parse_nodes_config(path: str) -> List[str]:
@@ -818,6 +844,9 @@ def main() -> None:
         args.es_timeout,
     )
 
+    solver_compare_file = None
+    solver_compare_writer = None
+
     server_log_path = None if args.server_log == "-" else Path(args.server_log)
     proc = start_server(server_log_path, truncate_log=args.truncate_server_log)
     try:
@@ -848,6 +877,33 @@ def main() -> None:
                 f"tasks={len(solver_context['tasks'])}/{len(assets['tasks'])} | "
                 f"nodes={len(solver_context['nodes'])}/{len(assets['nodes'])}"
             )
+
+            solver_compare_path = Path(
+                _solver_compare_csv_name(
+                    args.solver_task_count,
+                    args.solver_node_count,
+                    args.query_node_count,
+                )
+            )
+            solver_compare_file = open(solver_compare_path, "w", newline="")
+            solver_compare_writer = csv.writer(solver_compare_file)
+            solver_compare_writer.writerow(
+                [
+                    "timestamp_utc",
+                    "epoch",
+                    "server_objective",
+                    "server_assignments",
+                    "server_unassigned",
+                    "server_status",
+                    "server_solver_ms",
+                    "es_objective",
+                    "es_assignments",
+                    "es_unassigned",
+                    "es_status",
+                    "es_solver_ms",
+                ]
+            )
+            solver_compare_file.flush()
 
         query_nodes = _select_first_n(nodes, args.query_node_count)
         if args.solver_node_count > 0 and args.query_node_count > 0:
@@ -914,8 +970,28 @@ def main() -> None:
             if args.run_solver and assets is not None and solver_context is not None:
                 server_usage = _extract_server_usage(server_json)
                 es_usage = _extract_es_usage(es_json)
-                server_solver_ms = run_solver_for_usage(server_usage, assets, solver_context)
-                es_solver_ms = run_solver_for_usage(es_usage, assets, solver_context)
+                server_result = run_solver_for_usage(server_usage, assets, solver_context)
+                es_result = run_solver_for_usage(es_usage, assets, solver_context)
+                server_solver_ms = server_result.elapsed_ms
+                es_solver_ms = es_result.elapsed_ms
+                if solver_compare_writer is not None and solver_compare_file is not None:
+                    solver_compare_writer.writerow(
+                        [
+                            datetime.now(timezone.utc).isoformat(),
+                            epoch,
+                            f"{server_result.objective_value:.6f}",
+                            server_result.assignments,
+                            server_result.unassigned,
+                            server_result.status_code,
+                            f"{server_result.elapsed_ms:.4f}",
+                            f"{es_result.objective_value:.6f}",
+                            es_result.assignments,
+                            es_result.unassigned,
+                            es_result.status_code,
+                            f"{es_result.elapsed_ms:.4f}",
+                        ]
+                    )
+                    solver_compare_file.flush()
 
             max_diff = compare_results(server_json, es_json)
             server_rtt_total = server_rtt + server_solver_ms
@@ -960,6 +1036,8 @@ def main() -> None:
     finally:
         stop_server(proc)
         csv_file.close()
+        if solver_compare_file is not None:
+            solver_compare_file.close()
 
     plot_results(results, out_plot)
     total_plot = out_plot.with_name(f"{out_plot.stem}_total{out_plot.suffix}")
