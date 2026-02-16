@@ -19,3 +19,12 @@ python3 run_rtt_sweep_epoch.py \
   --truncate-csv \
   --truncate-server-log \
   2>&1 | tee run_rtt_sweep.log
+
+python3 run_rtt_sweep_epoch_with_solver.py \
+  --run-solver \
+  --solver-data-dir solver_experimental/dummy_data \
+  --out-csv rtt_results_epoch_with_solver.csv \
+  --server-log logs/server_epoch.log \
+  --truncate-csv \
+  --truncate-server-log \
+  2>&1 | tee run_rtt_sweep.log
