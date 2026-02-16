@@ -5,3 +5,4 @@ __pycache__/
 .venv/
 dummy_data/
 logs/
+.claude/

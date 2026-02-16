@@ -12,15 +12,14 @@ A proof-of-concept **network control system** that pairs a high-performance Rust
 
 ```
 .
-├── scripts/                     # Wrappers for RTT/plot scripts
+├── scripts/                     # RTT sweep and plotting scripts
 ├── data/                        # Generated benchmark CSV outputs
 ├── plots/                       # Generated benchmark PNG plots
 ├── logs/                        # Runtime logs for RTT sweep scripts (gitignored)
 ├── single_node_server/          # Rust HTTP server for metric aggregation
 ├── solver_experimental/         # Python solver, telemetry emulator, benchmarking
-├── *.py                         # Root-level source scripts (wrapped by scripts/)
+├── *.py                         # Root-level utility scripts
 ├── evaluate_demo.sh             # Full pipeline orchestrator
-├── run_rtt_sweep_script.sh      # Compatibility wrapper to scripts/run_rtt_sweep_all.sh
 └── CLAUDE.md
 ```
 
@@ -105,24 +104,18 @@ uv run main.py --node-path dummy_data/nodes.jsonl --edge-path dummy_data/edges.j
 | `generate_cluster_metrics_running_tasks.py` | Generates realistic metrics from solver topology data (~31 clusters) |
 | `reset_es_index.py` | Resets Elasticsearch `cluster-metrics` index with field mappings |
 | `reset_and_ingest.py` | Resets ES index + ingests metrics from CSV |
-| `rtt_sweep_common.py` | Shared infrastructure for RTT sweep scripts (ES helpers, server lifecycle, querying, comparison, argparse) |
-| `run_rtt_sweep.py` | RTT benchmark: server vs ES, configurable row counts and batch sizes |
-| `run_rtt_sweep_epoch.py` | Epoch-based RTT sweep (measures RTT changes across data epochs) |
-| `run_rtt_sweep_epoch_with_solver.py` | RTT sweep + solver integration per epoch |
-| `plot_query_rtt.py` | Plots query RTT from `query_rtt.csv` |
-| `plot_epoch_cumulative.py` | Cumulative RTT analysis across epochs |
-| `plot_solver_comparison.py` | Compares multiple solver runs (reads `rtt_solver_*.csv`) |
 
-### `scripts/` wrappers
+### `scripts/` benchmark scripts
 
 | Script | Purpose |
 |---|---|
-| `scripts/run_rtt_sweep.py` | Wrapper for `run_rtt_sweep.py` |
-| `scripts/run_rtt_sweep_epoch.py` | Wrapper for `run_rtt_sweep_epoch.py` |
-| `scripts/run_rtt_sweep_epoch_with_solver.py` | Wrapper for `run_rtt_sweep_epoch_with_solver.py` |
-| `scripts/plot_query_rtt.py` | Wrapper for `plot_query_rtt.py` |
-| `scripts/plot_epoch_cumulative.py` | Wrapper for `plot_epoch_cumulative.py` |
-| `scripts/plot_solver_comparison.py` | Wrapper for `plot_solver_comparison.py` |
+| `scripts/run_rtt_sweep.py` | RTT benchmark: server vs ES, configurable row counts and batch sizes |
+| `scripts/run_rtt_sweep_epoch.py` | Epoch-based RTT sweep |
+| `scripts/run_rtt_sweep_epoch_with_solver.py` | Epoch-based RTT sweep with solver timings |
+| `scripts/rtt_sweep_common.py` | Shared helpers for RTT sweeps |
+| `scripts/plot_query_rtt.py` | Plot query RTT logs |
+| `scripts/plot_epoch_cumulative.py` | Plot cumulative epoch RTT |
+| `scripts/plot_solver_comparison.py` | Plot solver comparison graphs |
 | `scripts/run_rtt_sweep_all.sh` | Runs all three RTT sweeps with `data/` + `plots/` + `logs/` defaults |
 
 ### Benchmark output convention
@@ -130,8 +123,6 @@ uv run main.py --node-path dummy_data/nodes.jsonl --edge-path dummy_data/edges.j
 - **CSV output** defaults to `data/`
 - **Plot output** defaults to `plots/`
 - **Log output** defaults to `logs/`
-- RTT sweep scripts support `--legacy-root-output` (enabled by default) to also copy outputs to legacy root-level names (for backwards compatibility)
-- Disable compatibility copies with `--no-legacy-root-output`
 
 ### `evaluate_demo.sh` — Full pipeline
 
