@@ -25,15 +25,22 @@ uv run emulate_telemetry.py
 
 # Benchmarks
 uv run bench_queries.py
+
+# Epoch-based sweep (no emulator needed; ingests directly to server + ES)
+uv run epoch_sweep.py --start-epoch 1 --end-epoch 5 --rows-per-epoch 10000 \
+  --solver-task-count 5 --solver-node-count 10
 ```
 
 `run_main.sh` starts `emulate_telemetry.py` in the background, then runs `main.py`.
+
+`epoch_sweep.py` is a self-contained entry point that generates synthetic data, ingests directly to both the Sketch server and ES (bypassing the emulator), queries both backends, runs the solver, and compares results — similar to `scripts/run_rtt_sweep_epoch_with_solver.py` but using solver_experimental's native query and solver infrastructure.
 
 ## Directory Structure
 
 ```
 solver_experimental/
 ├── main.py                    # Orchestrator: event loop, solver invocation, metric comparison
+├── epoch_sweep.py             # Epoch-based sweep: direct ingest + query + solver (no emulator)
 ├── config.py                  # All env-var-based configuration
 ├── emulate_telemetry.py       # FastAPI sidecar: generates and sends synthetic metrics
 ├── es_query.py                # Builds queries for both backends, compares results
@@ -105,6 +112,21 @@ CSV format also supported (peer data semicolon-delimited in CSV).
    - Logs RTT, e2e timing, and metric comparisons to CSVs
    - Pushes assignments back to telemetry emulator (`POST /ingest`)
 5. Carries over unassigned tasks (with retry limit of 5 before marking as failed)
+
+## How `epoch_sweep.py` Works
+
+A simpler epoch-based alternative to `main.py` that does not require the telemetry emulator. For each epoch:
+
+1. Generates synthetic metric rows (cpu, memory, network per node/task) using a seeded RNG
+2. Ingests directly to both the Sketch server (`POST /` columnar format) and ES (bulk API)
+3. Queries both backends via `fetch_node_usage()` from `es_query.py`
+4. Updates `node.used_cpu/memory/network` from cumulative query results
+5. Runs `TaskScheduler.solve()` with sketch-backed usage, then again with ES-backed usage
+6. Compares backend results and logs timings to `e2e.csv`, `query_rtt.csv`, `query_compare.csv`
+
+Key CLI flags: `--start-epoch`, `--end-epoch`, `--rows-per-epoch`, `--batch-size`, `--solver-task-count`, `--solver-node-count`, `--query-node-count`.
+
+Assumes the Sketch server and ES are already running (does not manage server lifecycle).
 
 ## Solver (`scheduler/solver.py`)
 
@@ -190,3 +212,8 @@ No tests for the PuLP scheduler (`scheduler/`) currently.
 | Formulation | Minimize reassignments, maximize placements | Similar + migration penalties |
 | Path routing | Single path per node pair (TODO: multi-path) | Flow variables |
 | Status | Active, integrated with query/ingest pipeline | More mature formulation, not wired into main loop |
+
+## Known Issues
+
+- **ES is currently unavailable.** `epoch_sweep.py` detects this at startup (`check_es_available()`) and runs in sketch-only mode — ES ingestion and queries are skipped, comparison metrics are not produced. The root cause is unresolved; all ES-dependent features (parallel benchmark, backend comparison, ES-backed solver pass) are effectively disabled.
+- **Node ID mismatch between server and dummy data.** The Rust server's `nodes-config.yaml` defines N001–N030 (30 nodes), but `dummy_data/nodes.jsonl` contains N000–N300 (301 nodes). Ingestion of rows referencing nodes outside N001–N030 fails with a 500 from the server. `epoch_sweep.py` currently logs these as warnings and continues, but most batch ingestions will fail, resulting in sparse/empty sketch data.
