@@ -31,11 +31,8 @@ from config import (
 from logging_utils import log_e2e, log_node_metric_comparisons, log_record
 
 from es_query import (
-    fetch_node_usage,
     fetch_task_usage,
-    compare_node_metrics,
     check_es_available,
-    NodeMetricsSnapshot,
 )
 
 INGEST_POST_TIMEOUT = float(os.getenv("INGEST_POST_TIMEOUT_SECONDS", "30"))
@@ -142,16 +139,10 @@ def assign_tasks(args: AppConfig):
     # Initialize the solver and benchmarking timers.
     solver = TaskScheduler(network=network)
 
-    # Load query config and toggle benchmark modes.
-    parallel_enabled = PARALLEL_BENCHMARK_ENABLED
-    consistency_tolerance = CONSISTENCY_CHECK_TOLERANCE
-
     # Decide whether to run the ES comparison path.
     es_available = check_es_available()
-    if not es_available:
-        logger.warning("Direct ES backend unavailable; running sketch-only benchmark.")
-    if not parallel_enabled:
-        logger.info("Parallel benchmark disabled; running sketch-only benchmark.")
+    if not es_available and args.use_es:
+        logger.warning("Direct ES backend can not be reached.")
 
     epoch_length_s = args.epoch_length_s
     with httpx.Client(timeout=5, base_url=args.emulator_url) as client:
