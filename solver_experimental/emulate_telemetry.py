@@ -136,54 +136,6 @@ async def send_es_bulk(
             )
 
 
-def _record_from_rows(rows: list[dict]) -> dict:
-    # Convert row dictionaries into the sketch/ES record schema.
-    tasks: list[str] = []
-    clusters: list[str] = []
-    cpu: list[float] = []
-    memory: list[float] = []
-    network: list[float] = []
-    durations: list[float] = []
-    timestamp_ms: list[int] = []
-    timestamps: list[str] = []
-
-    for row in rows:
-        task_id = row.get("task")
-        cluster_id = row.get("cluster")
-        if task_id is None or cluster_id is None:
-            continue
-        tasks.append(str(task_id))
-        clusters.append(str(cluster_id))
-        cpu.append(float(row.get("cpu_cores", 0.0)))
-        memory.append(float(row.get("memory_gb", 0.0)))
-        network.append(float(row.get("network_mbps", 0.0)))
-        durations.append(float(row.get("estimated_duration", 0.0)))
-
-        ts_ms = row.get("timestamp_ms")
-        ts = row.get("timestamp") or row.get("@timestamp")
-        if ts_ms is None and ts:
-            try:
-                parsed = dt.datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-                ts_ms = int(parsed.timestamp() * 1000)
-            except ValueError:
-                ts_ms = None
-        if ts_ms is None:
-            ts_ms = int(time.time() * 1000)
-        timestamp_ms.append(int(ts_ms))
-        ts_iso = dt.datetime.fromtimestamp(ts_ms / 1000.0, tz=dt.timezone.utc)
-        timestamps.append(
-            ts_iso.isoformat(timespec="milliseconds").replace("+00:00", "Z")
-        )
-
-    return {
-        "task": tasks,
-        "cluster": clusters,
-        "cpu_cores": cpu,
-        "memory_gb": memory,
-        "network_mbps": network
-    }
-
-
 async def send_records(records: list[dict], refresh: str | None = None) -> None:
     # Push records to sketch and ES (optionally waiting for refresh).
     if not records:
@@ -278,16 +230,6 @@ async def ingest(assignments: list[dict]):
     return {"message": "Tasks ingested successfully."}
 
 
-@app.post("/ingest_rows")
-async def ingest_rows(rows: list[dict]):
-    # Receive raw metric rows and forward to sketch/ES immediately.
-    if not rows:
-        return {"message": "No rows provided.", "count": 0}
-    record = _record_from_rows(rows)
-    await send_records([record], refresh="wait_for")
-    return {"message": "Rows ingested successfully.", "count": len(rows)}
-
-
 async def force_es_refresh() -> None:
     # Push metrics immediately and wait for ES refresh so queries can see them.
     records = list(emulator.create_metrics_records())
@@ -334,9 +276,9 @@ class TaskMetrics:
         if size <= 0:
             return None
 
-        cpu_slice, cpu_duration_factor = self.cpu_usage.generate(start=start, stop=stop, num=size, value=allocated_cpu)
-        memory_slice, memory_duration_factor = self.memory_usage.generate(start=start, stop=stop, num=size, value=allocated_memory)
-        network_slice, network_duration_factor = self.network_usage.generate(start=start, stop=stop, num=size, value=allocated_network)
+        cpu_slice, cpu_duration_factor = self.cpu_usage.generate(start=start, stop=stop, num=size, max_value=allocated_cpu)
+        memory_slice, memory_duration_factor = self.memory_usage.generate(start=start, stop=stop, num=size, max_value=allocated_memory)
+        network_slice, network_duration_factor = self.network_usage.generate(start=start, stop=stop, num=size, max_value=allocated_network)
 
         # Pad to same length to send to server and maintain temporal consistency.
         max_buffer_length = int(epoch_length_s * data_rate)
@@ -412,7 +354,7 @@ class MetricGenerator:
     
         return cls(a=a, b=b, c=c, base_value=base_value)
 
-    def generate(self, stop: float = 1.0, start: float = 0.0, num: int = 60, value: float = 1.0) -> tuple[np.ndarray, float]:
+    def generate(self, stop: float = 1.0, start: float = 0.0, num: int = 60, max_value: float = 1.0) -> tuple[np.ndarray, float]:
         # Generate a noisy sinusoidal time series around the base value.
         """
         Generates a timeseries of emulated metric values over a specified range of the metric duration. Also returns the adjusted duration factor, the
@@ -422,7 +364,7 @@ class MetricGenerator:
             start: Start time (in [0, 1]) of the metric duration.
             stop: Stop time (in [0, 1]) of the metric duration.
             num: Number of samples to generate.
-            value: Represents the nominal amount of resources allocated to the task.
+            max_value: Represents the nominal amount of resources allocated to the task.
         Returns:
             Array of emulated metric values and the adjusted duration factor.
         """
@@ -444,20 +386,20 @@ class MetricGenerator:
         buffer = self.base_value * (scale_factor + noise)
 
         # Reduce projected duration when usage is higher than allocated value.
-        min_arr = np.clip(buffer, a_min=value, a_max=None)
-        weight = min_arr.mean() * (stop - start) + value * (1.0 - (stop - start))
-        resource_usage = value / weight
+        min_arr = np.clip(buffer, a_min=max_value, a_max=None)
+        weight = min_arr.mean() * (stop - start) + max_value * (1.0 - (stop - start))
+        resource_usage = max_value / weight
 
         # Calculate slow down using Amdahl's law with the observed value scale. Use for duration adjustment.
         empirical_speed_up = amdahl_factor(self.p_scalable, resource_usage)
         duration_adjust_factor = self.duration_adjust_factor(speed_up=empirical_speed_up, stop=stop)
 
-        clipped_buffer = np.clip(buffer, a_min=0, a_max=value)
+        clipped_buffer = np.clip(buffer, a_min=0, a_max=max_value)
 
         return clipped_buffer, duration_adjust_factor
     
     def duration_adjust_factor(self, speed_up: float = 1.0, stop: float = 1.0) -> float:
-        # Compute scale factor to adjust the projected duration for remainder of task based on the speed-up factor.
+        # Compute scale factor to adjust the projected duration for remainder of task based on the "speed-up" factor.
         interval = 1.0 - stop
         adjusted_interval = interval / round(speed_up, 3)
         adjusted_duration = stop + adjusted_interval
@@ -583,7 +525,7 @@ class TaskMetricsEmulator:
                 total_memory_usage += metrics_buffers.memory_usage
                 total_network_usage += metrics_buffers.network_usage
 
-                # # Adjust task's projected duration based on speed-up factors.
+                # Adjust task projected duration based on resource usage (adjustment is side effect in generate_buffers).
                 new_duration = task_metrics.projected_duration
                 logger.info(f'Updated projected duration for task {t_id}: {old_duration} -> {new_duration} s')
 
@@ -610,7 +552,7 @@ class TaskMetricsEmulator:
 
     def create_metrics_records(self) -> Iterable[dict]:
         """
-        Creates serializable records from metrics data.
+        Creates serializable records from metrics data. These are in column oriented format (except for the epoch field which is scalar).
 
         Args:
             metrics: Dictionary mapping task ids to their metrics.
