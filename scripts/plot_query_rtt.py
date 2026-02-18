@@ -5,6 +5,8 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -15,13 +17,26 @@ def parse_args() -> argparse.Namespace:
         default=100,
         help="Rows per second in generated data",
     )
+    parser.add_argument(
+        "--in-csv",
+        type=str,
+        default="solver_experimental/query_rtt.csv",
+        help="Input CSV with query RTT logs",
+    )
+    parser.add_argument(
+        "--out-plot",
+        type=str,
+        default="plots/query_rtt_plot.png",
+        help="Output plot filename",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    root = Path(__file__).resolve().parent
-    path = root / "solver_experimental" / "query_rtt.csv"
+    path = Path(args.in_csv)
+    if not path.is_absolute():
+        path = REPO_ROOT / path
     server_ms = []
     es_ms = []
     x_server = []
@@ -54,9 +69,10 @@ def main() -> None:
     )
     plt.legend()
     plt.tight_layout()
-    out_path = Path(
-        f"solver_experimental/query_rtt_plot_nodes{args.nodes}_rps{args.rows_per_second}.png"
-    )
+    out_path = Path(args.out_plot)
+    if not out_path.is_absolute():
+        out_path = REPO_ROOT / out_path
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(out_path, dpi=150)
     print(f"Wrote {out_path}")
 

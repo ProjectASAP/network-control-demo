@@ -8,19 +8,21 @@ import csv
 from pathlib import Path
 from typing import List, Tuple
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--in-csv",
         type=str,
-        default="rtt_results_epoch.csv",
+        default="data/rtt_results_epoch.csv",
         help="Input CSV with epoch RTT data",
     )
     parser.add_argument(
         "--out-plot",
         type=str,
-        default="query_rtt_plot_epoch_cumulative.png",
+        default="plots/query_rtt_plot_epoch_cumulative.png",
         help="Output plot filename",
     )
     return parser.parse_args()
@@ -76,6 +78,11 @@ def main() -> None:
     args = parse_args()
     in_csv = Path(args.in_csv)
     out_plot = Path(args.out_plot)
+    if not in_csv.is_absolute():
+        in_csv = REPO_ROOT / in_csv
+    if not out_plot.is_absolute():
+        out_plot = REPO_ROOT / out_plot
+    out_plot.parent.mkdir(parents=True, exist_ok=True)
 
     epochs, server_rtt, es_rtt = load_rows(in_csv)
     if not epochs:

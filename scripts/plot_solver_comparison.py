@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import csv
 from pathlib import Path
 from typing import Dict, List, Tuple
 
 import matplotlib.pyplot as plt
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 FILES = [
@@ -14,6 +17,33 @@ FILES = [
     "rtt_solver_3.csv",
     "rtt_solver_4.csv",
 ]
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--in-dir",
+        type=str,
+        default="data",
+        help="Input directory containing rtt_solver_*.csv files",
+    )
+    parser.add_argument(
+        "--out-dir",
+        type=str,
+        default="plots",
+        help="Output directory for generated plots",
+    )
+    return parser.parse_args()
+
+
+def _resolve_input(in_dir: Path, file_name: str) -> Path:
+    candidate = in_dir / file_name
+    if candidate.exists():
+        return candidate
+    legacy = Path(file_name)
+    if legacy.exists():
+        return legacy
+    return candidate
 
 
 def _read_csv(path: Path) -> Tuple[Dict[str, str], Dict[str, List[float]]]:
@@ -84,14 +114,22 @@ def _plot_compare(
 
 
 def main() -> None:
+    args = parse_args()
+    in_dir = Path(args.in_dir)
+    out_dir = Path(args.out_dir)
+    if not in_dir.is_absolute():
+        in_dir = REPO_ROOT / in_dir
+    if not out_dir.is_absolute():
+        out_dir = REPO_ROOT / out_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     runs: Dict[str, Tuple[Dict[str, str], Dict[str, List[float]]]] = {}
     for file_name in FILES:
-        path = Path(file_name)
+        path = _resolve_input(in_dir, file_name)
         meta, series = _read_csv(path)
         runs[file_name] = (meta, series)
 
     # 4 total-time graphs (one per CSV)
-    out_dir = Path(".")
     for file_name, (meta, series) in runs.items():
         stem = Path(file_name).stem
         _plot_total(meta, series, out_dir / f"{stem}_total_vs_epoch.png")
