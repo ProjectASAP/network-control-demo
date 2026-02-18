@@ -4,7 +4,7 @@ set -euo pipefail
 
 EPOCH_LENGTH_S=150.0
 
-LOG_DIR="logs"
+LOG_DIR="logs/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "${LOG_DIR}"
 
 uv run emulate_telemetry.py \

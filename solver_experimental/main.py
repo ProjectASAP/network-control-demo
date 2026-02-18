@@ -21,12 +21,7 @@ from scheduler.entities import RunningTask, Task, NetworkTopology
 from scheduler.load_info import load_nodes, load_edges, load_tasks, build_task_graph
 from scheduler.solver import TaskScheduler
 from config import (
-    CONSISTENCY_CHECK_TOLERANCE,
-    PARALLEL_BENCHMARK_ENABLED,
     SCHEDULER_BATCH_SIZE,
-    CLUSTER_METRICS_CSV,
-    ES_TIME_FIELD,
-    TIME_RANGE_MS,
 )
 from logging_utils import log_e2e, log_node_metric_comparisons, log_record
 
@@ -175,7 +170,7 @@ def assign_tasks(args: AppConfig):
 
             arrived_tasks: dict[str, Task] = {}
             # Pull all tasks that have arrived at this simulated time.
-            while task_queue and task_queue[0].arrival_offset_s <= curr_offset_s:
+            while task_queue:
                 task = task_queue.popleft()
                 arrived_tasks[task.task_id] = task
             logger.debug(f"Arrived tasks ({len(arrived_tasks)}): {list(arrived_tasks.keys())}")

@@ -228,7 +228,7 @@ class TaskScheduler:
             prob += total_bandwidth <= self.edges[edge_key].capacity
 
         # Solve
-        solver = plp.PULP_CBC_CMD(timeLimit=time_limit, msg=0)
+        solver = plp.SCIP_PY(timeLimit=time_limit, msg=0)
         prob.solve(solver)
 
         # Extract solution
