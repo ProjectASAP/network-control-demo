@@ -112,6 +112,7 @@ uv run main.py --node-path dummy_data/nodes.jsonl --edge-path dummy_data/edges.j
 | `scripts/run_rtt_sweep.py` | RTT benchmark: server vs ES, configurable row counts and batch sizes |
 | `scripts/run_rtt_sweep_epoch.py` | Epoch-based RTT sweep |
 | `scripts/run_rtt_sweep_epoch_with_solver.py` | Epoch-based RTT sweep with solver timings |
+| `scripts/run_rtt_sweep_epoch_full.py` | Epoch-based sweep: ingest + query + solver timing for both backends |
 | `scripts/rtt_sweep_common.py` | Shared helpers for RTT sweeps |
 | `scripts/plot_query_rtt.py` | Plot query RTT logs |
 | `scripts/plot_epoch_cumulative.py` | Plot cumulative epoch RTT |
@@ -175,6 +176,7 @@ bash scripts/run_rtt_sweep_all.sh
 python3 scripts/run_rtt_sweep.py
 python3 scripts/run_rtt_sweep_epoch.py
 python3 scripts/run_rtt_sweep_epoch_with_solver.py --run-solver
+python3 scripts/run_rtt_sweep_epoch_full.py --run-solver
 ```
 
 ### Tests
