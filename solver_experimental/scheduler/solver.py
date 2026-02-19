@@ -78,15 +78,15 @@ class TaskScheduler:
         """
         prob = plp.LpProblem("Task_Scheduling", plp.LpMinimize)
 
-        # Include currently running tasks in optimization.
-        original_tasks = tasks | {t: rt.task for t, rt in running_tasks.items()}
-
         # Get task communication requirements and filter out tasks whose peers are not here as well.
-        task_communication, tasks = get_valid_task_graph(tasks, task_graph=task_graph)
+        task_communication, filtered_tasks = get_valid_task_graph(tasks, task_graph=task_graph)
         leftover_tasks = {
-            task_id: original_tasks[task_id]
-            for task_id in original_tasks.keys() - tasks.keys()
+            task_id: tasks[task_id]
+            for task_id in tasks.keys() - filtered_tasks.keys()
         }
+
+        # Include currently running task specs in optimization.
+        tasks = filtered_tasks | {t: rt.task for t, rt in running_tasks.items()}
 
         # Decision variables
         # d[t][n] = 1 if task t assigned to node n, 0 otherwise
@@ -101,20 +101,24 @@ class TaskScheduler:
         # For a given task t (from a previous epoch), we sum over all d[t][n] for all n besides the node t was assigned originally.
         # Since only one d[t][n] can equal 1 (see constraint 1) for a given t, this sum is 1 if t is reassigned. Sum over all such tasks, and
         # we get the total reassignments.
-        reassignments = plp.lpSum(
-            d[t][n]
-            for t in tasks
-            for n in self.nodes.keys()
-            if t in running_tasks and running_tasks[t].node_id != n
-        )
+        running_task_vars = [d[t][running_tasks[t].node_id] for t in tasks if t in running_tasks]
+        reassignments = plp.lpSum(1 - var for var in running_task_vars)
+
+
         total_allocated = plp.lpSum(allocated[t] for t in tasks)
 
         # Objective: Minimize reassignments, Maximize allocations.
         prob += -total_allocated + self.reassignment_penalty * reassignments
 
+        # Number of reassignments should not exceed max_reassignments.
         prob += reassignments <= self.max_reassignments
 
-        # Constraints
+        # Tasks already running should be allocated somewhere (either the same node or a different node).
+        for t in running_tasks:
+            prob += allocated[t] == 1
+
+        # Resource/topology constraints.
+
         # 1. Each task assigned to exactly one node if allocated
         for t in tasks:
             prob += plp.lpSum(d[t][n] for n in self.nodes) == allocated[t]
