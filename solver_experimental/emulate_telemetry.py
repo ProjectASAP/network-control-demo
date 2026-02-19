@@ -185,6 +185,11 @@ _RNG = np.random.default_rng(SEED)
 app = FastAPI()
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.get("/active_tasks")
 async def active_tasks():
     running_tasks: dict[str, RunningTask] = {}

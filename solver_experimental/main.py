@@ -39,25 +39,28 @@ class AppConfig:
     node_path: str
     edge_path: str
     task_path: str
-    query_manager_config: str
     emulator_url: str = "http://localhost:8000"
+    batch_size: int = SCHEDULER_BATCH_SIZE
     epoch_length_s: float = 300.0
     interval: float = 10.0
     query_rtt_log_path: str = "fetch_tasks_rtt.csv"
     loop_rtt_log_path: str = "loop_rtt.csv"
+    assignments_log_path: str = "assignments.csv"
     log_level: str = "INFO"
     use_es: bool = False
 
 
-def filter_completed_tasks(client: httpx.Client, running_tasks: dict[str, RunningTask], current_time: float | None = None) -> dict[str, RunningTask]:
+def filter_completed_tasks(client: httpx.Client, running_tasks: dict[str, RunningTask], current_time: float | None = None) -> tuple[dict[str, RunningTask], dict[str, RunningTask]]:
     """Filter out tasks whose duration has elapsed. Assumes client base URL is set to the emulator URL."""
     active_tasks = {}
+    completed_tasks = {}
     try:
         response = client.get("/active_tasks")
         response.raise_for_status()
         data = response.json()
         active_tasks = structure(data["running_tasks"], dict[str, RunningTask])
-        return active_tasks
+        completed_tasks = structure(data["completed_tasks"], dict[str, RunningTask])
+        return active_tasks, completed_tasks
     except Exception as exc:
         logger.warning(f"Failed to fetch active tasks from emulator: {exc}")
 
@@ -69,7 +72,20 @@ def filter_completed_tasks(client: httpx.Client, running_tasks: dict[str, Runnin
         elapsed = current_time - rt.start_time_s
         if elapsed < rt.task.duration_s:
             active_tasks[task_id] = rt
-    return active_tasks
+        else:
+            completed_tasks[task_id] = rt
+    return active_tasks, completed_tasks
+
+
+def check_emulator_reachable(url: str) -> bool:
+    from urllib.parse import urljoin
+    try:
+        response = httpx.get(urljoin(url, "health"), timeout=5)
+        response.raise_for_status()
+        return True
+    except Exception as exc:
+        logger.warning(f"Emulator health check failed: {exc}")
+        return False
 
 
 def _post_with_retry(
@@ -132,12 +148,16 @@ def assign_tasks(args: AppConfig):
     )
 
     # Initialize the solver and benchmarking timers.
-    solver = TaskScheduler(network=network)
+    solver = TaskScheduler(network=network, max_reassignments=0)
 
     # Decide whether to run the ES comparison path.
     es_available = check_es_available()
     if not es_available and args.use_es:
         logger.warning("Direct ES backend can not be reached.")
+
+    emulator_reachable = check_emulator_reachable(args.emulator_url)
+    if not emulator_reachable:
+        logger.warning("Emulator can not be reached at startup; scheduling loop will still run but all metric queries will fail.")
 
     epoch_length_s = args.epoch_length_s
     with httpx.Client(timeout=5, base_url=args.emulator_url) as client:
@@ -150,6 +170,7 @@ def assign_tasks(args: AppConfig):
             logger.info("No template tasks found; ingestion-only mode.")
 
         task_queue: deque[Task] = deque(template_tasks_sorted)
+        total_tasks_completed: int = 0
         epoch_index = 0
 
         base_time_s = time.time()
@@ -162,17 +183,22 @@ def assign_tasks(args: AppConfig):
             # Advance simulated time to the next arrival.
             curr_offset_s = epoch_index * epoch_length_s
             current_time_s = base_time_s + curr_offset_s
-            epoch_index += 1
+            
             logger.debug(f"Current time offset: {curr_offset_s:.2f} s")
             # Prune tasks whose duration has elapsed.
-            running_tasks = filter_completed_tasks(client, running_tasks, current_time_s)
+            running_tasks, completed_tasks = filter_completed_tasks(client, running_tasks, current_time_s)
+            total_tasks_completed += len(completed_tasks)
+
             logger.debug(f"Currently running tasks ({len(running_tasks)}): {list(running_tasks.keys())}")
+            logger.debug(f"Completed tasks in this epoch: {len(completed_tasks)}")
 
             arrived_tasks: dict[str, Task] = {}
             # Pull all tasks that have arrived at this simulated time.
-            while task_queue:
+            n = 0
+            while n < args.batch_size and task_queue:
                 task = task_queue.popleft()
                 arrived_tasks[task.task_id] = task
+                n += 1
             logger.debug(f"Arrived tasks ({len(arrived_tasks)}): {list(arrived_tasks.keys())}")
             logger.debug(
                 f"Unassigned tasks from previous rounds ({len(unassigned_tasks)}): {list(unassigned_tasks.keys())}"
@@ -192,14 +218,15 @@ def assign_tasks(args: AppConfig):
                 logger.info(
                     "No pending tasks to schedule at this arrival time."
                 )
+                epoch_index += 1
                 continue
             task_graph = build_task_graph(tasks_to_schedule_pool)
             tasks_to_schedule = tasks_to_schedule_pool
             overflow_tasks: dict[str, Task] = {}
-            if len(tasks_to_schedule) > SCHEDULER_BATCH_SIZE:
+            if len(tasks_to_schedule) > args.batch_size:
                 ordered_items = list(tasks_to_schedule.items())
-                tasks_to_schedule = dict(ordered_items[:SCHEDULER_BATCH_SIZE])
-                overflow_tasks = dict(ordered_items[SCHEDULER_BATCH_SIZE:])
+                tasks_to_schedule = dict(ordered_items[:args.batch_size])
+                overflow_tasks = dict(ordered_items[args.batch_size:])
             logger.info(
                 "Backlog size: {}; scheduling: {}",
                 len(tasks_to_schedule_pool),
@@ -234,6 +261,7 @@ def assign_tasks(args: AppConfig):
             objective_value = None
 
             logger.info(f"Scheduling {len(tasks_to_schedule)} tasks...")
+            logger.debug(f"Tasks to be scheduled: {tasks_to_schedule.keys()}")
             assignments, leftover_tasks, objective_value, status_code = (
                 solver.solve(
                     tasks=tasks_to_schedule,
@@ -243,6 +271,18 @@ def assign_tasks(args: AppConfig):
                     time_limit=30,
                     current_time_s=current_time_s,
                 )
+            )
+
+            # Log success (and failure) info for task allocations.
+            log_record(
+                log_path=args.assignments_log_path,
+                epoch=epoch_index,
+                tasks_scheduled=len(assignments),
+                tasks_attempted=len(tasks_to_schedule),
+                backlog_size=len(overflow_tasks) + len(leftover_tasks),
+                failed_tasks=len(failed_tasks),
+                tasks_completed=total_tasks_completed,
+                objective_value=objective_value,
             )
 
             solver_status = pulp.LpStatus.get(status_code, "unknown")
@@ -284,10 +324,11 @@ def assign_tasks(args: AppConfig):
             unassigned_tasks = dict(
                 list(leftover_tasks.items()) + list(overflow_tasks.items())
             )
-            running_tasks.update(assignments)
+
+            new_assignments = set(assignments.keys()) - set(running_tasks.keys())
 
             # Display assignments + objective value, and push assignments to emulator immediately so next query sees the metrics.
-            logger.info(f"Number of running tasks ({len(assignments)} new assignments): {len(running_tasks)}")
+            logger.info(f"Number of running tasks ({len(new_assignments)} new tasks assigned): {len(assignments)}")
             if solver_status == "Optimal" and assignments:
                 assignment_repr = "Assignment: "
                 for task, rt in sorted(assignments.items()):
@@ -302,20 +343,25 @@ def assign_tasks(args: AppConfig):
             else:
                 logger.info("Could not assign tasks.")
 
-            # Push assignments to emulator immediately so next query sees the metrics.
-            running_tasks_payload = unstructure(
-                list(assignments.values()), list[RunningTask]
-            )
-            _post_with_retry(
-                client,
-                "/ingest",
-                running_tasks_payload,
-            )
-            logger.debug(
-                "Pushed {} assignments to emulator before next task arrival",
-                len(assignments),
-            )
+            # Update running tasks to reflect new assignments for the next iteration.
+            running_tasks = assignments
 
+            # Push assignments to emulator immediately so next query sees the metrics.
+            if emulator_reachable:
+                running_tasks_payload = unstructure(
+                    list(assignments.values()), list[RunningTask]
+                )
+                _post_with_retry(
+                    client,
+                    "/ingest",
+                    running_tasks_payload,
+                )
+                logger.debug(
+                    "Pushed {} assignments to emulator before next task arrival",
+                    len(assignments),
+                )
+
+            epoch_index += 1
             yield assignments
 
 
@@ -338,11 +384,12 @@ if __name__ == "__main__":
     parser.add_argument("--emulator-url", type=str, default="http://localhost:8000")
     parser.add_argument("--query-rtt-log-path", type=str, default="fetch_tasks_rtt.csv")
     parser.add_argument("--loop-rtt-log-path", type=str, default="loop_rtt.csv")
+    parser.add_argument("--assignments-log-path", type=str, default="assignments.csv")
     parser.add_argument("--use-es", action="store_true", default=False)
     parser.add_argument("--interval", type=float, default=30.0)
     parser.add_argument("--epoch-length-s", type=float, default=300.0)
-    parser.add_argument("--query-manager-config", type=str, required=True)
     parser.add_argument("--log-level", type=str, default="INFO")
+    parser.add_argument("--batch-size", type=int, default=SCHEDULER_BATCH_SIZE)
     args = parser.parse_args()
     logger.remove()
     logger.add(sys.stderr, level=args.log_level)
