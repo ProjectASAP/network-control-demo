@@ -155,17 +155,27 @@ class AssignmentResult:
 class NetworkControllerSolver:
     """OR-Tools based solver for network task placement."""
 
+    SUPPORTED_BACKENDS = ("CBC", "SCIP", "GLPK")
+
     def __init__(
         self,
         nodes: Mapping[str, Node],
         edges: Mapping[EdgeKey, Edge],
         *,
         undirected: bool = True,
+        solver_backend: str = "CBC",
     ) -> None:
         if not nodes:
             raise ValueError("At least one node must be provided")
         if not edges:
             raise ValueError("At least one network edge must be provided")
+        solver_backend = solver_backend.upper()
+        if solver_backend not in self.SUPPORTED_BACKENDS:
+            raise ValueError(
+                f"Unsupported solver backend {solver_backend!r}. "
+                f"Supported: {self.SUPPORTED_BACKENDS}"
+            )
+        self._solver_backend = solver_backend
 
         self._undirected = undirected
         self._nodes: Dict[str, Node] = {
@@ -293,9 +303,12 @@ class NetworkControllerSolver:
                     f"Edge {edge_id} is over-subscribed before optimisation (bandwidth)."
                 )
 
-        solver = pywraplp.Solver.CreateSolver("CBC")
+        solver = pywraplp.Solver.CreateSolver(self._solver_backend)
         if solver is None:
-            raise RuntimeError("Failed to initialise OR-Tools CBC solver.")
+            raise RuntimeError(
+                f"Failed to initialise OR-Tools {self._solver_backend} solver. "
+                f"Ensure the {self._solver_backend} backend is installed."
+            )
 
         x_vars: Dict[str, Dict[str, pywraplp.Variable]] = {}
         skip_vars: Dict[str, pywraplp.Variable] = {}

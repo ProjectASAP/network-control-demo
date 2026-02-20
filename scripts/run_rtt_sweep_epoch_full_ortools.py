@@ -117,6 +117,13 @@ def parse_args() -> argparse.Namespace:
         default=str(SOLVER_DUMMY_DIR),
         help="Directory containing dummy_data JSONL inputs",
     )
+    parser.add_argument(
+        "--solver-backend",
+        type=str,
+        choices=["CBC", "SCIP", "GLPK"],
+        default="CBC",
+        help="OR-Tools solver backend (default: CBC)",
+    )
     return parser.parse_args()
 
 
@@ -289,11 +296,12 @@ def run_solver_for_usage(
     usage: Dict[str, Dict[str, float]],
     assets: dict,
     context: dict,
+    solver_backend: str = "CBC",
 ) -> SolverResult:
     nodes = _build_nodes_with_usage(context["nodes"], usage, assets["OrtNode"])
     edges = context["edges"]
 
-    solver = assets["NetworkControllerSolver"](nodes, edges)
+    solver = assets["NetworkControllerSolver"](nodes, edges, solver_backend=solver_backend)
     tasks_list = list(context["tasks"].values())
 
     t0 = time.perf_counter()
@@ -318,7 +326,7 @@ def run_solver_for_usage(
 # Plotting
 # ---------------------------------------------------------------------------
 
-def plot_results(results: List[SweepResult], out_path: Path) -> None:
+def plot_results(results: List[SweepResult], out_path: Path, backend: str = "CBC") -> None:
     """Stacked bar chart (ingest / query / solver) per epoch for each backend,
     plus a separate total-time comparison line chart."""
     import matplotlib.pyplot as plt
@@ -358,7 +366,7 @@ def plot_results(results: List[SweepResult], out_path: Path) -> None:
     ax.set_xticklabels([str(e) for e in epochs])
     ax.set_xlabel("Epoch")
     ax.set_ylabel("Time (ms)")
-    ax.set_title("Per-epoch timing breakdown: Server vs ES (OR-Tools solver)\n(ingest + query + solver)")
+    ax.set_title(f"Per-epoch timing breakdown: Server vs ES (OR-Tools/{backend} solver)\n(ingest + query + solver)")
     ax.legend(loc="upper left", fontsize=8)
     ax.grid(axis="y", alpha=0.3)
     plt.tight_layout()
@@ -372,7 +380,7 @@ def plot_results(results: List[SweepResult], out_path: Path) -> None:
     ax2.plot(epochs, e_total, marker="s", label="ES total (ms)",     color="#e15759")
     ax2.set_xlabel("Epoch")
     ax2.set_ylabel("Total time (ms)")
-    ax2.set_title("Total epoch time: Server vs ES (OR-Tools solver)\n(ingest + query + solver)")
+    ax2.set_title(f"Total epoch time: Server vs ES (OR-Tools/{backend} solver)\n(ingest + query + solver)")
     ax2.legend()
     ax2.grid(True, alpha=0.3)
     plt.tight_layout()
@@ -443,7 +451,7 @@ def main() -> None:
         solver_context = None
         if args.run_solver:
             solver_dir = Path(args.solver_data_dir)
-            print(f"Loading solver inputs from {solver_dir} (OR-Tools) ...")
+            print(f"Loading solver inputs from {solver_dir} (OR-Tools/{args.solver_backend}) ...")
             assets = _load_solver_assets(solver_dir)
             solver_context = _build_solver_context(
                 assets,
@@ -538,14 +546,15 @@ def main() -> None:
             server_solver_ms = 0.0
             es_solver_ms = 0.0
             if args.run_solver and assets is not None and solver_context is not None:
-                print("  running OR-Tools solver on server metrics ...")
+                backend = args.solver_backend
+                print(f"  running OR-Tools ({backend}) solver on server metrics ...")
                 server_usage = _extract_server_usage(server_json)
-                server_sr = run_solver_for_usage(server_usage, assets, solver_context)
+                server_sr = run_solver_for_usage(server_usage, assets, solver_context, solver_backend=backend)
                 server_solver_ms = server_sr.elapsed_ms
 
-                print("  running OR-Tools solver on ES metrics ...")
+                print(f"  running OR-Tools ({backend}) solver on ES metrics ...")
                 es_usage = _extract_es_usage(es_json)
-                es_sr = run_solver_for_usage(es_usage, assets, solver_context)
+                es_sr = run_solver_for_usage(es_usage, assets, solver_context, solver_backend=backend)
                 es_solver_ms = es_sr.elapsed_ms
 
             # --- TOTALS ---
@@ -597,7 +606,7 @@ def main() -> None:
         stop_server(proc)
         csv_file.close()
 
-    plot_results(results, out_plot)
+    plot_results(results, out_plot, backend=args.solver_backend)
     total_plot = out_plot.with_name(f"{out_plot.stem}_total{out_plot.suffix}")
     print(f"\nWrote {out_csv}")
     print(f"Wrote {out_plot} and {total_plot}")

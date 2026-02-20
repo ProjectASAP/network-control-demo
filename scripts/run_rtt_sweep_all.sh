@@ -75,34 +75,42 @@ mkdir -p "${ROOT_DIR}/data" "${ROOT_DIR}/plots" "${ROOT_DIR}/logs"
 #   --truncate-server-log \
 #   2>&1 | tee -a "${ROOT_DIR}/logs/run_rtt_sweep.log"
 
-# Full sweep: 30-node topology (OR-Tools)
-"${PYTHON_BIN}" "${SCRIPT_DIR}/run_rtt_sweep_epoch_full_ortools.py" \
-  --run-solver \
-  --solver-data-dir "${ROOT_DIR}/solver_experimental/dummy_data" \
-  --start-epoch 1 \
-  --end-epoch 10 \
-  --rows-per-epoch 1000000 \
-  --batch-size 1000 \
-  --solver-node-count 30 \
-  --query-node-count 30 \
-  --out-csv "${ROOT_DIR}/data/rtt_results_epoch_full_ortools_30nodes.csv" \
-  --out-plot "${ROOT_DIR}/plots/rtt_epoch_full_ortools_30nodes.png" \
-  --server-log "${ROOT_DIR}/logs/server_epoch_full_ortools_30nodes.log" \
-  --truncate-csv \
-  --truncate-server-log \
-  2>&1 | tee -a "${ROOT_DIR}/logs/run_rtt_sweep.log"
+# Full sweep: 30-node topology (OR-Tools with CBC, SCIP, GLPK backends)
+for BACKEND in CBC SCIP; do
+  BACKEND_LOWER="$(echo "${BACKEND}" | tr '[:upper:]' '[:lower:]')"
+  echo ""
+  echo "=========================================="
+  echo "  Running OR-Tools with ${BACKEND} backend"
+  echo "=========================================="
+  "${PYTHON_BIN}" "${SCRIPT_DIR}/run_rtt_sweep_epoch_full_ortools.py" \
+    --run-solver \
+    --solver-backend "${BACKEND}" \
+    --solver-data-dir "${ROOT_DIR}/solver_experimental/dummy_data" \
+    --start-epoch 1 \
+    --end-epoch 10 \
+    --rows-per-epoch 1000000 \
+    --batch-size 1000 \
+    --solver-node-count 30 \
+    --query-node-count 30 \
+    --out-csv "${ROOT_DIR}/data/rtt_results_epoch_full_ortools_${BACKEND_LOWER}_30nodes.csv" \
+    --out-plot "${ROOT_DIR}/plots/rtt_epoch_full_ortools_${BACKEND_LOWER}_30nodes.png" \
+    --server-log "${ROOT_DIR}/logs/server_epoch_full_ortools_${BACKEND_LOWER}_30nodes.log" \
+    --truncate-csv \
+    --truncate-server-log \
+    2>&1 | tee -a "${ROOT_DIR}/logs/run_rtt_sweep.log"
+done
 
-# Full sweep: all nodes (OR-Tools)
-"${PYTHON_BIN}" "${SCRIPT_DIR}/run_rtt_sweep_epoch_full_ortools.py" \
-  --run-solver \
-  --solver-data-dir "${ROOT_DIR}/solver_experimental/dummy_data" \
-  --start-epoch 1 \
-  --end-epoch 10 \
-  --rows-per-epoch 1000000 \
-  --batch-size 1000 \
-  --out-csv "${ROOT_DIR}/data/rtt_results_epoch_full_ortools_allnodes.csv" \
-  --out-plot "${ROOT_DIR}/plots/rtt_epoch_full_ortools_allnodes.png" \
-  --server-log "${ROOT_DIR}/logs/server_epoch_full_ortools_allnodes.log" \
-  --truncate-csv \
-  --truncate-server-log \
-  2>&1 | tee -a "${ROOT_DIR}/logs/run_rtt_sweep.log"
+# # Full sweep: all nodes (OR-Tools)
+# "${PYTHON_BIN}" "${SCRIPT_DIR}/run_rtt_sweep_epoch_full_ortools.py" \
+#   --run-solver \
+#   --solver-data-dir "${ROOT_DIR}/solver_experimental/dummy_data" \
+#   --start-epoch 1 \
+#   --end-epoch 10 \
+#   --rows-per-epoch 1000000 \
+#   --batch-size 1000 \
+#   --out-csv "${ROOT_DIR}/data/rtt_results_epoch_full_ortools_allnodes.csv" \
+#   --out-plot "${ROOT_DIR}/plots/rtt_epoch_full_ortools_allnodes.png" \
+#   --server-log "${ROOT_DIR}/logs/server_epoch_full_ortools_allnodes.log" \
+#   --truncate-csv \
+#   --truncate-server-log \
+#   2>&1 | tee -a "${ROOT_DIR}/logs/run_rtt_sweep.log"
