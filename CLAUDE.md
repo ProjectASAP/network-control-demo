@@ -112,7 +112,8 @@ uv run main.py --node-path dummy_data/nodes.jsonl --edge-path dummy_data/edges.j
 | `scripts/run_rtt_sweep.py` | RTT benchmark: server vs ES, configurable row counts and batch sizes |
 | `scripts/run_rtt_sweep_epoch.py` | Epoch-based RTT sweep |
 | `scripts/run_rtt_sweep_epoch_with_solver.py` | Epoch-based RTT sweep with solver timings |
-| `scripts/run_rtt_sweep_epoch_full.py` | Epoch-based sweep: ingest + query + solver timing for both backends |
+| `scripts/run_rtt_sweep_epoch_full.py` | Epoch-based sweep: ingest + query + solver timing for both backends (PuLP) |
+| `scripts/run_rtt_sweep_epoch_full_ortools.py` | Same as above but using OR-Tools solver instead of PuLP |
 | `scripts/rtt_sweep_common.py` | Shared helpers for RTT sweeps |
 | `scripts/plot_query_rtt.py` | Plot query RTT logs |
 | `scripts/plot_epoch_cumulative.py` | Plot cumulative epoch RTT |
@@ -177,6 +178,7 @@ python3 scripts/run_rtt_sweep.py
 python3 scripts/run_rtt_sweep_epoch.py
 python3 scripts/run_rtt_sweep_epoch_with_solver.py --run-solver
 python3 scripts/run_rtt_sweep_epoch_full.py --run-solver
+python3 scripts/run_rtt_sweep_epoch_full_ortools.py --run-solver
 ```
 
 ### Tests
@@ -191,3 +193,7 @@ cd solver_experimental && uv run pytest python_solver/tests/
 - Two solver implementations exist: **PuLP** (`scheduler/solver.py`) and **OR-Tools** (`python_solver/`). The OR-Tools version is more mature with migration penalties and reassignment limits
 - The telemetry emulator (`emulate_telemetry.py`) runs as a FastAPI sidecar, sending identical data to both ES and Sketch server for consistency comparison
 - Benchmark scripts measure both **latency** (RTT) and **correctness** (metric value comparison between backends)
+
+## Known Issues
+
+- **Ingested metric usage can exceed node capacity.** Synthetic metrics generated during benchmarks may produce cumulative usage values (CPU, memory) that exceed a node's declared capacity. The PuLP solver handles this gracefully (`max(capacity - used, 0.0)`), but the OR-Tools solver raises a `ValueError` on over-subscribed nodes. The OR-Tools sweep script (`run_rtt_sweep_epoch_full_ortools.py`) works around this by clamping `used_cpu`/`used_memory` to the node's capacity before solving. A proper fix would be to either cap the synthetic metric generation or add clamping inside the OR-Tools solver itself.
