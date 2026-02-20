@@ -19,16 +19,20 @@ uv run emulate_telemetry.py \
 EMULATOR_PID=$!
 trap 'kill "$EMULATOR_PID"' EXIT
 
+sleep 3
+
 INTERVAL=1.0
+BATCH_SIZE=60
 uv run main.py \
     --node-path "dummy_data/nodes.jsonl" \
     --edge-path "dummy_data/edges.jsonl" \
     --task-path "dummy_data/tasks.jsonl" \
     --emulator-url "http://localhost:8000" \
     --interval "${INTERVAL}" \
+    --batch-size "${BATCH_SIZE}" \
     --epoch-length-s "${EPOCH_LENGTH_S}" \
-    --query-manager-config "configs/sample.yml" \
     --log-level "INFO" \
     --query-rtt-log-path "${LOG_DIR}/query_rtt.csv" \
-    --loop-rtt-log-path "${LOG_DIR}/loop_rtt.csv" 
+    --loop-rtt-log-path "${LOG_DIR}/loop_rtt.csv" \
+    --assignments-log-path "${LOG_DIR}/assignments.csv" 
     # --use-es 
