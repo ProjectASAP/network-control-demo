@@ -13,7 +13,6 @@ from collections import deque
 from loguru import logger
 import pulp
 import httpx
-from urllib3.util.retry import Retry
 from dataclasses import dataclass
 from cattrs import structure, unstructure
 
@@ -50,16 +49,45 @@ class AppConfig:
     use_es: bool = False
 
 
-def filter_completed_tasks(client: httpx.Client, running_tasks: dict[str, RunningTask], current_time: float | None = None) -> tuple[dict[str, RunningTask], dict[str, RunningTask]]:
+def update_task_specs(running_tasks: dict[str, RunningTask], task_metrics: dict):
+    """Update the task resource estimations (Task objects) in-place using returned metrics data."""
+    try:
+        for record in task_metrics:
+            task_id = record["key"]
+            if task_id in running_tasks:
+                task_spec = running_tasks[task_id].task
+
+                quantiles = record['percentiles']
+
+                # Update rule. For now, just use the median of the last epoch's usage as the new estimate. Could be made more complex later.
+                new_cpu = quantiles["cpu_cores"].get("50", task_spec.initial_cpu)
+                new_memory = quantiles["memory_gb"].get("50", task_spec.initial_memory)
+
+                new_cpu = new_cpu if new_cpu is not None and new_cpu > 0 else task_spec.initial_cpu
+                new_memory = new_memory if new_memory is not None and new_memory > 0 else task_spec.initial_memory
+
+                logger.debug(
+                    f"Updating task {task_id} specs: CPU {task_spec.initial_cpu:.2f} -> {new_cpu:.2f}, Memory {task_spec.initial_memory:.2f} -> {new_memory:.2f}"
+                )
+
+                task_spec.initial_cpu = new_cpu
+                task_spec.initial_memory = new_memory
+                # TODO: Find sensible way to handle network metrics.
+    except Exception as exc:
+        logger.warning(f"Failed to update task specs with metrics data: {exc}")
+    return running_tasks
+
+
+def filter_completed_tasks(client: httpx.Client, running_tasks: dict[str, RunningTask], current_time: float | None = None) -> tuple[dict[str, RunningTask], set[str]]:
     """Filter out tasks whose duration has elapsed. Assumes client base URL is set to the emulator URL."""
     active_tasks = {}
-    completed_tasks = {}
+    completed_tasks = set()
     try:
         response = client.get("/active_tasks")
         response.raise_for_status()
         data = response.json()
         active_tasks = structure(data["running_tasks"], dict[str, RunningTask])
-        completed_tasks = structure(data["completed_tasks"], dict[str, RunningTask])
+        completed_tasks = {tid for tid in running_tasks if tid not in active_tasks}
         return active_tasks, completed_tasks
     except Exception as exc:
         logger.warning(f"Failed to fetch active tasks from emulator: {exc}")
@@ -73,7 +101,7 @@ def filter_completed_tasks(client: httpx.Client, running_tasks: dict[str, Runnin
         if elapsed < rt.task.duration_s:
             active_tasks[task_id] = rt
         else:
-            completed_tasks[task_id] = rt
+            completed_tasks.add(task_id)
     return active_tasks, completed_tasks
 
 
@@ -250,6 +278,9 @@ def assign_tasks(args: AppConfig):
                 )
                 ran_query = True
                 logger.debug(f'Queried data: {sketch_task_metrics}')
+
+                if sketch_task_metrics and not args.use_es:
+                    update_task_specs(running_tasks, sketch_task_metrics)
             else:
                 logger.debug("No running tasks to query metrics for.")
             sketch_query_ms = (time.perf_counter() - sketch_start) * 1000.0
@@ -315,7 +346,7 @@ def assign_tasks(args: AppConfig):
                     retry_counts.pop(task_id, None)
             for task_id in list(leftover_tasks.keys()):
                 retry_counts[task_id] = retry_counts.get(task_id, 0) + 1
-                if retry_counts[task_id] >= 5:
+                if retry_counts[task_id] >= 200:
                     failed_tasks[task_id] = leftover_tasks.pop(task_id)
                     logger.warning(
                         "Task {} exceeded retry limit; moving to failed list.",

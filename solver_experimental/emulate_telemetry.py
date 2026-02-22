@@ -33,8 +33,6 @@ TIMEOUT = int(os.getenv("INGEST_TIMEOUT_SECONDS", "30"))  # seconds
 
 # Emulator instance (initialized in main).
 emulator: "TaskMetricsEmulator"
-# Function to get current time based on epoch (initialized in main).
-get_current_time: Callable[[], float]
 
 # Ingest parameters.
 SKETCH_INGEST_ENABLED = True
@@ -43,6 +41,8 @@ ES_INGEST_ENABLED = True
 # Logging parameters.
 SKETCH_INGEST_LOG_PATH: str | None = None
 ES_INGEST_LOG_PATH: str | None = None
+
+EPOCH_LENGTH_S = 60.0
 
 global_epoch = 0
 
@@ -249,9 +249,13 @@ class TaskMetrics:
     cpu_usage: "MetricGenerator"
     memory_usage: "MetricGenerator"
     network_usage: "MetricGenerator"
-    projected_duration: float
+    original_duration: float
+    projected_duration: float = field(init=False)
     # NOTE: Tracks actual task arrival time on assigned node. This assumes tasks can be suspended and resumed when reassigned.
     ingest_wall_time_s: float = field(default_factory=lambda: time.time())
+
+    def __post_init__(self):
+        self.projected_duration = self.original_duration
 
     def generate_buffers(
             self, 
@@ -316,15 +320,6 @@ class MetricBuffers:
 
 
 @dataclass
-class MetricsRecord:
-    # Point-in-time metrics for a task.
-    task_id: str
-    cpu_usage: float
-    memory_usage: float
-    network_usage: float
-
-
-@dataclass
 class MetricGenerator:
     """
     Generates emulated metric values using a noisy sinusoidal model.
@@ -335,13 +330,14 @@ class MetricGenerator:
     base_value: float = 1.0
     noise_scale: float = 0.1
     p_scalable: float = 0
+    rng: np.random.RandomGenerator = field(default_factory=lambda: np.random.default_rng())
 
     def __post_init__(self):
         # Randomly assign a portion of the task as scalable to resources for more realistic variability.
-        self.p_scalable = np.random.uniform(0.1, 0.9)
+        self.p_scalable = self.rng.uniform(0.1, 0.9)
 
     @classmethod
-    def create(cls, base_value: float = 1.0) -> "MetricGenerator":
+    def create(cls, base_value: float = 1.0, rng: np.random.RandomGenerator = _RNG) -> "MetricGenerator":
         # Generate a noisy sinusoidal time series around the base value.
         """
         Creates a MetricGenerator with random parameters.
@@ -351,13 +347,12 @@ class MetricGenerator:
         Returns:
             A MetricGenerator instance.
         """
-        rng = _RNG
         period = rng.uniform(0, 10)
         a = rng.uniform(0.05, 0.65)
         b = 2 * np.pi / period
-        c = b * rng.uniform(0, 10)
+        c = rng.uniform(0, 10)
     
-        return cls(a=a, b=b, c=c, base_value=base_value)
+        return cls(a=a, b=b, c=c, base_value=base_value, rng=rng)
 
     def generate(self, stop: float = 1.0, start: float = 0.0, num: int = 60, max_value: float = 1.0) -> tuple[np.ndarray, float]:
         # Generate a noisy sinusoidal time series around the base value.
@@ -375,10 +370,7 @@ class MetricGenerator:
         """
         if self.base_value == 0:
             return np.zeros(num), 1.0
-        rng = _RNG
-        # value_scale = value / self.base_value
-
-        # speed_up = amdahl_factor(self.p_scalable, value_scale)
+        rng = self.rng
         a = self.a
         # Compress timeseries by corresponding factor.
         b = self.b
@@ -386,35 +378,22 @@ class MetricGenerator:
         
         t = np.linspace(start, stop, num=num)
     
-        scale_factor = 1 + a * np.sin(b * t - c)
+        scale_factor = 1 + a * np.sin(b * t + c)
         noise = rng.normal(loc=0, scale=self.noise_scale, size=len(scale_factor))
         buffer = self.base_value * (scale_factor + noise)
 
-        # Reduce projected duration when usage is higher than allocated value.
-        min_arr = np.clip(buffer, a_min=max_value, a_max=None)
-        weight = min_arr.mean() * (stop - start) + max_value * (1.0 - (stop - start))
-        resource_usage = max_value / weight
+        # Increase projected duration when usage is higher than allocated value.
+        min_arr = np.clip(buffer - max_value, a_min=0, a_max=None) / max_value
+        dt = stop - start
+        weight = round(1 + (min_arr.mean() * dt), 3)
 
         # Calculate slow down using Amdahl's law with the observed value scale. Use for duration adjustment.
-        empirical_speed_up = amdahl_factor(self.p_scalable, resource_usage)
-        duration_adjust_factor = self.duration_adjust_factor(speed_up=empirical_speed_up, stop=stop)
+        adjust_factor = round(1 - self.p_scalable + weight * self.p_scalable, 3)
+        duration_adjust_factor = round((1 - dt) + dt * adjust_factor, 3)
 
         clipped_buffer = np.clip(buffer, a_min=0, a_max=max_value)
 
         return clipped_buffer, duration_adjust_factor
-    
-    def duration_adjust_factor(self, speed_up: float = 1.0, stop: float = 1.0) -> float:
-        # Compute scale factor to adjust the projected duration for remainder of task based on the "speed-up" factor.
-        interval = 1.0 - stop
-        adjusted_interval = interval / round(speed_up, 3)
-        adjusted_duration = stop + adjusted_interval
-        return round(adjusted_duration, 3) # Round for nicer logging and numerical stability.
-
-
-def amdahl_factor(p: float, n: float):
-    time_scale = (1 - p) + p / n
-    speed_up = 1 / time_scale
-    return speed_up
 
 
 class TaskMetricsEmulator:
@@ -452,17 +431,20 @@ class TaskMetricsEmulator:
         return cls(network=network, **kwargs)
 
     def create_task_metrics(self, task: Task) -> TaskMetrics:
-        # Generate a full-duration timeseries for a new task.
-        size = int(task.duration_s)
-        cpu_usage = MetricGenerator.create(base_value=task.initial_cpu)
-        memory_usage = MetricGenerator.create(base_value=task.initial_memory)
-        network_usage = MetricGenerator.create(base_value=sum(task.peer_bandwidths.values()))
+        # Generate a full-duration timeseries for a new task deterministically based on task id.
+        seed = int.from_bytes(task.task_id.encode(), "little", signed=False) % (2**32)
+        rng = np.random.default_rng(seed)
+
+        # Generated metrics share same random generator for reproducibility and temporal consistency across metrics for a given task, but differ across tasks.
+        cpu_usage = MetricGenerator.create(base_value=task.initial_cpu, rng=rng)
+        memory_usage = MetricGenerator.create(base_value=task.initial_memory, rng=rng)
+        network_usage = MetricGenerator.create(base_value=sum(task.peer_bandwidths.values()), rng=rng)
         current_time_s = get_current_time()
         return TaskMetrics(
             cpu_usage=cpu_usage, 
             memory_usage=memory_usage, 
             network_usage=network_usage, 
-            projected_duration=size,
+            original_duration=task.duration_s,
             ingest_wall_time_s=current_time_s,
         )
 
@@ -568,37 +550,26 @@ class TaskMetricsEmulator:
         global global_epoch
         metrics = self._emit_metrics()
         epoch = global_epoch
-        for task_id, task_metrics in metrics.items():
+        for task_id, buffers in metrics.items():
             running_task = self.running_tasks[task_id]
             # NOTE: Sketch server wants a scalar for "epoch".
             record = {
                 "epoch": epoch,
-                "task": [task_id] * len(task_metrics.cpu_usage),
-                "cluster": [running_task.node_id] * len(task_metrics.cpu_usage),
-                "cpu_cores": task_metrics.cpu_usage.tolist(),
-                "memory_gb": task_metrics.memory_usage.tolist(),
-                "network_mbps": task_metrics.network_usage.tolist()
+                "task": [task_id] * len(buffers.cpu_usage),
+                "cluster": [running_task.node_id] * len(buffers.cpu_usage),
+                "cpu_cores": buffers.cpu_usage.tolist(),
+                "memory_gb": buffers.memory_usage.tolist(),
+                "network_mbps": buffers.network_usage.tolist()
             }
             yield record
 
 
-def create_virtual_clock(epoch_length_s: int = 60) -> Callable[[], float]:
-    """
-    Creates a virtual clock function that simulates time progression in the emulator. The clock returns the current time based on a specified epoch length.
-
-    Args:
-        epoch_length_s: The nominal duration of each epoch in seconds. Should be consistent with the epoch length used for the controller to maintain temporal consistency.
-    Returns:
-        A function that returns the current virtual time and epoch index when called.
-    """
-    # Simple virtual clock to track time in the emulator.
-    base_time_s = time.time()
-
-    def get_time():
-        global global_epoch
-        return base_time_s + global_epoch * epoch_length_s
-
-    return get_time
+def get_current_time(epoch: int | None = None) -> float:
+    """Get current time in seconds based on the global epoch and epoch length."""
+    global global_epoch
+    if epoch is None:
+        epoch = global_epoch
+    return EPOCH_LENGTH_S * epoch
 
 
 if __name__ == "__main__":
@@ -619,7 +590,7 @@ if __name__ == "__main__":
     # Start the FastAPI telemetry emulator.
     emulator = TaskMetricsEmulator.create_emulator(epoch_length_s=args.epoch_length_s, data_rate=args.data_rate)
 
-    get_current_time = create_virtual_clock(epoch_length_s=args.epoch_length_s)
+    EPOCH_LENGTH_S = args.epoch_length_s
 
     SKETCH_INGEST_LOG_PATH = args.sketch_ingest_log_path
     ES_INGEST_LOG_PATH = args.es_ingest_log_path
@@ -628,5 +599,7 @@ if __name__ == "__main__":
 
     logger.remove()
     logger.add(sys.stderr, level=args.log_level.upper())
+
+    np.seterr(all='raise') # Raise error on invalid value to catch NaNs from duration adjustment.
 
     uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level.lower())
