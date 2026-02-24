@@ -32,9 +32,9 @@ def plot_query_solver(csv_path: Path, out_path: Path, backend: str) -> None:
 
     fig, ax = plt.subplots(figsize=(max(10, len(epochs) * 1.5), 6))
 
-    ax.bar(x - bar_w / 2, s_query,  bar_w, label="Server query",  color="#76b7b2")
+    ax.bar(x - bar_w / 2, s_query,  bar_w, label="Sketch query",  color="#76b7b2")
     ax.bar(x - bar_w / 2, s_solver, bar_w, bottom=s_query,
-           label="Server solver", color="#59a14f")
+           label="Sketch solver", color="#59a14f")
 
     ax.bar(x + bar_w / 2, e_query,  bar_w, label="ES query",  color="#f28e2b")
     ax.bar(x + bar_w / 2, e_solver, bar_w, bottom=e_query,
