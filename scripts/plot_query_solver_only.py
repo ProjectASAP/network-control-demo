@@ -45,7 +45,7 @@ def plot_query_solver(csv_path: Path, out_path: Path, backend: str) -> None:
     ax.set_xlabel("Epoch")
     ax.set_ylabel("Time (ms)")
     ax.set_title(
-        f"Per-epoch query + solver breakdown: Server vs ES (OR-Tools/{backend})\n"
+        f"Per-epoch query + solver breakdown: Sketch vs ES (OR-Tools/{backend})\n"
         f"(ingestion time excluded)"
     )
     ax.legend(loc="upper left", fontsize=8)
