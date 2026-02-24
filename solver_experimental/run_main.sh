@@ -2,16 +2,37 @@
 
 set -euo pipefail
 
-uv run emulate_telemetry.py &
+EPOCH_LENGTH_S=150.0
+
+LOG_DIR="logs/$(date +%Y%m%d-%H%M%S)"
+mkdir -p "${LOG_DIR}"
+
+uv run emulate_telemetry.py \
+    --epoch-length-s "${EPOCH_LENGTH_S}" \
+    --log-level "DEBUG" \
+    --data-rate 200 \
+    --sketch-ingest-log-path "${LOG_DIR}/sketch_ingest.csv" \
+    --es-ingest-log-path "${LOG_DIR}/es_ingest.csv" \
+    --no-es-ingest \
+    &
+
 EMULATOR_PID=$!
 trap 'kill "$EMULATOR_PID"' EXIT
 
-CLUSTER_METRICS_CSV="${CLUSTER_METRICS_CSV:-$HOME/cluster-metrics.csv}" \
-TIME_RANGE_MS="${TIME_RANGE_MS:-3000000}" \
-NODE_QUERY_LIMIT="${NODE_QUERY_LIMIT:-}" \
+sleep 3
+
+INTERVAL=1.0
+BATCH_SIZE=60
 uv run main.py \
     --node-path "dummy_data/nodes.jsonl" \
     --edge-path "dummy_data/edges.jsonl" \
     --task-path "dummy_data/tasks.jsonl" \
-    --query-manager-config "configs/sample.yml" \
-    --log-level "INFO"
+    --emulator-url "http://localhost:8000" \
+    --interval "${INTERVAL}" \
+    --batch-size "${BATCH_SIZE}" \
+    --epoch-length-s "${EPOCH_LENGTH_S}" \
+    --log-level "INFO" \
+    --query-rtt-log-path "${LOG_DIR}/query_rtt.csv" \
+    --loop-rtt-log-path "${LOG_DIR}/loop_rtt.csv" \
+    --assignments-log-path "${LOG_DIR}/assignments.csv" 
+    # --use-es 

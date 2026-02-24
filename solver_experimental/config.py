@@ -37,7 +37,7 @@ ES_URL = os.getenv("ES_URL") or os.getenv("ES_BACKEND_URL") or "http://localhost
 ES_INDEX_NAME = os.getenv("ES_INDEX_NAME", "cluster-metrics")
 
 ES_API_KEY = os.getenv(
-    "ES_API_KEY", "TWg0S01wc0JhR1AxOFVUcUY5N2w6bGR0TjIySHRZTHVwdmZLTmtqcGtGQQ=="
+    "ES_API_KEY", "UnI2NFA1d0JkMjVjRVA5bDBsQmU6Tkd6Y3pUajVPWjJhU2ZXQWdYUGpFdw=="
 )
 SKETCH_API_KEY = os.getenv("SKETCH_API_KEY") or ES_API_KEY
 CLUSTER_METRICS_CSV = os.path.expanduser(

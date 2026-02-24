@@ -121,3 +121,4 @@ class RunningTask:
     node_id: str
     start_time_s: float
     task: Task
+    end_time_s: float | None = None

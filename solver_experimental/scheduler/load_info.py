@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import json
+from cattrs import structure
+import jsonlines
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, MutableMapping, Sequence, Tuple
+from typing import Iterable, Mapping, TypeVar
 import pandas as pd
 import datetime as dt
-import math
 import networkx as nx
 import jsonlines
 
@@ -35,11 +35,21 @@ def _read_jsonl(path: str | Path) -> Iterable[dict[str, object]]:
                 yield row
             else:
                 raise ValueError(f"Expected JSON object per line in {path}.")
+            
+
+def _load_entities_jsonl(path: str | Path, cls: type[T], mapping: Mapping[str, str] | None = None) -> list[T]:
+    results = []
+    for obj in _read_jsonl(path):
+        data = _apply_column_mapping(obj, mapping)
+        entity = structure(data, cls)
+        results.append(entity)
+    return results
 
 
-def load_nodes(
-    path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs
-) -> dict[str, Node]:
+T = TypeVar("T")
+
+
+def load_nodes(path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs) -> dict[str, Node]:
     """
     Load node capacities from a CSV or JSONL file. Specify mapping between column names and expected fields if they differ.
 
@@ -56,13 +66,20 @@ def load_nodes(
         ]
     """
     if _path_is_jsonl(path):
-        return _load_nodes_jsonl(path, column_names=column_names)
+        entities = _load_entities_jsonl(path, Node, mapping=column_names)
+        result = {}
+        for node in entities:
+            if node.node_id in result:
+                continue
+            result[node.node_id] = node
+        return result
     return _load_nodes_csv(path, column_names=column_names, **kwargs)
 
 
 def _load_nodes_csv(
     path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs
 ) -> dict[str, Node]:
+    # TODO: Old CSV loading logic. Remove/refactor later.
     df = pd.read_csv(path, **kwargs)
     if column_names is not None:
         df = df.rename(columns=column_names)
@@ -84,32 +101,7 @@ def _load_nodes_csv(
             used_memory=float(row.get("used_memory", 0)),
             used_network=float(row.get("used_network", 0)),
         )
-        result[node.node_id] = node
-    return result
-
-
-def _load_nodes_jsonl(
-    path: str | Path, column_names: Mapping[str, str] | None = None
-) -> dict[str, Node]:
-    result: dict[str, Node] = {}
-    for row in _read_jsonl(path):
-        row = _apply_column_mapping(row, column_names)
-        node_id = str(row["node_id"])
-        if node_id in result:
-            continue
-        node = Node(
-            node_id=node_id,
-            cpu_capacity=float(row["cpu_capacity"]),
-            memory_capacity=float(row["memory_capacity"]),
-            network_capacity=(
-                float(row["network_capacity"])
-                if row.get("network_capacity") not in (None, "")
-                else None
-            ),
-            used_cpu=float(row.get("used_cpu", 0) or 0),
-            used_memory=float(row.get("used_memory", 0) or 0),
-            used_network=float(row.get("used_network", 0) or 0),
-        )
+        node = structure(row, Node)
         result[node.node_id] = node
     return result
 
@@ -132,13 +124,21 @@ def load_edges(
         ]
     """
     if _path_is_jsonl(path):
-        return _load_edges_jsonl(path, column_names=column_names)
+        entities = _load_entities_jsonl(path, Edge, mapping=column_names)
+        result = {}
+        for edge in entities:
+            key = tuple(sorted(edge.edge_id))  # type: ignore
+            if key in result:
+                continue
+            result[key] = edge
+        return result
     return _load_edges_csv(path, column_names=column_names, **kwargs)
 
 
 def _load_edges_csv(
     path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs
 ) -> dict[EdgeKey, Edge]:
+    # TODO: Old CSV loading logic. Remove/refactor later.
     df = pd.read_csv(path, **kwargs)
     if column_names is not None:
         df = df.rename(columns=column_names)
@@ -154,30 +154,6 @@ def _load_edges_csv(
             edge_id=key,
             capacity=float(row["capacity"]),
             used_bandwidth=float(row.get("used_bandwidth", 0)),
-        )
-        result[key] = edge
-    return result
-
-
-def _load_edges_jsonl(
-    path: str | Path, column_names: Mapping[str, str] | None = None
-) -> dict[EdgeKey, Edge]:
-    result: dict[EdgeKey, Edge] = {}
-    for row in _read_jsonl(path):
-        row = _apply_column_mapping(row, column_names)
-        edge_id = row.get("edge_id")
-        if edge_id is None:
-            edge_id = (row["source"], row["target"])
-        if not isinstance(edge_id, (list, tuple)) or len(edge_id) != 2:
-            raise ValueError(f"Invalid edge_id {edge_id} in {path}.")
-        key: EdgeKey = (str(edge_id[0]), str(edge_id[1]))
-        key = tuple(sorted(key))  # type: ignore
-        if key in result:
-            continue
-        edge = Edge(
-            edge_id=key,
-            capacity=float(row["capacity"]),
-            used_bandwidth=float(row.get("used_bandwidth", 0) or 0),
         )
         result[key] = edge
     return result
@@ -201,7 +177,13 @@ def load_tasks(
         ]
     """
     if _path_is_jsonl(path):
-        return _load_tasks_jsonl(path, column_names=column_names)
+        entities = _load_entities_jsonl(path, Task, mapping=column_names)
+        result = {}
+        for task in entities:
+            if task.task_id in result:
+                continue
+            result[task.task_id] = task
+        return result
     return _load_tasks_csv(path, column_names=column_names, **kwargs)
 
 
@@ -211,6 +193,8 @@ def _load_tasks_csv(
     df = pd.read_csv(path, **kwargs).fillna(
         ""
     )  # Fill NaN in case certain tasks don't have peers.
+    # TODO: Old CSV loading logic. Remove/refactor later.
+    df = pd.read_csv(path, **kwargs).fillna("") # Fill NaN in case certain tasks don't have peers.
     if column_names is not None:
         df = df.rename(columns=column_names)
     payload = df.to_dict(orient="records")
@@ -239,120 +223,9 @@ def _load_tasks_csv(
     return result
 
 
-def _parse_peer_task_ids(value: object | None) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return [str(item) for item in value]
-    if value == "":
-        return []
-    return str(value).split(";")
-
-
-def _parse_peer_bandwidths(
-    peer_task_ids: object | None, peer_bandwidths: object | None
-) -> dict[str, float]:
-    if isinstance(peer_bandwidths, dict):
-        return {str(task_id): float(bw) for task_id, bw in peer_bandwidths.items()}
-    if peer_bandwidths is None or peer_bandwidths == "":
-        return {}
-    peer_ids = _parse_peer_task_ids(peer_task_ids)
-    if isinstance(peer_bandwidths, list):
-        return {task_id: float(bw) for task_id, bw in zip(peer_ids, peer_bandwidths)}
-    bandwidth_values = (
-        [float(bw) for bw in str(peer_bandwidths).split(";")] if peer_bandwidths else []
-    )
-    return {task_id: bw for task_id, bw in zip(peer_ids, bandwidth_values)}
-
-
-def _load_tasks_jsonl(
-    path: str | Path, column_names: Mapping[str, str] | None = None
-) -> dict[str, Task]:
-    result: dict[str, Task] = {}
-    for row in _read_jsonl(path):
-        row = _apply_column_mapping(row, column_names)
-        task_id = str(row["task_id"])
-        if task_id in result:
-            continue
-        peer_bandwidths = _parse_peer_bandwidths(
-            row.get("peer_task_ids"),
-            row.get("peer_bandwidths"),
-        )
-        task = Task(
-            task_id=task_id,
-            arrival_offset_s=float(row["arrival_offset_s"]),
-            duration_s=float(row["duration_s"]),
-            initial_cpu=float(row["initial_cpu"]),
-            initial_memory=float(row["initial_memory"]),
-            peer_bandwidths=peer_bandwidths,
-        )
-        result[task.task_id] = task
-    return result
-
-
 def build_task_graph(tasks: dict[str, Task]) -> nx.DiGraph:
     task_graph = nx.DiGraph()
     for t_i, task in tasks.items():
         for t_j, bw in task.peer_bandwidths.items():
             task_graph.add_edge(t_i, t_j, bandwidth=bw)
     return task_graph
-
-
-def load_task_communications(
-    path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs
-) -> dict[tuple[str, str], TaskCommunication]:
-    """
-    Load task communication demands from a CSV or JSONL file. Specify mapping between column names and expected fields if they differ.
-
-    Expected format:
-        [
-            {
-                "source_task_id": "task1",
-                "target_task_id": "task2",
-                "bandwidth": 20
-            },
-            ...
-        ]
-    """
-    if _path_is_jsonl(path):
-        return _load_task_communications_jsonl(path, column_names=column_names)
-    return _load_task_communications_csv(path, column_names=column_names, **kwargs)
-
-
-def _load_task_communications_csv(
-    path: str | Path, column_names: Mapping[str, str] | None = None, **kwargs
-) -> dict[tuple[str, str], TaskCommunication]:
-    df = pd.read_csv(path, **kwargs)
-    if column_names is not None:
-        df = df.rename(columns=column_names)
-    payload = df.to_dict(orient="records")
-    result = {}
-    for row in payload:
-        t_i, t_j = str(row["source_task_id"]), str(row["target_task_id"])
-        if (t_i, t_j) in result:
-            continue
-        comm = TaskCommunication(
-            source_task_id=t_i,
-            target_task_id=t_j,
-            bandwidth=float(row["bandwidth"]),
-        )
-        result[(comm.source_task_id, comm.target_task_id)] = comm
-    return result
-
-
-def _load_task_communications_jsonl(
-    path: str | Path, column_names: Mapping[str, str] | None = None
-) -> dict[tuple[str, str], TaskCommunication]:
-    result: dict[tuple[str, str], TaskCommunication] = {}
-    for row in _read_jsonl(path):
-        row = _apply_column_mapping(row, column_names)
-        t_i, t_j = str(row["source_task_id"]), str(row["target_task_id"])
-        if (t_i, t_j) in result:
-            continue
-        comm = TaskCommunication(
-            source_task_id=t_i,
-            target_task_id=t_j,
-            bandwidth=float(row["bandwidth"]),
-        )
-        result[(comm.source_task_id, comm.target_task_id)] = comm
-    return result
