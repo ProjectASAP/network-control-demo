@@ -161,6 +161,7 @@ class NetworkControllerSolver:
         edges: Mapping[EdgeKey, Edge],
         *,
         undirected: bool = True,
+        solver_backend: str = "CBC",
     ) -> None:
         if not nodes:
             raise ValueError("At least one node must be provided")
@@ -168,6 +169,7 @@ class NetworkControllerSolver:
             raise ValueError("At least one network edge must be provided")
 
         self._undirected = undirected
+        self._solver_backend = solver_backend.upper()
         self._nodes: Dict[str, Node] = {
             node_id: Node(
                 node_id=node.node_id,
@@ -219,6 +221,7 @@ class NetworkControllerSolver:
         previous_assignments: Optional[Mapping[str, str]] = None,
         max_task_movements: Optional[int] = None,
         ilp_output_path: Optional[str | Path] = None,
+        time_limit_s: Optional[float] = None,
     ) -> AssignmentResult:
         """
         Optimise task placement subject to resource and migration constraints.
@@ -293,9 +296,13 @@ class NetworkControllerSolver:
                     f"Edge {edge_id} is over-subscribed before optimisation (bandwidth)."
                 )
 
-        solver = pywraplp.Solver.CreateSolver("CBC")
+        solver = pywraplp.Solver.CreateSolver(self._solver_backend)
         if solver is None:
-            raise RuntimeError("Failed to initialise OR-Tools CBC solver.")
+            raise RuntimeError(
+                f"Failed to initialise OR-Tools solver backend '{self._solver_backend}'."
+            )
+        if time_limit_s is not None and time_limit_s > 0:
+            solver.SetTimeLimit(int(time_limit_s * 1000))
 
         x_vars: Dict[str, Dict[str, pywraplp.Variable]] = {}
         skip_vars: Dict[str, pywraplp.Variable] = {}

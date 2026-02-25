@@ -114,11 +114,13 @@ uv run main.py --node-path dummy_data/nodes.jsonl --edge-path dummy_data/edges.j
 | `scripts/run_rtt_sweep_epoch_with_solver.py` | Epoch-based RTT sweep with solver timings |
 | `scripts/run_rtt_sweep_epoch_full.py` | Epoch-based sweep: ingest + query + solver timing for both backends (PuLP) |
 | `scripts/run_rtt_sweep_epoch_full_ortools.py` | Same as above but using OR-Tools solver instead of PuLP; supports `--solver-backend {CBC,SCIP,GLPK}` |
+| `scripts/run_dynamic_epoch_benchmark.py` | Dynamic epoch benchmark using emulator-generated task telemetry + padding to target rows/epoch; measures ingest/query/solver for Sketch vs ES |
 | `scripts/rtt_sweep_common.py` | Shared helpers for RTT sweeps |
 | `scripts/plot_query_rtt.py` | Plot query RTT logs |
 | `scripts/plot_epoch_cumulative.py` | Plot cumulative epoch RTT |
 | `scripts/plot_solver_comparison.py` | Plot solver comparison graphs |
 | `scripts/run_rtt_sweep_all.sh` | Runs all three RTT sweeps with `data/` + `plots/` + `logs/` defaults |
+| `scripts/run_dynamic_epoch_benchmark_all.sh` | Runs dynamic epoch benchmark across solver backends (e.g., CBC/SCIP) with standard `data/` + `plots/` + `logs/` outputs |
 
 ### Benchmark output convention
 
@@ -181,6 +183,8 @@ python3 scripts/run_rtt_sweep_epoch_full.py --run-solver
 python3 scripts/run_rtt_sweep_epoch_full_ortools.py --run-solver                        # default: CBC
 python3 scripts/run_rtt_sweep_epoch_full_ortools.py --run-solver --solver-backend SCIP  # SCIP backend
 python3 scripts/run_rtt_sweep_epoch_full_ortools.py --run-solver --solver-backend GLPK  # GLPK backend
+python3 scripts/run_dynamic_epoch_benchmark.py --solver-backend SCIP --max-epochs 50 --rows-per-epoch 1000000
+bash scripts/run_dynamic_epoch_benchmark_all.sh
 ```
 
 ### Tests

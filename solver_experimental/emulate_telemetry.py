@@ -235,6 +235,30 @@ async def ingest(assignments: list[dict]):
     return {"message": "Tasks ingested successfully."}
 
 
+@app.post("/generate")
+async def generate(assignments: list[dict]):
+    """Generate telemetry records from assignments without ingesting to backends."""
+    running_tasks = structure(assignments, list[RunningTask])
+    logger.debug(f"Generating records for assignments: {running_tasks}")
+
+    running_tasks_map: dict[str, RunningTask] = {}
+    if running_tasks:
+        running_tasks_map = {rt.task.task_id: rt for rt in running_tasks}
+        emulator.emulate_metrics(running_tasks=running_tasks_map)
+    else:
+        logger.warning("No running tasks provided for generation.")
+
+    records = list(emulator.create_metrics_records())
+
+    global global_epoch
+    global_epoch += 1
+    logger.info(
+        f"Advanced to epoch {global_epoch}. Generated {len(records)} records from {len(running_tasks_map)} running tasks."
+    )
+
+    return {"records": records, "epoch": global_epoch - 1}
+
+
 async def force_es_refresh() -> None:
     # Push metrics immediately and wait for ES refresh so queries can see them.
     records = list(emulator.create_metrics_records())
