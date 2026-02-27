@@ -10,7 +10,7 @@ mkdir -p "${LOG_DIR}"
 uv run emulate_telemetry.py \
     --epoch-length-s "${EPOCH_LENGTH_S}" \
     --log-level "DEBUG" \
-    --data-rate 200 \
+    --data-rate 1 \
     --sketch-ingest-log-path "${LOG_DIR}/sketch_ingest.csv" \
     --es-ingest-log-path "${LOG_DIR}/es_ingest.csv" \
     --no-es-ingest \

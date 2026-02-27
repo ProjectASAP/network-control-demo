@@ -324,9 +324,8 @@ class MetricGenerator:
     """
     Generates emulated metric values using a noisy sinusoidal model.
     """
-    a: float
+    m: float
     b: float
-    c: float
     base_value: float = 1.0
     noise_scale: float = 0.1
     p_scalable: float = 0
@@ -347,12 +346,12 @@ class MetricGenerator:
         Returns:
             A MetricGenerator instance.
         """
-        period = rng.uniform(0, 10)
-        a = rng.uniform(0.05, 0.65)
-        b = 2 * np.pi / period
-        c = rng.uniform(0, 10)
+
+        # Slope of the underlying "trend" of the metric over time, which can be positive or negative for more variability.
+        m = rng.uniform(-0.5, 0.5)
+        b = rng.uniform(0.4, 0.6)
     
-        return cls(a=a, b=b, c=c, base_value=base_value, rng=rng)
+        return cls(m=m, b=b, base_value=base_value, rng=rng)
 
     def generate(self, stop: float = 1.0, start: float = 0.0, num: int = 60, max_value: float = 1.0) -> tuple[np.ndarray, float]:
         # Generate a noisy sinusoidal time series around the base value.
@@ -371,14 +370,10 @@ class MetricGenerator:
         if self.base_value == 0:
             return np.zeros(num), 1.0
         rng = self.rng
-        a = self.a
-        # Compress timeseries by corresponding factor.
-        b = self.b
-        c = self.c
         
         t = np.linspace(start, stop, num=num)
     
-        scale_factor = 1 + a * np.sin(b * t + c)
+        scale_factor = self.m * t + self.b # Linear trend.
         noise = rng.normal(loc=0, scale=self.noise_scale, size=len(scale_factor))
         buffer = self.base_value * (scale_factor + noise)
 
