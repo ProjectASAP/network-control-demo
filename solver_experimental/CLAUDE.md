@@ -8,7 +8,7 @@ The Python side of the network control demo: a **task scheduling optimizer** tha
 
 - **uv** (see `pyproject.toml`, `uv.lock`). Use `uv run <script>` to execute.
 - Requires **Python 3.13+**.
-- Key deps: pulp, networkx, elasticsearch, fastapi, cattrs, loguru, pandas, requests, httpx
+- Key deps: ortools, pulp, networkx, elasticsearch, fastapi, cattrs, loguru, pandas, requests, httpx
 
 ## Entry Points
 
@@ -151,6 +151,7 @@ FastAPI server on `127.0.0.1:8000`:
 | Endpoint | Method | Description |
 |---|---|---|
 | `/ingest` | POST | Receives task assignments, generates synthetic metrics |
+| `/generate` | POST | Receives task assignments, generates and returns metrics records without ingesting to Sketch/ES |
 | `/ingest_rows` | POST | Receives raw CSV rows, forwards to Sketch + ES |
 
 Background loop periodically pushes `MetricsEmulator.create_metrics_records()` to both backends.

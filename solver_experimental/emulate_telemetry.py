@@ -329,14 +329,14 @@ class MetricGenerator:
     base_value: float = 1.0
     noise_scale: float = 0.1
     p_scalable: float = 0
-    rng: np.random.RandomGenerator = field(default_factory=lambda: np.random.default_rng())
+    rng: np.random.Generator = field(default_factory=lambda: np.random.default_rng())
 
     def __post_init__(self):
         # Randomly assign a portion of the task as scalable to resources for more realistic variability.
         self.p_scalable = self.rng.uniform(0.1, 0.9)
 
     @classmethod
-    def create(cls, base_value: float = 1.0, rng: np.random.RandomGenerator = _RNG) -> "MetricGenerator":
+    def create(cls, base_value: float = 1.0, rng: np.random.Generator = _RNG) -> "MetricGenerator":
         # Generate a noisy sinusoidal time series around the base value.
         """
         Creates a MetricGenerator with random parameters.

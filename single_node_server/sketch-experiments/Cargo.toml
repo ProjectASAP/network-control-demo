@@ -1,0 +1,12 @@
+[package]
+name = "sketch-experiments"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "tumbling-window"
+path = "src/tumbling_window.rs"
+
+[dependencies]
+sketchlib-rust = { path = "/users/yuanyc/sketchlib-rust" }
+rand = "0.9"
