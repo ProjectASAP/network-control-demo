@@ -1,234 +1,244 @@
 use sketchlib_rust::{KLL, SketchInput};
 use std::collections::HashMap;
-use std::error::Error;
 use std::sync::RwLock;
 
-use crate::config::NodesConfig;
-use crate::metrics::MetricField;
-
-pub struct NodeStore {
-    pub nodes: HashMap<String, NodeData>,
+#[derive(Default)]
+struct MetricData {
+    kll: KLL,
+    cumulative: f64,
 }
 
-pub struct NodeData {
-    pub cpu_kll: RwLock<KLL>,
-    pub mem_kll: RwLock<KLL>,
-    pub net_kll: RwLock<KLL>,
-    pub cpu_cumulative: RwLock<f64>,
-    pub mem_cumulative: RwLock<f64>,
-    pub net_cumulative: RwLock<f64>,
+pub struct MetricStore {
+    groups: RwLock<HashMap<String, HashMap<String, MetricData>>>,
+    global_metrics: RwLock<HashMap<String, MetricData>>,
 }
 
-impl NodeStore {
-    pub fn from_config(config: NodesConfig) -> Result<Self, Box<dyn Error + Send + Sync>> {
-        let count = config.nodes.count;
-        let range = config.nodes.range;
-        let (prefix, start_num, width) = split_node_id(&range.start)?;
-        let (end_prefix, end_num, end_width) = split_node_id(&range.end)?;
+impl Default for MetricStore {
+    fn default() -> Self {
+        Self {
+            groups: RwLock::new(HashMap::new()),
+            global_metrics: RwLock::new(HashMap::new()),
+        }
+    }
+}
 
-        if prefix != end_prefix {
-            return Err(format!(
-                "node id prefixes do not match: '{}' vs '{}'",
-                prefix, end_prefix
-            )
-            .into());
-        }
-        if width != end_width {
-            return Err(format!("node id width does not match: {} vs {}", width, end_width).into());
-        }
-        if end_num < start_num {
-            return Err(format!("node range end before start: {}..{}", start_num, end_num).into());
-        }
-
-        let expected = (end_num - start_num + 1) as usize;
-        if count != expected {
-            return Err(format!(
-                "node count {} does not match range size {}",
-                count, expected
-            )
-            .into());
-        }
-
-        let mut nodes = HashMap::with_capacity(count);
-        for num in start_num..=end_num {
-            let id = format!("{prefix}{:0width$}", num, width = width);
-            nodes.insert(id, NodeData::new());
-        }
-
-        Ok(Self { nodes })
+impl MetricStore {
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    pub fn insert_sample(
+    pub fn insert_metrics(
         &self,
-        node_id: &str,
-        cpu_value: f64,
-        mem_value: f64,
-        net_value: f64,
+        group_keys: &[String],
+        metrics: &HashMap<String, f64>,
     ) -> Result<(), String> {
-        let node = self
-            .nodes
-            .get(node_id)
-            .ok_or_else(|| format!("node id '{}' not found", node_id))?;
+        if metrics.is_empty() {
+            return Ok(());
+        }
 
         {
-            let mut cpu = node.cpu_kll.write().map_err(|_| "failed to lock cpu kll")?;
-            cpu.update(&SketchInput::F64(cpu_value))
-                .map_err(|_| "cpu values should be numeric")?;
-        }
-        {
-            let mut mem = node.mem_kll.write().map_err(|_| "failed to lock mem kll")?;
-            mem.update(&SketchInput::F64(mem_value))
-                .map_err(|_| "mem values should be numeric")?;
-        }
-        {
-            let mut net = node.net_kll.write().map_err(|_| "failed to lock net kll")?;
-            net.update(&SketchInput::F64(net_value))
-                .map_err(|_| "net values should be numeric")?;
-        }
-        {
-            let mut cpu = node
-                .cpu_cumulative
+            let mut global = self
+                .global_metrics
                 .write()
-                .map_err(|_| "failed to lock cpu cumulative")?;
-            *cpu += cpu_value;
+                .map_err(|_| "failed to lock global metrics")?;
+            for (metric, value) in metrics {
+                let metric_entry = global.entry(metric.clone()).or_default();
+                metric_entry
+                    .kll
+                    .update(&SketchInput::F64(*value))
+                    .map_err(|_| format!("{} values should be numeric", metric))?;
+                metric_entry.cumulative += *value;
+            }
         }
-        {
-            let mut mem = node
-                .mem_cumulative
-                .write()
-                .map_err(|_| "failed to lock mem cumulative")?;
-            *mem += mem_value;
+
+        if group_keys.is_empty() {
+            return Ok(());
         }
-        {
-            let mut net = node
-                .net_cumulative
-                .write()
-                .map_err(|_| "failed to lock net cumulative")?;
-            *net += net_value;
+
+        let mut groups = self.groups.write().map_err(|_| "failed to lock grouped metrics")?;
+        for group_key in group_keys {
+            let per_group = groups.entry(group_key.clone()).or_insert_with(HashMap::new);
+            for (metric, value) in metrics {
+                let metric_entry = per_group.entry(metric.clone()).or_default();
+                metric_entry
+                    .kll
+                    .update(&SketchInput::F64(*value))
+                    .map_err(|_| format!("{} values should be numeric", metric))?;
+                metric_entry.cumulative += *value;
+            }
         }
 
         Ok(())
     }
 
-    pub fn cumulative_value(&self, node_id: &str, field: MetricField) -> Result<f64, String> {
-        let node = self
-            .nodes
-            .get(node_id)
-            .ok_or_else(|| format!("node id '{}' not found", node_id))?;
-        let value = match field {
-            MetricField::CpuCores => node
-                .cpu_cumulative
-                .read()
-                .map_err(|_| "failed to lock cpu cumulative")?,
-            MetricField::MemoryGb => node
-                .mem_cumulative
-                .read()
-                .map_err(|_| "failed to lock mem cumulative")?,
-            MetricField::NetworkMbps => node
-                .net_cumulative
-                .read()
-                .map_err(|_| "failed to lock net cumulative")?,
-        };
-        Ok(*value)
+    pub fn cumulative_value(&self, key: Option<&str>, field: &str) -> Result<f64, String> {
+        let normalized_field = normalize_metric_name(field);
+        if let Some(group_key) = key {
+            let groups = self.groups.read().map_err(|_| "failed to lock grouped metrics")?;
+            let per_group = groups
+                .get(group_key)
+                .ok_or_else(|| format!("key '{}' not found", group_key))?;
+            let value = per_group
+                .get(&normalized_field)
+                .ok_or_else(|| format!("metric '{}' not found for key '{}'", field, group_key))?;
+            return Ok(value.cumulative);
+        }
+
+        let global = self
+            .global_metrics
+            .read()
+            .map_err(|_| "failed to lock global metrics")?;
+        let value = global
+            .get(&normalized_field)
+            .ok_or_else(|| format!("metric '{}' not found", field))?;
+        Ok(value.cumulative)
     }
 
     pub fn query_percentiles(
         &self,
-        node_id: &str,
-        field: MetricField,
+        key: Option<&str>,
+        field: &str,
         percents: &[f64],
     ) -> Result<Vec<Option<f64>>, String> {
-        let node = self
-            .nodes
-            .get(node_id)
-            .ok_or_else(|| format!("node id '{}' not found", node_id))?;
-        let kll = match field {
-            MetricField::CpuCores => node.cpu_kll.read().map_err(|_| "failed to lock cpu kll")?,
-            MetricField::MemoryGb => node.mem_kll.read().map_err(|_| "failed to lock mem kll")?,
-            MetricField::NetworkMbps => {
-                node.net_kll.read().map_err(|_| "failed to lock net kll")?
-            }
+        let normalized_field = normalize_metric_name(field);
+
+        let metric_data = if let Some(group_key) = key {
+            let groups = self.groups.read().map_err(|_| "failed to lock grouped metrics")?;
+            let per_group = groups
+                .get(group_key)
+                .ok_or_else(|| format!("key '{}' not found", group_key))?;
+            per_group
+                .get(&normalized_field)
+                .ok_or_else(|| format!("metric '{}' not found for key '{}'", field, group_key))?
+                .kll
+                .clone()
+        } else {
+            let global = self
+                .global_metrics
+                .read()
+                .map_err(|_| "failed to lock global metrics")?;
+            global
+                .get(&normalized_field)
+                .ok_or_else(|| format!("metric '{}' not found", field))?
+                .kll
+                .clone()
         };
+
         let mut results = Vec::with_capacity(percents.len());
         for percent in percents {
             if !(0.0..=100.0).contains(percent) {
                 results.push(None);
                 continue;
             }
-            results.push(Some(kll.quantile(*percent / 100.0)));
+            results.push(Some(metric_data.quantile(*percent / 100.0)));
         }
+
         Ok(results)
     }
 
     pub fn clear_all(&self) -> Result<(), String> {
-        for node in self.nodes.values() {
-            {
-                let mut cpu = node.cpu_kll.write().map_err(|_| "failed to lock cpu kll")?;
-                *cpu = KLL::default();
-            }
-            {
-                let mut mem = node.mem_kll.write().map_err(|_| "failed to lock mem kll")?;
-                *mem = KLL::default();
-            }
-            {
-                let mut net = node.net_kll.write().map_err(|_| "failed to lock net kll")?;
-                *net = KLL::default();
-            }
-            {
-                let mut cpu = node
-                    .cpu_cumulative
-                    .write()
-                    .map_err(|_| "failed to lock cpu cumulative")?;
-                *cpu = 0.0;
-            }
-            {
-                let mut mem = node
-                    .mem_cumulative
-                    .write()
-                    .map_err(|_| "failed to lock mem cumulative")?;
-                *mem = 0.0;
-            }
-            {
-                let mut net = node
-                    .net_cumulative
-                    .write()
-                    .map_err(|_| "failed to lock net cumulative")?;
-                *net = 0.0;
-            }
+        {
+            let mut groups = self.groups.write().map_err(|_| "failed to lock grouped metrics")?;
+            groups.clear();
+        }
+        {
+            let mut global = self
+                .global_metrics
+                .write()
+                .map_err(|_| "failed to lock global metrics")?;
+            global.clear();
         }
         Ok(())
     }
 }
 
-impl NodeData {
-    fn new() -> Self {
-        Self {
-            cpu_kll: RwLock::new(KLL::default()),
-            mem_kll: RwLock::new(KLL::default()),
-            net_kll: RwLock::new(KLL::default()),
-            cpu_cumulative: RwLock::new(0.0),
-            mem_cumulative: RwLock::new(0.0),
-            net_cumulative: RwLock::new(0.0),
-        }
-    }
+fn normalize_metric_name(name: &str) -> String {
+    name.trim()
+        .to_ascii_lowercase()
+        .replace('-', "_")
+        .replace(' ', "_")
 }
 
-fn split_node_id(id: &str) -> Result<(String, u32, usize), Box<dyn Error + Send + Sync>> {
-    let mut digit_idx = None;
-    for (idx, ch) in id.char_indices() {
-        if ch.is_ascii_digit() {
-            digit_idx = Some(idx);
-            break;
-        }
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::MetricStore;
+
+    #[test]
+    fn insert_metrics_allows_any_group_keys() {
+        let store = MetricStore::new();
+        let mut metrics = HashMap::new();
+        metrics.insert("cpu_cores".to_string(), 10.0);
+
+        store
+            .insert_metrics(&["any-key".to_string()], &metrics)
+            .expect("arbitrary key should succeed");
     }
-    let digit_idx = digit_idx.ok_or_else(|| format!("node id '{id}' has no digits"))?;
-    let (prefix, number_str) = id.split_at(digit_idx);
-    if number_str.is_empty() {
-        return Err(format!("node id '{id}' missing numeric suffix").into());
+
+    #[test]
+    fn insert_and_query_grouped_and_global_values() {
+        let store = MetricStore::new();
+
+        let mut sample_a = HashMap::new();
+        sample_a.insert("cpu_cores".to_string(), 10.0);
+        sample_a.insert("memory_gb".to_string(), 4.0);
+
+        let mut sample_b = HashMap::new();
+        sample_b.insert("cpu_cores".to_string(), 30.0);
+        sample_b.insert("memory_gb".to_string(), 6.0);
+
+        let group_keys = vec!["N001".to_string(), "task-a".to_string(), "N001;task-a".to_string()];
+
+        store
+            .insert_metrics(&group_keys, &sample_a)
+            .expect("first insert should succeed");
+        store
+            .insert_metrics(&group_keys, &sample_b)
+            .expect("second insert should succeed");
+
+        let global_cpu = store
+            .cumulative_value(None, "cpu-cores")
+            .expect("global cumulative should exist");
+        assert!((global_cpu - 40.0).abs() < f64::EPSILON);
+
+        let grouped_cpu = store
+            .cumulative_value(Some("N001;task-a"), "cpu_cores")
+            .expect("group cumulative should exist");
+        assert!((grouped_cpu - 40.0).abs() < f64::EPSILON);
+
+        let grouped_mem = store
+            .cumulative_value(Some("task-a"), "memory gb")
+            .expect("group cumulative should exist");
+        assert!((grouped_mem - 10.0).abs() < f64::EPSILON);
+
+        let pct = store
+            .query_percentiles(Some("N001"), "cpu_cores", &[50.0, -1.0, 101.0])
+            .expect("percentile query should succeed");
+        assert_eq!(pct.len(), 3);
+        assert!(pct[0].is_some());
+        assert!(pct[1].is_none());
+        assert!(pct[2].is_none());
+
+        let p50 = pct[0].expect("p50 value");
+        assert!((10.0..=30.0).contains(&p50));
     }
-    if !number_str.chars().all(|c| c.is_ascii_digit()) {
-        return Err(format!("node id '{id}' has non-numeric suffix").into());
+
+    #[test]
+    fn clear_all_removes_all_metrics() {
+        let store = MetricStore::new();
+        let mut metrics = HashMap::new();
+        metrics.insert("cpu_cores".to_string(), 7.0);
+
+        store
+            .insert_metrics(&["N001".to_string()], &metrics)
+            .expect("insert should succeed");
+
+        store.clear_all().expect("clear should succeed");
+
+        let err = store
+            .cumulative_value(None, "cpu_cores")
+            .expect_err("metrics should be empty after clear");
+        assert!(err.contains("metric 'cpu_cores' not found"));
     }
-    let number: u32 = number_str.parse()?;
-    Ok((prefix.to_string(), number, number_str.len()))
 }

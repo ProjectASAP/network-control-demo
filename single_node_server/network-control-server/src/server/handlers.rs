@@ -15,14 +15,12 @@ use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio::task::JoinSet;
 
-use crate::metrics::MetricField;
-
 use super::logging::log_request_middleware;
 use super::query::{handle_cumulative, handle_percentiles, parse_quantile_spec};
 use super::timing::{QueryTiming, write_timing_log};
 use super::types::{
     AggregationKind, AppState, BatchQueryRequest, BatchQueryResponse, BatchQueryResult,
-    IngestRecord, MetricsQuery, PercentileAggregation, RootResponse, SearchRequest,
+    MetricsQuery, PercentileAggregation, RootResponse, SearchRequest,
 };
 use super::upstream::{forward_to_upstream, merge_aggregations};
 
@@ -64,9 +62,16 @@ async fn root_handler() -> Json<RootResponse<'static>> {
 
 async fn ingest_handler(
     State(state): State<AppState>,
-    Json(record): Json<IngestRecord>,
+    Json(record): Json<Value>,
 ) -> impl IntoResponse {
-    let len = record.cpu_cores.len();
+    let parsed = match parse_ingest_record(&state, &record) {
+        Ok(parsed) => parsed,
+        Err(message) => {
+            return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
+        }
+    };
+
+    let len = parsed.len;
     if len == 0 {
         return (
             axum::http::StatusCode::BAD_REQUEST,
@@ -74,18 +79,7 @@ async fn ingest_handler(
         )
             .into_response();
     }
-    if record.task.len() != len
-        || record.cluster.len() != len
-        || record.memory_gb.len() != len
-        || record.network_mbps.len() != len
-    {
-        return (
-            axum::http::StatusCode::BAD_REQUEST,
-            "metrics record fields must have equal lengths".to_string(),
-        )
-            .into_response();
-    }
-    if let Some(epoch) = record.epoch {
+    if let Some(epoch) = parsed.epoch {
         let mut should_clear = false;
         match state.current_epoch.lock() {
             Ok(mut guard) => {
@@ -103,7 +97,7 @@ async fn ingest_handler(
             }
         }
         if should_clear {
-            if let Err(message) = state.node_store.clear_all() {
+            if let Err(message) = state.metric_store.clear_all() {
                 return (
                     axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                     message,
@@ -116,17 +110,27 @@ async fn ingest_handler(
 
     let mut inserted = 0usize;
     for idx in 0..len {
-        let cluster = record.cluster[idx].trim();
-        let task = record.task[idx].trim();
-        if cluster.is_empty() || task.is_empty() {
+        let sample_labels: HashMap<String, String> = parsed
+            .label_columns
+            .iter()
+            .map(|(name, values)| (name.clone(), values[idx].clone()))
+            .collect();
+
+        let sample_metrics: HashMap<String, f64> = parsed
+            .metric_columns
+            .iter()
+            .map(|(name, values)| (name.clone(), values[idx]))
+            .collect();
+
+        if sample_metrics.is_empty() {
             continue;
         }
-        if let Err(message) = state.node_store.insert_sample(
-            cluster,
-            record.cpu_cores[idx],
-            record.memory_gb[idx],
-            record.network_mbps[idx],
-        ) {
+
+        let group_keys = build_group_keys(&parsed.label_combinations, &sample_labels);
+        if let Err(message) = state
+            .metric_store
+            .insert_metrics(&group_keys, &sample_metrics)
+        {
             return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, message).into_response();
         }
         inserted += 1;
@@ -329,11 +333,13 @@ async fn batch_query_handler(
     }
 
     let fields = request.fields.unwrap_or_else(|| {
-        vec![
-            "cpu_cores".to_string(),
-            "memory_gb".to_string(),
-            "network_mbps".to_string(),
-        ]
+        let mut fields: Vec<String> = state
+            .agg_config
+            .supported_metric_fields()
+            .into_iter()
+            .collect();
+        fields.sort();
+        fields
     });
     let percents = request.percents.unwrap_or_else(|| vec![50.0]);
     let agg_kinds: Vec<BatchAggKind> = request
@@ -357,22 +363,18 @@ async fn batch_query_handler(
             })
             .collect()
     };
-    let cumulative_fields: Vec<(String, MetricField)> = fields
+    let cumulative_fields: Vec<(String, String)> = fields
         .iter()
         .filter_map(|field_name| {
             let trimmed = field_name.trim();
             if trimmed.is_empty() {
                 return None;
             }
-            if !state
-                .agg_config
-                .cumulative_metrics
-                .contains(&trimmed.to_ascii_lowercase())
-            {
+            let normalized = normalize_metric_name(trimmed);
+            if !state.agg_config.supports_cumulative_field(&normalized) {
                 return None;
             }
-            let field = MetricField::from_spec(trimmed)?;
-            Some((field_name.clone(), field))
+            Some((field_name.clone(), normalized))
         })
         .collect();
 
@@ -438,8 +440,8 @@ async fn batch_query_handler(
                         let mut field_cumulative = HashMap::new();
                         for (field_name, field) in cumulative_fields.iter() {
                             let value = state
-                                .node_store
-                                .cumulative_value(key_value, *field)
+                                .metric_store
+                                .cumulative_value(Some(key_value), field)
                                 .map_err(|message| message)?;
                             field_cumulative.insert(field_name.clone(), value);
                         }
@@ -496,16 +498,17 @@ async fn metrics_handler(
     };
 
     // Step 1: Parse field
-    let field = match MetricField::from_spec(&field_spec) {
-        Some(field) => field,
-        None => {
-            return (
-                axum::http::StatusCode::BAD_REQUEST,
-                format!("unsupported metric field: {field_spec}"),
-            )
-                .into_response();
-        }
-    };
+    let field = normalize_metric_name(&field_spec);
+    if !state
+        .agg_config
+        .supports_percentile_field(&field, true)
+    {
+        return (
+            axum::http::StatusCode::BAD_REQUEST,
+            format!("unsupported metric field: {field_spec}"),
+        )
+            .into_response();
+    }
     if let Some(t) = &mut timing {
         t.step("parse_field");
     }
@@ -559,8 +562,8 @@ async fn metrics_handler(
         };
 
         let values = match state
-            .node_store
-            .query_percentiles(&node_id, field, &[percent])
+            .metric_store
+            .query_percentiles(Some(&node_id), &field, &[percent])
         {
             Ok(values) => values,
             Err(message) => {
@@ -619,4 +622,142 @@ async fn metrics_handler(
         }))
         .into_response()
     }
+}
+
+struct ParsedIngestRecord {
+    epoch: Option<u64>,
+    len: usize,
+    label_columns: HashMap<String, Vec<String>>,
+    metric_columns: HashMap<String, Vec<f64>>,
+    label_combinations: Vec<Vec<String>>,
+}
+
+fn parse_ingest_record(state: &AppState, value: &Value) -> Result<ParsedIngestRecord, String> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| "ingest payload must be a JSON object".to_string())?;
+
+    let epoch = object.get("epoch").map(parse_epoch).transpose()?;
+    let mut string_columns: HashMap<String, Vec<String>> = HashMap::new();
+    let mut numeric_columns: HashMap<String, Vec<f64>> = HashMap::new();
+    let mut row_len: Option<usize> = None;
+
+    for (name, col_value) in object {
+        if name == "epoch" {
+            continue;
+        }
+        let normalized_name = normalize_metric_name(name);
+        let array = col_value
+            .as_array()
+            .ok_or_else(|| format!("field '{}' must be an array", name))?;
+
+        if let Some(existing) = row_len {
+            if existing != array.len() {
+                return Err("metrics record fields must have equal lengths".to_string());
+            }
+        } else {
+            row_len = Some(array.len());
+        }
+
+        let mut all_numbers = true;
+        let mut num_values = Vec::with_capacity(array.len());
+        for item in array {
+            if let Some(value) = item.as_f64() {
+                num_values.push(value);
+            } else {
+                all_numbers = false;
+                break;
+            }
+        }
+        if all_numbers {
+            numeric_columns.insert(normalized_name, num_values);
+            continue;
+        }
+
+        let mut all_strings = true;
+        let mut str_values = Vec::with_capacity(array.len());
+        for item in array {
+            if let Some(value) = item.as_str() {
+                str_values.push(value.trim().to_string());
+            } else {
+                all_strings = false;
+                break;
+            }
+        }
+        if all_strings {
+            string_columns.insert(normalized_name, str_values);
+            continue;
+        }
+
+        return Err(format!(
+            "field '{}' must be either a numeric array or string array",
+            name
+        ));
+    }
+
+    let len = row_len.unwrap_or(0);
+    let mut label_combinations: Vec<Vec<String>> = string_columns
+        .keys()
+        .cloned()
+        .map(|name| vec![name])
+        .collect();
+    label_combinations.extend(state.agg_config.label_combinations.iter().cloned());
+
+    Ok(ParsedIngestRecord {
+        epoch,
+        len,
+        label_columns: string_columns,
+        metric_columns: numeric_columns,
+        label_combinations,
+    })
+}
+
+fn parse_epoch(value: &Value) -> Result<u64, String> {
+    value
+        .as_u64()
+        .ok_or_else(|| "epoch must be an unsigned integer".to_string())
+}
+
+fn build_group_keys(
+    label_combinations: &[Vec<String>],
+    labels: &HashMap<String, String>,
+) -> Vec<String> {
+    let mut keys = Vec::new();
+    let mut seen = HashSet::new();
+
+    for labels_for_key in label_combinations {
+        let mut parts = Vec::with_capacity(labels_for_key.len());
+        let mut missing = false;
+
+        for label_name in labels_for_key {
+            let Some(value) = labels.get(label_name) else {
+                missing = true;
+                break;
+            };
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                missing = true;
+                break;
+            }
+            parts.push(trimmed.to_string());
+        }
+
+        if missing {
+            continue;
+        }
+
+        let key = parts.join(";");
+        if seen.insert(key.clone()) {
+            keys.push(key);
+        }
+    }
+
+    keys
+}
+
+fn normalize_metric_name(name: &str) -> String {
+    name.trim()
+        .to_ascii_lowercase()
+        .replace('-', "_")
+        .replace(' ', "_")
 }

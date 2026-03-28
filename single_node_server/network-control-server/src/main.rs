@@ -13,9 +13,9 @@ use std::{
     time::Instant,
 };
 
-use config::{AggregationConfig, NodesConfig};
+use config::AggregationConfig;
 // use ingest::load_metric_store;
-use metrics::NodeStore;
+use metrics::MetricStore;
 use reqwest::Client;
 use server::{AppState, TimingSender, run_http_server, start_request_logger};
 
@@ -42,25 +42,7 @@ async fn main() {
         config_start.elapsed()
     );
 
-    let nodes_config_start = Instant::now();
-    let nodes_config = match NodesConfig::load() {
-        Ok(cfg) => cfg,
-        Err(err) => {
-            eprintln!("failed to load nodes config: {err}");
-            return;
-        }
-    };
-    let node_store = match NodeStore::from_config(nodes_config) {
-        Ok(store) => store,
-        Err(err) => {
-            eprintln!("failed to build node store: {err}");
-            return;
-        }
-    };
-    eprintln!(
-        "nodes config loaded in {:.2?}",
-        nodes_config_start.elapsed()
-    );
+    let metric_store = MetricStore::new();
 
     // Startup ingestion is disabled; start with an empty store.
     // eprintln!("loading metrics from CSV...");
@@ -77,7 +59,7 @@ async fn main() {
     // };
 
     let state = AppState {
-        node_store: Arc::new(node_store),
+        metric_store: Arc::new(metric_store),
         current_epoch: Arc::new(std::sync::Mutex::new(None)),
         agg_config: Arc::new(agg_config),
         http_client: Client::new(),

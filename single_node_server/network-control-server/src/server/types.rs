@@ -6,8 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::config::AggregationConfig;
-// use crate::metrics::{EntityEstimate, MetricStore, NodeStore};
-use crate::metrics::NodeStore;
+use crate::metrics::MetricStore;
 
 use super::TimingSender;
 use super::logging::LogSender;
@@ -15,7 +14,7 @@ use super::logging::LogSender;
 #[derive(Clone)]
 pub struct AppState {
     // pub store: Arc<MetricStore>,
-    pub node_store: Arc<NodeStore>,
+    pub metric_store: Arc<MetricStore>,
     pub current_epoch: Arc<Mutex<Option<u64>>>,
     pub agg_config: Arc<AggregationConfig>,
     pub http_client: Client,
@@ -86,17 +85,6 @@ pub(crate) struct BatchQueryResult {
 #[derive(Debug, Serialize)]
 pub(crate) struct BatchQueryResponse {
     pub(crate) results: Vec<BatchQueryResult>,
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct IngestRecord {
-    #[serde(default)]
-    pub(crate) epoch: Option<u64>,
-    pub(crate) task: Vec<String>,
-    pub(crate) cluster: Vec<String>,
-    pub(crate) cpu_cores: Vec<f64>,
-    pub(crate) memory_gb: Vec<f64>,
-    pub(crate) network_mbps: Vec<f64>,
 }
 
 pub(crate) enum AggregationKind {
