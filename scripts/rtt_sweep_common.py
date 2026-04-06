@@ -18,10 +18,23 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 DEFAULT_ES_URL = "http://localhost:9200"
 DEFAULT_ES_INDEX = "cluster-metrics"
-DEFAULT_ES_API_KEY = os.getenv(
-    "ES_API_KEY",
-    "UzhwdVM1d0Jtb2JkQy1QOE1GTDM6NFRRSHBRXzJtLV9xTXhMUzFJM1FPZw==",
-)
+def _load_es_api_key() -> str | None:
+    """Load ES API key from env var or a local credentials file.
+
+    Resolution order:
+    1. ES_API_KEY environment variable
+    2. File path in ES_API_KEY_FILE environment variable
+    3. .es_api_key file in the repo root
+    """
+    if key := os.getenv("ES_API_KEY"):
+        return key
+    key_file = Path(os.getenv("ES_API_KEY_FILE", REPO_ROOT / ".es_api_key"))
+    if key_file.exists():
+        return key_file.read_text().strip()
+    return None
+
+
+DEFAULT_ES_API_KEY = _load_es_api_key()
 DEFAULT_SERVER_URL = "http://localhost:10101"
 DEFAULT_BATCH_SIZE = 1000
 DEFAULT_CONNECT_TIMEOUT = 5.0
@@ -86,8 +99,8 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--nodes-config",
         type=str,
-        default="single_node_server/network-control-server/nodes-config.yaml",
-        help="Path to nodes-config.yaml",
+        default="single_node_server/network-control-server/server-config.yaml",
+        help="Path to server-config.yaml (or legacy nodes-config.yaml)",
     )
     parser.add_argument(
         "--out-csv",
@@ -118,9 +131,9 @@ def parse_nodes_config(path: str) -> List[str]:
         for line in fh:
             line = line.strip()
             if line.startswith("start:"):
-                start = line.split(":", 1)[1].strip()
+                start = line.split(":", 1)[1].strip().strip('"').strip("'")
             elif line.startswith("end:"):
-                end = line.split(":", 1)[1].strip()
+                end = line.split(":", 1)[1].strip().strip('"').strip("'")
     if not start or not end:
         raise ValueError("nodes-config.yaml missing start/end")
     prefix_start, start_num = start[:-3], int(start[-3:])

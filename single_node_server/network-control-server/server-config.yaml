@@ -1,0 +1,64 @@
+server:
+  host: "0.0.0.0"
+  port: 10101
+  body_limit_mb: 50
+  request_log_buffer: 1000
+  enable_timing: false
+  timing_csv_path: "server_request_timing.csv"
+
+api:
+  index_name: "cluster-metrics"
+  enable_batch_endpoint: true
+  enable_metrics_endpoint: true
+  strict_mode: false
+
+upstream:
+  mode: "fallback"
+  search_url: "http://localhost:9200/cluster-metrics/_search"
+  forward_headers:
+    - "x-request-id"
+    - "x-request-type"
+
+storage:
+  backend: "in_memory_node_store"
+  node_catalog:
+    kind: "range"
+    count: 30
+    range:
+      start: "N001"
+      end: "N030"
+
+schema:
+  metrics:
+    - name: "cpu_cores"
+      aliases: ["cpucores", "cpu-cores"]
+      storage_field: "cpu_cores"
+    - name: "memory_gb"
+      aliases: ["memorygb", "memory-gb"]
+      storage_field: "memory_gb"
+    - name: "network_mbps"
+      aliases: ["networkmbps", "network-mbps"]
+      storage_field: "network_mbps"
+  key_fields:
+    - "cluster"
+  ingest_field_mapping:
+    key_field: "cluster"
+    epoch_field: "epoch"
+    task_field: "task"
+    metric_fields:
+      cpu_cores: "cpu_cores"
+      memory_gb: "memory_gb"
+      network_mbps: "network_mbps"
+
+query_support:
+  aggregations:
+    - "percentiles"
+    - "cumulative"
+  supported_filter_types:
+    - "term"
+  default_batch_fields:
+    - "cpu_cores"
+    - "memory_gb"
+    - "network_mbps"
+  default_batch_percents:
+    - 50.0

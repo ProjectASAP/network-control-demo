@@ -1,5 +1,6 @@
 mod handlers;
 mod logging;
+mod planner;
 mod query;
 mod timing;
 mod types;
@@ -9,9 +10,12 @@ pub use handlers::run_http_server;
 #[allow(unused_imports)]
 pub use logging::LogEntry;
 pub use logging::start_request_logger;
+pub use planner::DefaultRequestPlanner;
+pub use query::SketchAggregationEngine;
 #[allow(unused_imports)]
 pub use timing::QueryTiming;
 pub use types::AppState;
+pub use upstream::EsFallbackUpstreamClient;
 
 #[allow(dead_code)]
 pub type LogSender = logging::LogSender;

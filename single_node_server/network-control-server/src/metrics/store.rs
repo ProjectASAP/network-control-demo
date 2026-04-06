@@ -1,12 +1,42 @@
-use sketchlib_rust::{KLL, SketchInput};
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::RwLock;
 
-use crate::config::NodesConfig;
-use crate::metrics::MetricField;
+use asap_sketch_lib::{KLL, SketchInput};
 
-pub struct NodeStore {
+use crate::config::NodeCatalogConfig;
+
+use super::MetricField;
+
+pub trait KeyCatalog: Send + Sync {
+    fn keys(&self) -> Vec<String>;
+    fn contains(&self, key: &str) -> bool;
+}
+
+pub trait MetricStore: Send + Sync {
+    fn insert_sample(
+        &self,
+        node_id: &str,
+        cpu_value: f64,
+        mem_value: f64,
+        net_value: f64,
+    ) -> Result<(), String>;
+    fn cumulative_value(&self, node_id: &str, field: MetricField) -> Result<f64, String>;
+    fn query_percentiles(
+        &self,
+        node_id: &str,
+        field: MetricField,
+        percents: &[f64],
+    ) -> Result<Vec<Option<f64>>, String>;
+    fn clear_all(&self) -> Result<(), String>;
+    fn contains_key(&self, key: &str) -> bool;
+}
+
+pub struct RangeKeyCatalog {
+    keys: Vec<String>,
+}
+
+pub struct InMemoryNodeStore {
     pub nodes: HashMap<String, NodeData>,
 }
 
@@ -19,10 +49,10 @@ pub struct NodeData {
     pub net_cumulative: RwLock<f64>,
 }
 
-impl NodeStore {
-    pub fn from_config(config: NodesConfig) -> Result<Self, Box<dyn Error + Send + Sync>> {
-        let count = config.nodes.count;
-        let range = config.nodes.range;
+impl RangeKeyCatalog {
+    pub fn from_config(config: &NodeCatalogConfig) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        let count = config.count;
+        let range = &config.range;
         let (prefix, start_num, width) = split_node_id(&range.start)?;
         let (end_prefix, end_num, end_width) = split_node_id(&range.end)?;
 
@@ -49,16 +79,37 @@ impl NodeStore {
             .into());
         }
 
-        let mut nodes = HashMap::with_capacity(count);
+        let mut keys = Vec::with_capacity(count);
         for num in start_num..=end_num {
-            let id = format!("{prefix}{:0width$}", num, width = width);
-            nodes.insert(id, NodeData::new());
+            keys.push(format!("{prefix}{:0width$}", num, width = width));
         }
 
-        Ok(Self { nodes })
+        Ok(Self { keys })
+    }
+}
+
+impl KeyCatalog for RangeKeyCatalog {
+    fn keys(&self) -> Vec<String> {
+        self.keys.clone()
     }
 
-    pub fn insert_sample(
+    fn contains(&self, key: &str) -> bool {
+        self.keys.iter().any(|candidate| candidate == key)
+    }
+}
+
+impl InMemoryNodeStore {
+    pub fn from_catalog(catalog: &dyn KeyCatalog) -> Self {
+        let mut nodes = HashMap::new();
+        for key in catalog.keys() {
+            nodes.insert(key, NodeData::new());
+        }
+        Self { nodes }
+    }
+}
+
+impl MetricStore for InMemoryNodeStore {
+    fn insert_sample(
         &self,
         node_id: &str,
         cpu_value: f64,
@@ -110,7 +161,7 @@ impl NodeStore {
         Ok(())
     }
 
-    pub fn cumulative_value(&self, node_id: &str, field: MetricField) -> Result<f64, String> {
+    fn cumulative_value(&self, node_id: &str, field: MetricField) -> Result<f64, String> {
         let node = self
             .nodes
             .get(node_id)
@@ -132,7 +183,7 @@ impl NodeStore {
         Ok(*value)
     }
 
-    pub fn query_percentiles(
+    fn query_percentiles(
         &self,
         node_id: &str,
         field: MetricField,
@@ -160,7 +211,7 @@ impl NodeStore {
         Ok(results)
     }
 
-    pub fn clear_all(&self) -> Result<(), String> {
+    fn clear_all(&self) -> Result<(), String> {
         for node in self.nodes.values() {
             {
                 let mut cpu = node.cpu_kll.write().map_err(|_| "failed to lock cpu kll")?;
@@ -197,6 +248,10 @@ impl NodeStore {
             }
         }
         Ok(())
+    }
+
+    fn contains_key(&self, key: &str) -> bool {
+        self.nodes.contains_key(key)
     }
 }
 

@@ -1,207 +1,161 @@
 # Network Control Server API
 
-Base URL: `http://localhost:10101`
+Base URL by default: `http://localhost:10101`
 
-All requests are logged to stderr with headers and body.
+The runtime contract is driven by `server-config.yaml`.
 
-## GET /
+## Supported Surface
 
-Returns a JSON help message with usage examples.
+- `POST /cluster-metrics/_search`
+- `POST /cluster-metrics/_batch`
+- `POST /metrics/:field` (compatibility endpoint, deprecated)
+- `POST /` for ingest
+- `GET /healthz`
 
-## GET /healthz
+## Local Search Contract
 
-Returns `ok`.
+`POST /cluster-metrics/_search`
 
-## POST /cluster-metrics/_search
+Supported local aggregations:
 
-Elasticsearch-style search body. The server will compute some aggregations locally
-and forward the remainder to the upstream URL (`UPSTREAM_URL`, default
-`http://localhost:9200/cluster-metrics/_search`).
+- `percentiles`
+- `cumulative`
 
-### Locally handled aggregations
+Supported local query subset:
 
-An aggregation is handled locally only if it contains exactly one of the
-recognized types and no extra fields.
+- `size: 0`
+- `query.bool.filter.term` on configured key fields such as `cluster`
+- `query.bool.filter.term` on `epoch`
 
-#### percentiles
+Anything outside that subset is either:
 
-- Only fields listed under `supported_aggs.percentiles.fields` in `agg-config.yaml`
-  are handled locally.
-- `percents` values must be within 0..=100.
-- Optional `key` is supported and must be non-empty if provided.
-- `key` may be `cluster`, `task`, or `cluster;task` (the ingester stores all
-  combinations).
+- forwarded upstream when `upstream.mode: fallback`
+- rejected with `400` when strict mode is enabled or upstream fallback is disabled
 
-Example:
+### Percentiles
+
 ```json
 {
+  "size": 0,
+  "query": {
+    "bool": {
+      "filter": [
+        { "term": { "cluster": "N001" } }
+      ]
+    }
+  },
   "aggs": {
     "cpu_quantiles": {
       "percentiles": {
         "field": "cpu_cores",
-        "percents": [10, 50]
+        "percents": [10, 50, 90]
       }
     }
   }
 }
 ```
 
-#### top_entities
+You may also provide `key` directly on the aggregation:
 
-- Only fields listed under `supported_aggs.top_entities.metrics` in `agg-config.yaml`
-  are handled locally.
-- Keys are tracked for `cluster`, `task`, and `cluster;task`. The returned `key`
-  can be any of those.
-- Values are rounded to the nearest positive integer before tracking.
-- `fields` may be provided to fetch multiple metrics in one aggregation.
-
-Example:
 ```json
 {
+  "size": 0,
   "aggs": {
-    "top_cpu": {
-      "top_entities": { "field": "cpu_cores" }
+    "cpu_quantiles": {
+      "percentiles": {
+        "field": "cpu_cores",
+        "percents": [50],
+        "key": "N001"
+      }
     }
   }
 }
 ```
 
-Multi-field example:
+### Cumulative
+
 ```json
 {
-  "aggs": {
-    "top_all": {
-      "top_entities": { "fields": ["cpu_cores", "memory_gb"] }
-    }
-  }
-}
-```
-
-#### cumulative
-
-- Only fields listed under `supported_aggs.cumulative.metrics` in `agg-config.yaml`
-  are handled locally.
-- `key` must be non-empty.
-- `key` may be `cluster`, `task`, or `cluster;task`.
-- Values are rounded to the nearest positive integer before summing.
-
-Example:
-```json
-{
+  "size": 0,
   "aggs": {
     "cpu_sum": {
-      "cumulative": { "field": "cpu_cores", "key": "cluster-a;task-1" }
-    }
-  }
-}
-```
-
-#### frequency
-
-- `field` must be a supported metric field.
-- `key` must be non-empty.
-- `value` is rounded to the nearest positive integer for counting.
-- `key` may be `cluster`, `task`, or `cluster;task` (tracked via Hydra CMS).
-
-Example:
-```json
-{
-  "aggs": {
-    "cpu_frequency": {
-      "frequency": { "field": "cpu_cores", "key": "cluster-c;cache", "value": 4 }
-    }
-  }
-}
-```
-
-Response aggregation value:
-```json
-{ "key": "cluster-c;cache", "value": 4, "count": 123 }
-```
-
-### Forwarded aggregations
-
-Any other aggregation types or any aggregation with
-extra fields are forwarded to the upstream URL. The response is merged with
-any locally handled aggregations.
-
-## POST /metrics/:field
-
-Simple percentile query for a single field.
-
-### Path parameter
-
-`:field` supports:
-- `cpu_cores` (also accepts `cpucores`, `cpu-cores`)
-- `memory_gb` (also accepts `memorygb`, `memory-gb`)
-- `network_mbps` (also accepts `networkmbps`, `network-mbps`)
-
-### Body
-
-```json
-{ "quantiles": ["p10", "p20", "p50"] }
-```
-
-- `quantiles` must be a non-empty list.
-- Each entry may be `pNN`, `PNN`, or a raw number (`"10"`). The server will
-  normalize keys to `p{percent}` in the response.
-- If a percentile cannot be computed, it is omitted from the response.
-
-### Response
-
-```json
-{
-  "field": "cpu_cores",
-  "quantiles": {
-    "p10": 1.23,
-    "p20": 2.34
-  }
-}
-```
-
-## POST /cluster-metrics/_batch
-
-Batch query endpoint for querying multiple keys at once.
-
-### Request Body
-
-```json
-{
-  "keys": ["cluster-a;task-1", "cluster-b;task-2"],
-  "fields": ["cpu_cores", "memory_gb"],
-  "aggs": ["percentiles", "cumulative"],
-  "percents": [50, 90],
-  "frequency_value": 4.0
-}
-```
-
-### Response
-
-```json
-{
-  "results": [
-    {
-      "key": "cluster-a;task-1",
-      "percentiles": {
-        "cpu_cores": {"p50": 2.5, "p90": 4.0},
-        "memory_gb": {"p50": 1.2, "p90": 2.0}
-      },
       "cumulative": {
-        "cpu_cores": 1000,
-        "memory_gb": 500
-      }
-    },
-    {
-      "key": "cluster-b;task-2",
-      "percentiles": {
-        "cpu_cores": {"p50": 1.0, "p90": 2.0},
-        "memory_gb": {"p50": 0.5, "p90": 1.0}
-      },
-      "cumulative": {
-        "cpu_cores": 200,
-        "memory_gb": 100
+        "field": "cpu_cores",
+        "key": "N001"
       }
     }
+  }
+}
+```
+
+### Error shape
+
+```json
+{
+  "code": "unsupported_request",
+  "message": "request contains unsupported local query features",
+  "details": ["unsupported_query: only bool.filter.term queries are supported locally"],
+  "supported_features": [
+    "aggregations.percentiles",
+    "aggregations.cumulative",
+    "query.bool.filter.term",
+    "size=0"
   ]
 }
 ```
+
+## Batch Contract
+
+`POST /cluster-metrics/_batch`
+
+```json
+{
+  "keys": ["N001", "N002"],
+  "fields": ["cpu_cores", "memory_gb"],
+  "aggs": ["percentiles", "cumulative"],
+  "percents": [50, 90]
+}
+```
+
+Notes:
+
+- `keys` is required.
+- `fields` defaults from `query_support.default_batch_fields`.
+- `percents` defaults from `query_support.default_batch_percents`.
+- Only configured and registered aggs are accepted.
+
+## Metrics Compatibility Endpoint
+
+`POST /metrics/:field`
+
+```json
+{
+  "quantiles": ["p50", "p90"],
+  "node_id": "N001"
+}
+```
+
+Response includes `"deprecated": true`.
+
+## Ingest
+
+`POST /`
+
+```json
+{
+  "epoch": 1,
+  "task": ["T001", "T002"],
+  "cluster": ["N001", "N002"],
+  "cpu_cores": [2.5, 3.1],
+  "memory_gb": [8.0, 16.0],
+  "network_mbps": [100.0, 200.0]
+}
+```
+
+## Not Supported Locally
+
+- `top_entities`
+- `frequency`
+- arbitrary Elasticsearch DSL
+- non-`term` filters
+- non-zero `size`

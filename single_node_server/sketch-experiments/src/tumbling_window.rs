@@ -10,7 +10,7 @@
 //! handles out-of-order insertion naturally.
 
 use rand::Rng;
-use sketchlib_rust::{KLL, SketchInput};
+use asap_sketch_lib::{KLL, SketchInput};
 
 /// A metric value paired with its timestamp.
 #[derive(Debug, Clone)]

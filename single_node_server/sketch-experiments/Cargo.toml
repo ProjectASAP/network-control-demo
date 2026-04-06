@@ -8,5 +8,5 @@ name = "tumbling-window"
 path = "src/tumbling_window.rs"
 
 [dependencies]
-sketchlib-rust = { path = "/users/yuanyc/sketchlib-rust" }
+ASAPSketchLib = { path = "/users/yuanyc/ASAPSketchLib" }
 rand = "0.9"

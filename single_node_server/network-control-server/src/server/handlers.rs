@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -15,51 +15,105 @@ use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio::task::JoinSet;
 
-use crate::metrics::MetricField;
-
 use super::logging::log_request_middleware;
-use super::query::{handle_cumulative, handle_percentiles, parse_quantile_spec};
+use super::query::parse_quantile_spec;
 use super::timing::{QueryTiming, write_timing_log};
 use super::types::{
-    AggregationKind, AppState, BatchQueryRequest, BatchQueryResponse, BatchQueryResult,
-    IngestRecord, MetricsQuery, PercentileAggregation, RootResponse, SearchRequest,
+    AppState, BatchQueryRequest, BatchQueryResponse, BatchQueryResult, ErrorResponse, IngestRecord,
+    MetricsQuery, QueryExecutionPlan, RootResponse, SearchRequest,
 };
-use super::upstream::{forward_to_upstream, merge_aggregations};
-
-#[derive(Clone, Copy)]
-enum BatchAggKind {
-    Percentiles,
-    Cumulative,
-}
+use super::upstream::merge_aggregations;
 
 pub async fn run_http_server(
     state: AppState,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let log_state = state.clone();
-    let app = Router::new()
-        .route("/", get(root_handler).post(ingest_handler))
-        .route("/healthz", get(|| async { "ok" }))
-        .route("/cluster-metrics/_search", post(search_handler))
-        .route("/cluster-metrics/_batch", post(batch_query_handler))
-        .route("/metrics/:field", post(metrics_handler))
-        .with_state(state)
-        .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
-        .layer(from_fn_with_state(log_state, log_request_middleware));
+    let search_path = state.runtime_config.search_path();
+    let batch_path = state.runtime_config.batch_path();
+    let metrics_enabled = state.runtime_config.api.enable_metrics_endpoint;
+    let batch_enabled = state.runtime_config.api.enable_batch_endpoint;
+    let body_limit = state.runtime_config.body_limit_bytes();
+    let bind_addr = state.runtime_config.bind_addr();
 
-    let listener = TcpListener::bind("0.0.0.0:10101").await?;
-    axum::serve(listener, app).await?;
+    // Build routes first (Router<AppState>), then apply layers, then consume state.
+    let mut router = Router::new()
+        .route("/", get(root_handler).post(ingest_handler))
+        .route("/healthz", get(healthz_handler))
+        .route(&search_path, post(search_handler));
+
+    if batch_enabled {
+        router = router.route(&batch_path, post(batch_query_handler));
+    }
+    if metrics_enabled {
+        router = router.route("/metrics/:field", post(metrics_handler));
+    }
+
+    // Apply layers before consuming state so from_fn_with_state has access to AppState.
+    let app = router
+        .layer(DefaultBodyLimit::max(body_limit))
+        .layer(from_fn_with_state(log_state, log_request_middleware))
+        .with_state(state);
+
+    let listener = TcpListener::bind(&bind_addr).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
     Ok(())
 }
 
-async fn root_handler() -> Json<RootResponse<'static>> {
+async fn shutdown_signal() {
+    use tokio::signal;
+
+    let ctrl_c = async {
+        signal::ctrl_c().await.expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => { eprintln!("received Ctrl+C, shutting down"); },
+        _ = terminate => { eprintln!("received SIGTERM, shutting down"); },
+    }
+}
+
+async fn root_handler(State(state): State<AppState>) -> Json<RootResponse<'static>> {
+    let search_path = state.runtime_config.search_path();
     Json(RootResponse {
-        message: "POST /cluster-metrics/_search with aggs for percentiles or cumulative (cumulative requires a key). Other aggs (e.g. avg) are forwarded to Elasticsearch.",
+        message: "Portable single-node metrics server. Supports local percentiles and cumulative aggregations over configured keys; unsupported features are either forwarded upstream or rejected based on runtime config.",
         examples: [
-            "POST /cluster-metrics/_search {\"aggs\":{\"cpu_quantiles\":{\"percentiles\":{\"field\":\"cpu_cores\",\"percents\":[10,50]}}}}",
-            "POST /cluster-metrics/_search {\"aggs\":{\"cpu_cumulative\":{\"cumulative\":{\"field\":\"cpu_cores\",\"key\":\"cluster-c;cache\"}}}}",
-            "POST /cluster-metrics/_search {\"aggs\":{\"mem_quantiles\":{\"percentiles\":{\"field\":\"memory_gb\",\"percents\":[25,75]}}}}",
+            Box::leak(
+                format!(
+                    "POST {search_path} {{\"size\":0,\"query\":{{\"bool\":{{\"filter\":[{{\"term\":{{\"cluster\":\"N001\"}}}}]}}}},\"aggs\":{{\"cpu_p50\":{{\"percentiles\":{{\"field\":\"cpu_cores\",\"percents\":[50]}}}}}}}}"
+                )
+                .into_boxed_str(),
+            ),
+            Box::leak(
+                format!(
+                    "POST {search_path} {{\"size\":0,\"aggs\":{{\"mem_sum\":{{\"cumulative\":{{\"field\":\"memory_gb\",\"key\":\"N001\"}}}}}}}}"
+                )
+                .into_boxed_str(),
+            ),
+            "POST /metrics/cpu_cores {\"quantiles\":[\"p50\"],\"node_id\":\"N001\"}",
         ],
     })
+}
+
+async fn healthz_handler(State(state): State<AppState>) -> Json<Value> {
+    Json(json!({
+        "status": "ok",
+        "config_loaded": true,
+        "upstream_enabled": state.runtime_config.is_upstream_enabled(),
+        "registered_aggregations": state.runtime_config.query_support.aggregations.clone(),
+    }))
 }
 
 async fn ingest_handler(
@@ -68,22 +122,20 @@ async fn ingest_handler(
 ) -> impl IntoResponse {
     let len = record.cpu_cores.len();
     if len == 0 {
-        return (
+        return error_json_response(
             axum::http::StatusCode::BAD_REQUEST,
-            "metrics record must contain at least one sample".to_string(),
-        )
-            .into_response();
+            ErrorResponse::bad_request("metrics record must contain at least one sample"),
+        );
     }
     if record.task.len() != len
         || record.cluster.len() != len
         || record.memory_gb.len() != len
         || record.network_mbps.len() != len
     {
-        return (
+        return error_json_response(
             axum::http::StatusCode::BAD_REQUEST,
-            "metrics record fields must have equal lengths".to_string(),
-        )
-            .into_response();
+            ErrorResponse::bad_request("metrics record fields must have equal lengths"),
+        );
     }
     if let Some(epoch) = record.epoch {
         let mut should_clear = false;
@@ -95,22 +147,19 @@ async fn ingest_handler(
                 }
             }
             Err(_) => {
-                return (
+                return error_json_response(
                     axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    "failed to lock epoch state".to_string(),
-                )
-                    .into_response();
+                    ErrorResponse::bad_request("failed to lock epoch state"),
+                );
             }
         }
         if should_clear {
-            if let Err(message) = state.node_store.clear_all() {
-                return (
+            if let Err(message) = state.store.clear_all() {
+                return error_json_response(
                     axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    message,
-                )
-                    .into_response();
+                    ErrorResponse::bad_request(message),
+                );
             }
-            eprintln!("epoch switch detected: cleared in-memory store for epoch {epoch}");
         }
     }
 
@@ -121,13 +170,16 @@ async fn ingest_handler(
         if cluster.is_empty() || task.is_empty() {
             continue;
         }
-        if let Err(message) = state.node_store.insert_sample(
+        if let Err(message) = state.store.insert_sample(
             cluster,
             record.cpu_cores[idx],
             record.memory_gb[idx],
             record.network_mbps[idx],
         ) {
-            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, message).into_response();
+            return error_json_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorResponse::bad_request(message),
+            );
         }
         inserted += 1;
     }
@@ -140,85 +192,100 @@ async fn search_handler(
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    let mut timing = if state.timing_enabled {
-        Some(QueryTiming::new())
-    } else {
-        None
-    };
-
-    // Step 1: Parse JSON
+    let mut timing = state.timing_enabled.then(QueryTiming::new);
     let request: SearchRequest = match serde_json::from_slice(&body) {
         Ok(value) => value,
         Err(err) => {
-            return (
+            return error_json_response(
                 axum::http::StatusCode::BAD_REQUEST,
-                format!("invalid JSON body: {err}"),
-            )
-                .into_response();
+                ErrorResponse::bad_request(format!("invalid JSON body: {err}")),
+            );
         }
     };
     if let Some(t) = &mut timing {
         t.step("parse_json");
     }
 
-    // Step 3: Process aggregations
+    let plan = match state.request_planner.plan_search(&state, &request) {
+        Ok(plan) => plan,
+        Err(message) => {
+            return error_json_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                ErrorResponse::bad_request(message),
+            );
+        }
+    };
+
+    let can_fallback = state.runtime_config.is_upstream_enabled();
+    if !plan.unsupported_features.is_empty()
+        && (state.runtime_config.api.strict_mode || !can_fallback)
+    {
+        let details = plan
+            .unsupported_features
+            .iter()
+            .map(|feature| format!("{}: {}", feature.code, feature.message))
+            .collect();
+        return error_json_response(
+            axum::http::StatusCode::BAD_REQUEST,
+            ErrorResponse::unsupported(
+                "request contains unsupported local query features",
+                details,
+                state.aggregation_engine.supported_features(),
+            ),
+        );
+    }
+    if (plan.has_other_fields || !plan.forwarded_aggs.is_empty())
+        && (state.runtime_config.api.strict_mode || !can_fallback)
+    {
+        let mut details = Vec::new();
+        if plan.has_other_fields {
+            details.push(
+                "request contains unsupported top-level search fields outside size/query/aggs"
+                    .to_string(),
+            );
+        }
+        if !plan.forwarded_aggs.is_empty() {
+            details.push(format!(
+                "request contains aggregations that are not locally supported: {}",
+                plan.forwarded_aggs
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ));
+        }
+        return error_json_response(
+            axum::http::StatusCode::BAD_REQUEST,
+            ErrorResponse::unsupported(
+                "request requires unsupported features and cannot be satisfied locally",
+                details,
+                state.aggregation_engine.supported_features(),
+            ),
+        );
+    }
+
     let mut handled = BTreeMap::new();
-    let mut handled_names = HashSet::new();
-    let mut has_unhandled = false;
-    let query_supported = true;
-    let query_key = None;
-    let has_other = request._other.keys().any(|key| key.as_str() != "query");
-
-    if let Some(aggs) = request.aggs.as_ref() {
-        for (name, agg) in aggs {
-            let result = if !query_supported {
-                None
-            } else {
-                match agg.kind() {
-                    Some(kind) => match kind {
-                        AggregationKind::Percentiles(pct) => {
-                            let t0 = Instant::now();
-                            let res = handle_percentiles(&state, &pct, query_key);
-                            let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
-                            if let Some(t) = &mut timing {
-                                t.record("sketch_estimate", elapsed_ms);
-                            }
-                            match res {
-                                Ok(Some(values)) => Some(json!({ "values": values })),
-                                Ok(None) => None,
-                                Err(message) => {
-                                    return (axum::http::StatusCode::BAD_REQUEST, message)
-                                        .into_response();
-                                }
-                            }
-                        }
-
-                        AggregationKind::Cumulative(cum) => {
-                            let t0 = Instant::now();
-                            let res = handle_cumulative(&state, &cum);
-                            let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
-                            if let Some(t) = &mut timing {
-                                t.record("sketch_estimate", elapsed_ms);
-                            }
-                            match res {
-                                Ok(value) => Some(json!({ "key": cum.key, "value": value })),
-                                Err(message) => {
-                                    return (axum::http::StatusCode::BAD_REQUEST, message)
-                                        .into_response();
-                                }
-                            }
-                        }
-                    },
-                    None => None,
+    let can_execute_local = plan.unsupported_features.is_empty();
+    if can_execute_local {
+        for local_agg in &plan.local_aggs {
+            let t0 = Instant::now();
+            let result = match state
+                .aggregation_engine
+                .evaluate(&state, &plan.context, local_agg)
+            {
+                Ok(result) => result,
+                Err(message) => {
+                    return error_json_response(
+                        axum::http::StatusCode::BAD_REQUEST,
+                        ErrorResponse::bad_request(message),
+                    );
                 }
             };
-
+            if let Some(t) = &mut timing {
+                t.record("sketch_estimate", t0.elapsed().as_secs_f64() * 1000.0);
+            }
             if let Some(value) = result {
-                let name = name.clone();
-                handled_names.insert(name.clone());
-                handled.insert(name, value);
-            } else {
-                has_unhandled = true;
+                handled.insert(local_agg.name.clone(), value);
             }
         }
     }
@@ -226,370 +293,45 @@ async fn search_handler(
         t.step("aggregations");
     }
 
-    // Step 5: Forward to upstream if needed
-    let needs_upstream = has_other || has_unhandled;
-    let mut response_value = if needs_upstream {
-        let mut upstream_body = match serde_json::to_value(&request) {
+    let should_forward = should_forward_request(&state, &plan, can_execute_local);
+    let mut response_value = if should_forward {
+        let upstream_body = match build_upstream_body(&request, &plan, can_execute_local) {
             Ok(value) => value,
-            Err(err) => {
-                return (
+            Err(message) => {
+                return error_json_response(
                     axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("failed to build upstream payload: {err}"),
-                )
-                    .into_response();
+                    ErrorResponse::bad_request(message),
+                );
             }
         };
         if let Some(t) = &mut timing {
-            t.step("deserialize");
-        }
-        if let Some(aggs_obj) = upstream_body.get_mut("aggs").and_then(Value::as_object_mut) {
-            aggs_obj.retain(|name, _| !handled_names.contains(name));
-        }
-        if let Some(t) = &mut timing {
             t.step("prepare_upstream");
         }
-        let response_value = match forward_to_upstream(&state, &headers, &upstream_body).await {
+        let value = match state
+            .upstream_client
+            .forward(&state, &headers, &upstream_body)
+            .await
+        {
             Ok(value) => value,
             Err(response) => return response,
         };
         if let Some(t) = &mut timing {
             t.step("upstream");
         }
-        response_value
+        value
     } else {
-        if let Some(t) = &mut timing {
-            t.step("prepare_upstream");
-        }
-        if let Some(t) = &mut timing {
-            t.step("upstream");
-        }
         json!({ "aggregations": {} })
     };
 
-    // Step 6: Merge results
     merge_aggregations(&mut response_value, handled);
     if let Some(t) = &mut timing {
         t.step("merge");
     }
 
-    // Build response (with timing if enabled)
     if let Some(t) = &mut timing {
-        // Add timing to response before serialization
         if let Some(obj) = response_value.as_object_mut() {
             obj.insert("_timing".to_string(), t.to_json());
         }
-
-        // Serialize to HTTP response (timed)
-        let mut response = Json(response_value).into_response();
-        t.step("serialize");
-        t.log();
-
-        let timing_header = t.to_header();
-        response
-            .headers_mut()
-            .insert("X-Server-Timing", timing_header.parse().unwrap());
-        let request_type_header = headers
-            .get("x-request-type")
-            .and_then(|value| value.to_str().ok())
-            .unwrap_or("unknown");
-        let request_type = if request_type_header == "es" {
-            if needs_upstream {
-                "es(forwarded)"
-            } else {
-                "es(native)"
-            }
-        } else {
-            request_type_header
-        };
-        write_timing_log(
-            &state,
-            &headers,
-            request_type,
-            "POST",
-            "/cluster-metrics/_search",
-            response.status(),
-            t,
-        );
-        response
-    } else {
-        Json(response_value).into_response()
-    }
-}
-
-async fn batch_query_handler(
-    State(state): State<AppState>,
-    Json(request): Json<BatchQueryRequest>,
-) -> impl IntoResponse {
-    if request.keys.is_empty() {
-        return (
-            axum::http::StatusCode::BAD_REQUEST,
-            "keys must be a non-empty list".to_string(),
-        )
-            .into_response();
-    }
-
-    let fields = request.fields.unwrap_or_else(|| {
-        vec![
-            "cpu_cores".to_string(),
-            "memory_gb".to_string(),
-            "network_mbps".to_string(),
-        ]
-    });
-    let percents = request.percents.unwrap_or_else(|| vec![50.0]);
-    let agg_kinds: Vec<BatchAggKind> = request
-        .aggs
-        .iter()
-        .filter_map(|agg| match agg.trim().to_ascii_lowercase().as_str() {
-            "percentiles" => Some(BatchAggKind::Percentiles),
-            "cumulative" => Some(BatchAggKind::Cumulative),
-            _ => None,
-        })
-        .collect();
-    let pct_aggs: Vec<PercentileAggregation> = if percents.is_empty() {
-        Vec::new()
-    } else {
-        fields
-            .iter()
-            .map(|field_name| PercentileAggregation {
-                field: field_name.clone(),
-                percents: percents.clone(),
-                key: None,
-            })
-            .collect()
-    };
-    let cumulative_fields: Vec<(String, MetricField)> = fields
-        .iter()
-        .filter_map(|field_name| {
-            let trimmed = field_name.trim();
-            if trimmed.is_empty() {
-                return None;
-            }
-            if !state
-                .agg_config
-                .cumulative_metrics
-                .contains(&trimmed.to_ascii_lowercase())
-            {
-                return None;
-            }
-            let field = MetricField::from_spec(trimmed)?;
-            Some((field_name.clone(), field))
-        })
-        .collect();
-
-    let agg_kinds = Arc::new(agg_kinds);
-    let pct_aggs = Arc::new(pct_aggs);
-    let cumulative_fields = Arc::new(cumulative_fields);
-
-    let mut join_set = JoinSet::new();
-    for (idx, key) in request.keys.iter().cloned().enumerate() {
-        let state = state.clone();
-        let agg_kinds = Arc::clone(&agg_kinds);
-        let pct_aggs = Arc::clone(&pct_aggs);
-        let cumulative_fields = Arc::clone(&cumulative_fields);
-        join_set.spawn_blocking(move || {
-            let key_for_query = {
-                let trimmed_key = key.trim();
-                if trimmed_key.is_empty() {
-                    None
-                } else {
-                    Some(trimmed_key.to_string())
-                }
-            };
-            let key_for_query_ref = key_for_query.as_deref();
-            let mut result = BatchQueryResult {
-                key,
-                percentiles: None,
-                cumulative: None,
-            };
-
-            for agg_kind in agg_kinds.iter().copied() {
-                match agg_kind {
-                    BatchAggKind::Percentiles => {
-                        if pct_aggs.is_empty() {
-                            continue;
-                        }
-                        let mut field_percentiles = HashMap::new();
-                        for pct in pct_aggs.iter() {
-                            match handle_percentiles(&state, pct, key_for_query_ref) {
-                                Ok(Some(values)) => {
-                                    let pct_map: HashMap<String, f64> =
-                                        values.into_iter().collect();
-                                    if !pct_map.is_empty() {
-                                        field_percentiles.insert(pct.field.clone(), pct_map);
-                                    }
-                                }
-                                Ok(None) => {}
-                                Err(message) => {
-                                    return Err(message);
-                                }
-                            }
-                        }
-                        if !field_percentiles.is_empty() {
-                            result.percentiles = Some(field_percentiles);
-                        }
-                    }
-                    BatchAggKind::Cumulative => {
-                        let Some(key_value) = key_for_query_ref else {
-                            continue;
-                        };
-                        if cumulative_fields.is_empty() {
-                            continue;
-                        }
-                        let mut field_cumulative = HashMap::new();
-                        for (field_name, field) in cumulative_fields.iter() {
-                            let value = state
-                                .node_store
-                                .cumulative_value(key_value, *field)
-                                .map_err(|message| message)?;
-                            field_cumulative.insert(field_name.clone(), value);
-                        }
-                        if !field_cumulative.is_empty() {
-                            result.cumulative = Some(field_cumulative);
-                        }
-                    }
-                }
-            }
-
-            Ok((idx, result))
-        });
-    }
-
-    let mut results: Vec<Option<BatchQueryResult>> =
-        (0..request.keys.len()).map(|_| None).collect();
-    let mut error_message: Option<String> = None;
-    while let Some(joined) = join_set.join_next().await {
-        match joined {
-            Ok(Ok((idx, result))) => {
-                results[idx] = Some(result);
-            }
-            Ok(Err(message)) => {
-                if error_message.is_none() {
-                    error_message = Some(message);
-                }
-            }
-            Err(err) => {
-                if error_message.is_none() {
-                    error_message = Some(format!("batch query task failed: {err}"));
-                }
-            }
-        }
-    }
-
-    if let Some(message) = error_message {
-        return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
-    }
-
-    let results: Vec<BatchQueryResult> = results.into_iter().flatten().collect();
-    Json(BatchQueryResponse { results }).into_response()
-}
-
-async fn metrics_handler(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Path(field_spec): Path<String>,
-    Json(query): Json<MetricsQuery>,
-) -> impl IntoResponse {
-    let mut timing = if state.timing_enabled {
-        Some(QueryTiming::new())
-    } else {
-        None
-    };
-
-    // Step 1: Parse field
-    let field = match MetricField::from_spec(&field_spec) {
-        Some(field) => field,
-        None => {
-            return (
-                axum::http::StatusCode::BAD_REQUEST,
-                format!("unsupported metric field: {field_spec}"),
-            )
-                .into_response();
-        }
-    };
-    if let Some(t) = &mut timing {
-        t.step("parse_field");
-    }
-
-    // Step 2: Validate query
-    if query.quantiles.is_empty() {
-        return (
-            axum::http::StatusCode::BAD_REQUEST,
-            "quantiles must be a non-empty list".to_string(),
-        )
-            .into_response();
-    }
-    if let Some(t) = &mut timing {
-        t.step("validate");
-    }
-
-    let node_id = query
-        .node_id
-        .as_ref()
-        .map(|id| id.trim())
-        .filter(|id| !id.is_empty());
-    let node_id = match node_id {
-        Some(id) => id.to_string(),
-        None => {
-            return (
-                axum::http::StatusCode::BAD_REQUEST,
-                "node_id is required".to_string(),
-            )
-                .into_response();
-        }
-    };
-    // Step 3: Query percentiles
-    let mut results = BTreeMap::new();
-    for spec in query.quantiles {
-        let percent = match parse_quantile_spec(&spec) {
-            Some(percent) if (0.0..=100.0).contains(&percent) => percent,
-            Some(_) => {
-                return (
-                    axum::http::StatusCode::BAD_REQUEST,
-                    format!("quantile out of range (0-100): {spec}"),
-                )
-                    .into_response();
-            }
-            None => {
-                return (
-                    axum::http::StatusCode::BAD_REQUEST,
-                    format!("invalid quantile format: {spec}"),
-                )
-                    .into_response();
-            }
-        };
-
-        let values = match state
-            .node_store
-            .query_percentiles(&node_id, field, &[percent])
-        {
-            Ok(values) => values,
-            Err(message) => {
-                return (axum::http::StatusCode::BAD_REQUEST, message).into_response();
-            }
-        };
-        if let Some(Some(value)) = values.get(0) {
-            results.insert(format!("p{percent}"), *value);
-        }
-    }
-    if let Some(t) = &mut timing {
-        t.step("query_percentiles");
-    }
-
-    // Build response (with timing if enabled)
-    if let Some(t) = &mut timing {
-        // Build response JSON (timed)
-        let mut response_value = json!({
-            "field": field_spec,
-            "quantiles": results,
-        });
-        t.step("build_response");
-
-        // Add timing to the response before serialization
-        if let Some(obj) = response_value.as_object_mut() {
-            obj.insert("_timing".to_string(), t.to_json());
-        }
-
-        // Serialize to HTTP response (timed)
         let mut response = Json(response_value).into_response();
         t.step("serialize");
         t.log();
@@ -607,6 +349,316 @@ async fn metrics_handler(
             &headers,
             request_type,
             "POST",
+            &state.runtime_config.search_path(),
+            response.status(),
+            t,
+        );
+        response
+    } else {
+        Json(response_value).into_response()
+    }
+}
+
+async fn batch_query_handler(
+    State(state): State<AppState>,
+    Json(request): Json<BatchQueryRequest>,
+) -> impl IntoResponse {
+    if request.keys.is_empty() {
+        return error_json_response(
+            axum::http::StatusCode::BAD_REQUEST,
+            ErrorResponse::bad_request("keys must be a non-empty list"),
+        );
+    }
+
+    let fields = request.fields.unwrap_or_else(|| {
+        state
+            .runtime_config
+            .query_support
+            .default_batch_fields
+            .clone()
+    });
+    let percents = request.percents.unwrap_or_else(|| {
+        state
+            .runtime_config
+            .query_support
+            .default_batch_percents
+            .clone()
+    });
+    let supported_aggs = state.runtime_config.aggregation_names();
+    let mut requested_aggs = Vec::new();
+    for agg in &request.aggs {
+        let normalized = agg.trim().to_ascii_lowercase();
+        if !supported_aggs.contains(&normalized) {
+            return error_json_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                ErrorResponse::unsupported(
+                    format!("unsupported batch aggregation '{agg}'"),
+                    Vec::new(),
+                    state.aggregation_engine.supported_features(),
+                ),
+            );
+        }
+        let Some(registration) = state.aggregation_engine.registration(&normalized) else {
+            return error_json_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                ErrorResponse::unsupported(
+                    format!("aggregation '{agg}' is not registered"),
+                    Vec::new(),
+                    state.aggregation_engine.supported_features(),
+                ),
+            );
+        };
+        if !registration.supports_batch {
+            return error_json_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                ErrorResponse::unsupported(
+                    format!("aggregation '{agg}' is not supported by the batch endpoint"),
+                    Vec::new(),
+                    state.aggregation_engine.supported_features(),
+                ),
+            );
+        }
+        requested_aggs.push(normalized);
+    }
+
+    for key in &request.keys {
+        if state.runtime_config.api.strict_mode && !state.store.contains_key(key.trim()) {
+            return error_json_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                ErrorResponse::bad_request(format!("unknown key '{}'", key)),
+            );
+        }
+    }
+
+    let fields: Vec<String> = fields
+        .into_iter()
+        .filter(|field| super::types::metric_field_for_name(&state.runtime_config, field).is_some())
+        .collect();
+    if fields.is_empty() {
+        return error_json_response(
+            axum::http::StatusCode::BAD_REQUEST,
+            ErrorResponse::bad_request(
+                "batch request does not contain any supported metric fields",
+            ),
+        );
+    }
+
+    let requested_aggs = Arc::new(requested_aggs);
+    let percents = Arc::new(percents);
+    let fields = Arc::new(fields);
+    let mut join_set = JoinSet::new();
+    for (idx, key) in request.keys.iter().cloned().enumerate() {
+        let state = state.clone();
+        let requested_aggs = Arc::clone(&requested_aggs);
+        let percents = Arc::clone(&percents);
+        let fields = Arc::clone(&fields);
+        join_set.spawn_blocking(move || {
+            let mut result = BatchQueryResult {
+                key: key.clone(),
+                percentiles: None,
+                cumulative: None,
+            };
+            let context = super::types::QueryContext {
+                key: Some(key.clone()),
+                epoch: None,
+            };
+            for agg in requested_aggs.iter() {
+                match agg.as_str() {
+                    "percentiles" => {
+                        let mut field_percentiles = HashMap::new();
+                        for field in fields.iter() {
+                            let plan = super::types::LocalAggregationPlan {
+                                name: field.clone(),
+                                kind: super::types::AggregationKind::Percentiles(
+                                    super::types::PercentileAggregation {
+                                        field: field.clone(),
+                                        percents: percents.as_ref().clone(),
+                                        key: None,
+                                    },
+                                ),
+                            };
+                            if let Some(value) =
+                                state.aggregation_engine.evaluate(&state, &context, &plan)?
+                            {
+                                let values = value
+                                    .get("values")
+                                    .and_then(Value::as_object)
+                                    .ok_or_else(|| "invalid percentiles response".to_string())?;
+                                let mut percentiles = HashMap::new();
+                                for (percent, value) in values {
+                                    if let Some(value) = value.as_f64() {
+                                        percentiles.insert(percent.clone(), value);
+                                    }
+                                }
+                                if !percentiles.is_empty() {
+                                    field_percentiles.insert(field.clone(), percentiles);
+                                }
+                            }
+                        }
+                        if !field_percentiles.is_empty() {
+                            result.percentiles = Some(field_percentiles);
+                        }
+                    }
+                    "cumulative" => {
+                        let mut field_cumulative = HashMap::new();
+                        for field in fields.iter() {
+                            let plan = super::types::LocalAggregationPlan {
+                                name: field.clone(),
+                                kind: super::types::AggregationKind::Cumulative(
+                                    super::types::CumulativeAggregation {
+                                        field: field.clone(),
+                                        key: None,
+                                    },
+                                ),
+                            };
+                            if let Some(value) =
+                                state.aggregation_engine.evaluate(&state, &context, &plan)?
+                            {
+                                if let Some(value) = value.get("value").and_then(Value::as_f64) {
+                                    field_cumulative.insert(field.clone(), value);
+                                }
+                            }
+                        }
+                        if !field_cumulative.is_empty() {
+                            result.cumulative = Some(field_cumulative);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok::<(usize, BatchQueryResult), String>((idx, result))
+        });
+    }
+
+    let mut results: Vec<Option<BatchQueryResult>> =
+        (0..request.keys.len()).map(|_| None).collect();
+    while let Some(joined) = join_set.join_next().await {
+        match joined {
+            Ok(Ok((idx, result))) => results[idx] = Some(result),
+            Ok(Err(message)) => {
+                return error_json_response(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    ErrorResponse::bad_request(message),
+                );
+            }
+            Err(err) => {
+                return error_json_response(
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    ErrorResponse::bad_request(format!("batch query task failed: {err}")),
+                );
+            }
+        }
+    }
+
+    Json(BatchQueryResponse {
+        results: results.into_iter().flatten().collect(),
+    })
+    .into_response()
+}
+
+async fn metrics_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(field_spec): Path<String>,
+    Json(query): Json<MetricsQuery>,
+) -> impl IntoResponse {
+    if !state.runtime_config.api.enable_metrics_endpoint {
+        return error_json_response(
+            axum::http::StatusCode::NOT_FOUND,
+            ErrorResponse::bad_request("metrics endpoint is disabled"),
+        );
+    }
+
+    let mut timing = state.timing_enabled.then(QueryTiming::new);
+    let field = match super::types::metric_field_for_name(&state.runtime_config, &field_spec) {
+        Some(field) => field,
+        None => {
+            return error_json_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                ErrorResponse::bad_request(format!("unsupported metric field: {field_spec}")),
+            );
+        }
+    };
+    if let Some(t) = &mut timing {
+        t.step("parse_field");
+    }
+
+    if query.quantiles.is_empty() {
+        return error_json_response(
+            axum::http::StatusCode::BAD_REQUEST,
+            ErrorResponse::bad_request("quantiles must be a non-empty list"),
+        );
+    }
+    if let Some(t) = &mut timing {
+        t.step("validate");
+    }
+
+    let node_id = query
+        .node_id
+        .as_ref()
+        .map(|id| id.trim())
+        .filter(|id| !id.is_empty());
+    let Some(node_id) = node_id else {
+        return error_json_response(
+            axum::http::StatusCode::BAD_REQUEST,
+            ErrorResponse::bad_request("node_id is required"),
+        );
+    };
+
+    let mut results = BTreeMap::new();
+    for spec in query.quantiles {
+        let percent = match parse_quantile_spec(&spec) {
+            Some(percent) if (0.0..=100.0).contains(&percent) => percent,
+            Some(_) => {
+                return error_json_response(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    ErrorResponse::bad_request(format!("quantile out of range (0-100): {spec}")),
+                );
+            }
+            None => {
+                return error_json_response(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    ErrorResponse::bad_request(format!("invalid quantile format: {spec}")),
+                );
+            }
+        };
+        let values = match state.store.query_percentiles(node_id, field, &[percent]) {
+            Ok(values) => values,
+            Err(message) => {
+                return error_json_response(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    ErrorResponse::bad_request(message),
+                );
+            }
+        };
+        if let Some(Some(value)) = values.first() {
+            results.insert(format!("p{percent}"), *value);
+        }
+    }
+    if let Some(t) = &mut timing {
+        t.step("query_percentiles");
+    }
+
+    if let Some(t) = &mut timing {
+        let mut response_value = json!({
+            "field": field_spec,
+            "quantiles": results,
+            "deprecated": true,
+        });
+        t.step("build_response");
+        if let Some(obj) = response_value.as_object_mut() {
+            obj.insert("_timing".to_string(), t.to_json());
+        }
+        let mut response = Json(response_value).into_response();
+        t.step("serialize");
+        response
+            .headers_mut()
+            .insert("X-Server-Timing", t.to_header().parse().unwrap());
+        write_timing_log(
+            &state,
+            &headers,
+            "metrics_compat",
+            "POST",
             "/metrics/:field",
             response.status(),
             t,
@@ -615,8 +667,47 @@ async fn metrics_handler(
     } else {
         Json(json!({
             "field": field_spec,
-            "quantiles": results
+            "quantiles": results,
+            "deprecated": true,
         }))
         .into_response()
     }
+}
+
+fn should_forward_request(
+    state: &AppState,
+    plan: &QueryExecutionPlan,
+    can_execute_local: bool,
+) -> bool {
+    if !state.runtime_config.is_upstream_enabled() {
+        return false;
+    }
+    if !can_execute_local {
+        return true;
+    }
+    !plan.forwarded_aggs.is_empty() || plan.has_other_fields
+}
+
+fn build_upstream_body(
+    request: &SearchRequest,
+    plan: &QueryExecutionPlan,
+    can_execute_local: bool,
+) -> Result<Value, String> {
+    let mut upstream_body = serde_json::to_value(request)
+        .map_err(|err| format!("failed to build upstream payload: {err}"))?;
+    if can_execute_local {
+        let handled_names: std::collections::HashSet<String> =
+            plan.local_aggs.iter().map(|agg| agg.name.clone()).collect();
+        if let Some(aggs_obj) = upstream_body.get_mut("aggs").and_then(Value::as_object_mut) {
+            aggs_obj.retain(|name, _| !handled_names.contains(name));
+        }
+    }
+    Ok(upstream_body)
+}
+
+fn error_json_response(
+    status: axum::http::StatusCode,
+    body: ErrorResponse,
+) -> axum::response::Response {
+    (status, Json(body)).into_response()
 }

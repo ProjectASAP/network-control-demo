@@ -1,71 +1,91 @@
 use std::collections::BTreeMap;
 
-use crate::metrics::MetricField;
+use serde_json::{Value, json};
 
-use super::types::AppState;
-use super::types::{CumulativeAggregation, PercentileAggregation};
+use super::types::{
+    AggregationEngine, AggregationKind, AggregationRegistration, AppState, LocalAggregationPlan,
+    QueryContext, metric_field_for_name,
+};
 
-pub(crate) fn handle_percentiles(
-    state: &AppState,
-    pct: &PercentileAggregation,
-    query_key: Option<&str>,
-) -> Result<Option<BTreeMap<String, f64>>, String> {
-    if pct.percents.is_empty() {
-        return Ok(None);
-    }
-    if !state
-        .agg_config
-        .percentile_fields
-        .contains(&pct.field.trim().to_ascii_lowercase())
-    {
-        return Ok(None);
-    }
-    let field = MetricField::from_spec(&pct.field)
-        .ok_or_else(|| format!("unsupported percentile field: {}", pct.field))?;
+pub struct SketchAggregationEngine;
 
-    let explicit_key = pct
-        .key
-        .as_ref()
-        .map(|key| key.trim())
-        .filter(|key| !key.is_empty());
-    if pct.key.is_some() && explicit_key.is_none() {
-        return Err("percentiles key is required when provided".to_string());
-    }
-    let key = explicit_key.or(query_key);
-    let node_id = key.ok_or_else(|| "percentiles key is required".to_string())?;
-    let query_results = state
-        .node_store
-        .query_percentiles(node_id, field, &pct.percents)?;
+impl AggregationEngine for SketchAggregationEngine {
+    fn evaluate(
+        &self,
+        state: &AppState,
+        context: &QueryContext,
+        plan: &LocalAggregationPlan,
+    ) -> Result<Option<Value>, String> {
+        match &plan.kind {
+            AggregationKind::Percentiles(pct) => {
+                if pct.percents.is_empty() {
+                    return Ok(None);
+                }
+                let field = metric_field_for_name(&state.runtime_config, &pct.field)
+                    .ok_or_else(|| format!("unsupported percentile field: {}", pct.field))?;
+                let explicit_key = pct
+                    .key
+                    .as_ref()
+                    .map(|key| key.trim())
+                    .filter(|key| !key.is_empty())
+                    .map(|key| key.to_string());
+                let key = explicit_key
+                    .or_else(|| context.key.clone())
+                    .ok_or_else(|| "percentiles key is required".to_string())?;
+                let query_results = state.store.query_percentiles(&key, field, &pct.percents)?;
 
-    let mut values = BTreeMap::new();
-    for (percent, value) in pct.percents.iter().zip(query_results.iter()) {
-        if let Some(value) = value {
-            values.insert(percent.to_string(), *value);
+                let mut values = BTreeMap::new();
+                for (percent, value) in pct.percents.iter().zip(query_results.iter()) {
+                    if let Some(value) = value {
+                        values.insert(percent.to_string(), *value);
+                    }
+                }
+                Ok(Some(json!({ "values": values })))
+            }
+            AggregationKind::Cumulative(cum) => {
+                let field = metric_field_for_name(&state.runtime_config, &cum.field)
+                    .ok_or_else(|| format!("unsupported cumulative field: {}", cum.field))?;
+                let explicit_key = cum
+                    .key
+                    .as_ref()
+                    .map(|key| key.trim())
+                    .filter(|key| !key.is_empty())
+                    .map(|key| key.to_string());
+                let key = explicit_key
+                    .or_else(|| context.key.clone())
+                    .ok_or_else(|| "cumulative key is required".to_string())?;
+                let value = state.store.cumulative_value(&key, field)?;
+                Ok(Some(json!({ "key": key, "value": value })))
+            }
         }
     }
 
-    Ok(Some(values))
-}
+    fn registration(&self, name: &str) -> Option<AggregationRegistration> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "percentiles" => Some(AggregationRegistration {
+                name: "percentiles",
+                supports_search: true,
+                supports_batch: true,
+            }),
+            "cumulative" => Some(AggregationRegistration {
+                name: "cumulative",
+                supports_search: true,
+                supports_batch: true,
+            }),
+            _ => None,
+        }
+    }
 
-pub(crate) fn handle_cumulative(
-    state: &AppState,
-    cum: &CumulativeAggregation,
-) -> Result<f64, String> {
-    if !state
-        .agg_config
-        .cumulative_metrics
-        .contains(&cum.field.trim().to_ascii_lowercase())
-    {
-        return Err(format!("unsupported cumulative field: {}", cum.field));
+    fn supported_features(&self) -> Vec<String> {
+        vec![
+            "aggregations.percentiles".to_string(),
+            "aggregations.cumulative".to_string(),
+            "query.bool.filter.term".to_string(),
+            "size=0".to_string(),
+            "batch.percentiles".to_string(),
+            "batch.cumulative".to_string(),
+        ]
     }
-    let field = MetricField::from_spec(&cum.field)
-        .ok_or_else(|| format!("unsupported cumulative field: {}", cum.field))?;
-    let node_id = cum.key.trim();
-    if node_id.is_empty() {
-        return Err("cumulative key is required".to_string());
-    }
-    let value = state.node_store.cumulative_value(node_id, field)?;
-    Ok(value)
 }
 
 pub(crate) fn parse_quantile_spec(spec: &str) -> Option<f64> {

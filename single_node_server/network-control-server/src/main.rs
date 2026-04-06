@@ -13,101 +13,81 @@ use std::{
     time::Instant,
 };
 
-use config::{AggregationConfig, NodesConfig};
-// use ingest::load_metric_store;
-use metrics::NodeStore;
+use config::ServerRuntimeConfig;
+use metrics::{InMemoryNodeStore, RangeKeyCatalog};
 use reqwest::Client;
-use server::{AppState, TimingSender, run_http_server, start_request_logger};
+use server::{
+    AppState, DefaultRequestPlanner, EsFallbackUpstreamClient, SketchAggregationEngine,
+    TimingSender, run_http_server, start_request_logger,
+};
 
 #[tokio::main]
 async fn main() {
-    // Parse CLI flags
     let args: Vec<String> = env::args().collect();
-    let timing_enabled = args.iter().any(|arg| arg == "--timing");
-    if timing_enabled {
-        eprintln!("timing enabled via --timing flag");
+    let startup_start = Instant::now();
+    let mut runtime_config = match ServerRuntimeConfig::load_from_env_and_args(&args) {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            eprintln!("failed to load server runtime config: {err}");
+            return;
+        }
+    };
+    if args.iter().any(|arg| arg == "--timing") {
+        runtime_config.server.enable_timing = true;
     }
 
-    let startup_start = Instant::now();
-    let config_start = Instant::now();
-    let agg_config = match AggregationConfig::load() {
-        Ok(cfg) => cfg,
+    let catalog = match RangeKeyCatalog::from_config(&runtime_config.storage.node_catalog) {
+        Ok(catalog) => catalog,
         Err(err) => {
-            eprintln!("failed to load aggregation config: {err}");
+            eprintln!("failed to build key catalog: {err}");
             return;
         }
     };
+    let store = InMemoryNodeStore::from_catalog(&catalog);
+
     eprintln!(
-        "aggregation config loaded in {:.2?}",
-        config_start.elapsed()
+        "resolved config: bind={} index={} upstream_mode={} timing={}",
+        runtime_config.bind_addr(),
+        runtime_config.api.index_name,
+        runtime_config.upstream.mode,
+        runtime_config.server.enable_timing
     );
 
-    let nodes_config_start = Instant::now();
-    let nodes_config = match NodesConfig::load() {
-        Ok(cfg) => cfg,
-        Err(err) => {
-            eprintln!("failed to load nodes config: {err}");
-            return;
-        }
+    let timing_sender = if runtime_config.server.enable_timing {
+        init_timing_sender(&runtime_config.server.timing_csv_path)
+    } else {
+        None
     };
-    let node_store = match NodeStore::from_config(nodes_config) {
-        Ok(store) => store,
-        Err(err) => {
-            eprintln!("failed to build node store: {err}");
-            return;
-        }
-    };
-    eprintln!(
-        "nodes config loaded in {:.2?}",
-        nodes_config_start.elapsed()
-    );
-
-    // Startup ingestion is disabled; start with an empty store.
-    // eprintln!("loading metrics from CSV...");
-    // let store = match tokio::task::spawn_blocking(move || load_metric_store(timing_enabled)).await {
-    //     Ok(Ok(store)) => store,
-    //     Ok(Err(err)) => {
-    //         eprintln!("failed to load metric store: {err}");
-    //         return;
-    //     }
-    //     Err(join_err) => {
-    //         eprintln!("loader task panicked: {join_err}");
-    //         return;
-    //     }
-    // };
 
     let state = AppState {
-        node_store: Arc::new(node_store),
+        store: Arc::new(store),
         current_epoch: Arc::new(std::sync::Mutex::new(None)),
-        agg_config: Arc::new(agg_config),
+        runtime_config: Arc::new(runtime_config.clone()),
+        aggregation_engine: Arc::new(SketchAggregationEngine),
+        request_planner: Arc::new(DefaultRequestPlanner),
+        upstream_client: Arc::new(EsFallbackUpstreamClient),
         http_client: Client::new(),
-        upstream_url: env::var("UPSTREAM_URL")
-            .unwrap_or_else(|_| "http://localhost:9200/cluster-metrics/_search".to_string()),
-        timing_enabled,
-        timing_sender: if timing_enabled {
-            init_timing_sender()
-        } else {
-            None
-        },
-        log_tx: Some(start_request_logger(1000)),
+        timing_enabled: runtime_config.server.enable_timing,
+        timing_sender,
+        log_tx: Some(start_request_logger(
+            runtime_config.server.request_log_buffer,
+        )),
     };
 
     eprintln!("startup complete in {:.2?}", startup_start.elapsed());
-    eprintln!("metrics ready, starting server on 0.0.0.0:10101");
+    eprintln!("server listening on {}", runtime_config.bind_addr());
     if let Err(err) = run_http_server(state).await {
         eprintln!("server error: {err}");
     }
 }
 
-fn init_timing_sender() -> Option<TimingSender> {
-    let path =
-        env::var("SERVER_TIMING_CSV").unwrap_or_else(|_| "server_request_timing.csv".to_string());
-    let is_empty = Path::new(&path)
+fn init_timing_sender(path: &str) -> Option<TimingSender> {
+    let is_empty = Path::new(path)
         .metadata()
         .map(|meta| meta.len() == 0)
         .unwrap_or(true);
 
-    let file = match OpenOptions::new().create(true).append(true).open(&path) {
+    let file = match OpenOptions::new().create(true).append(true).open(path) {
         Ok(file) => file,
         Err(err) => {
             eprintln!("failed to open timing CSV {path}: {err}");

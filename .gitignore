@@ -1,4 +1,5 @@
 misc/*
+.es_api_key
 target
 target-*/
 __pycache__/
@@ -6,3 +7,5 @@ __pycache__/
 dummy_data/
 logs/
 .claude/
+settings.json
+.vscode

@@ -1,41 +1,74 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
+use async_trait::async_trait;
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use serde_json::{Value, json};
 
-use super::types::AppState;
+use super::types::{AppState, UpstreamClient};
 
-pub(crate) async fn forward_to_upstream(
-    state: &AppState,
-    headers: &HeaderMap,
-    body: &Value,
-) -> Result<Value, axum::response::Response> {
-    let mut upstream_req = state.http_client.post(&state.upstream_url).json(body);
+pub struct EsFallbackUpstreamClient;
 
-    for (name, value) in headers.iter() {
-        if name == axum::http::header::HOST
-            || name == axum::http::header::CONTENT_TYPE
-            || name == axum::http::header::CONTENT_LENGTH
-        {
-            continue;
-        }
-        upstream_req = upstream_req.header(name, value);
-    }
-
-    let upstream_resp = match upstream_req.send().await {
-        Ok(resp) => resp,
-        Err(err) => {
+#[async_trait]
+impl UpstreamClient for EsFallbackUpstreamClient {
+    async fn forward(
+        &self,
+        state: &AppState,
+        headers: &HeaderMap,
+        body: &Value,
+    ) -> Result<Value, axum::response::Response> {
+        let Some(url) = state.runtime_config.upstream.search_url.as_ref() else {
             return Err((
-                axum::http::StatusCode::BAD_GATEWAY,
-                format!("failed to contact upstream elasticsearch: {err}"),
+                axum::http::StatusCode::BAD_REQUEST,
+                "upstream fallback requested but upstream.search_url is not configured".to_string(),
             )
                 .into_response());
-        }
-    };
+        };
+        let allowed_headers: HashSet<String> = state
+            .runtime_config
+            .upstream
+            .forward_headers
+            .iter()
+            .map(|value| value.trim().to_ascii_lowercase())
+            .collect();
+        let mut upstream_req = state.http_client.post(url).json(body);
 
-    let body_val: Value = upstream_resp.json().await.unwrap_or_else(|_| Value::Null);
-    Ok(body_val)
+        if let Some(api_key) = &state.runtime_config.upstream.es_api_key {
+            upstream_req = upstream_req.header(
+                axum::http::header::AUTHORIZATION,
+                format!("ApiKey {api_key}"),
+            );
+        }
+
+        for (name, value) in headers.iter() {
+            if name == axum::http::header::HOST
+                || name == axum::http::header::CONTENT_TYPE
+                || name == axum::http::header::CONTENT_LENGTH
+            {
+                continue;
+            }
+            if !allowed_headers.is_empty()
+                && !allowed_headers.contains(&name.as_str().to_ascii_lowercase())
+            {
+                continue;
+            }
+            upstream_req = upstream_req.header(name, value);
+        }
+
+        let upstream_resp = match upstream_req.send().await {
+            Ok(resp) => resp,
+            Err(err) => {
+                return Err((
+                    axum::http::StatusCode::BAD_GATEWAY,
+                    format!("failed to contact upstream elasticsearch: {err}"),
+                )
+                    .into_response());
+            }
+        };
+
+        let body_val: Value = upstream_resp.json().await.unwrap_or_else(|_| Value::Null);
+        Ok(body_val)
+    }
 }
 
 pub(crate) fn merge_aggregations(response: &mut Value, handled: BTreeMap<String, Value>) {
