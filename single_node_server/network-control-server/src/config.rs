@@ -427,3 +427,83 @@ query_support:
         config.validate().unwrap();
     }
 }
+
+fn parse_label_combinations(raw_labels: Vec<String>) -> Vec<Vec<String>> {
+    let mut seen = HashSet::new();
+    let mut result = Vec::new();
+
+    for raw in raw_labels {
+        let normalized_parts: Vec<String> = raw
+            .split(';')
+            .map(|part| part.trim().to_ascii_lowercase())
+            .filter(|part| !part.is_empty())
+            .collect();
+
+        if normalized_parts.is_empty() {
+            continue;
+        }
+
+        let dedupe_key = normalized_parts.join(";");
+        if seen.insert(dedupe_key) {
+            result.push(normalized_parts);
+        }
+    }
+
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::{AggregationConfig, parse_label_combinations};
+
+    #[test]
+    fn parse_label_combinations_normalizes_and_dedupes() {
+        let parsed = parse_label_combinations(vec![
+            " cluster ; task ".to_string(),
+            "cluster;task".to_string(),
+            "task".to_string(),
+            " ; ".to_string(),
+            "INSTANCE ; JOB".to_string(),
+        ]);
+
+        assert_eq!(parsed.len(), 3);
+        assert_eq!(parsed[0], vec!["cluster".to_string(), "task".to_string()]);
+        assert_eq!(parsed[1], vec!["task".to_string()]);
+        assert_eq!(parsed[2], vec!["instance".to_string(), "job".to_string()]);
+    }
+
+    #[test]
+    fn support_helpers_match_expected_fields() {
+        let cfg = AggregationConfig {
+            percentile_fields: HashSet::from(["cpu_cores".to_string()]),
+            percentile_label_fields: HashSet::from(["memory_gb".to_string()]),
+            percentile_labels: HashSet::new(),
+            cumulative_metrics: HashSet::from(["network_mbps".to_string()]),
+            cumulative_label_metrics: HashSet::from(["cpu_cores".to_string()]),
+            cumulative_labels: HashSet::new(),
+            label_combinations: vec![
+                vec!["cluster".to_string()],
+                vec!["cluster".to_string(), "task".to_string()],
+            ],
+        };
+
+        assert!(cfg.supports_percentile_field("cpu_cores", false));
+        assert!(!cfg.supports_percentile_field("memory_gb", false));
+        assert!(cfg.supports_percentile_field("memory_gb", true));
+
+        assert!(cfg.supports_cumulative_field("network_mbps"));
+        assert!(cfg.supports_cumulative_field("cpu_cores"));
+        assert!(!cfg.supports_cumulative_field("disk_io"));
+
+        let fields = cfg.supported_metric_fields();
+        assert!(fields.contains("cpu_cores"));
+        assert!(fields.contains("memory_gb"));
+        assert!(fields.contains("network_mbps"));
+
+        let labels = cfg.supported_label_names();
+        assert!(labels.contains("cluster"));
+        assert!(labels.contains("task"));
+    }
+}

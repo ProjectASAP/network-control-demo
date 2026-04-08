@@ -100,3 +100,30 @@ pub(crate) fn parse_quantile_spec(spec: &str) -> Option<f64> {
     }
     candidate.parse::<f64>().ok()
 }
+
+fn normalize_field_name(spec: &str) -> String {
+    spec.trim()
+        .to_ascii_lowercase()
+        .replace('-', "_")
+        .replace(' ', "_")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_quantile_spec;
+
+    #[test]
+    fn parse_quantile_accepts_prefixed_and_raw_numeric_values() {
+        assert_eq!(parse_quantile_spec("p50"), Some(50.0));
+        assert_eq!(parse_quantile_spec("P95"), Some(95.0));
+        assert_eq!(parse_quantile_spec("  12.5  "), Some(12.5));
+        assert_eq!(parse_quantile_spec(" p 75 "), Some(75.0));
+    }
+
+    #[test]
+    fn parse_quantile_rejects_empty_or_invalid_values() {
+        assert_eq!(parse_quantile_spec(""), None);
+        assert_eq!(parse_quantile_spec("p"), None);
+        assert_eq!(parse_quantile_spec("not-a-number"), None);
+    }
+}

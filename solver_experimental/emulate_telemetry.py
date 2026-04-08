@@ -235,30 +235,6 @@ async def ingest(assignments: list[dict]):
     return {"message": "Tasks ingested successfully."}
 
 
-@app.post("/generate")
-async def generate(assignments: list[dict]):
-    """Generate telemetry records from assignments without ingesting to backends."""
-    running_tasks = structure(assignments, list[RunningTask])
-    logger.debug(f"Generating records for assignments: {running_tasks}")
-
-    running_tasks_map: dict[str, RunningTask] = {}
-    if running_tasks:
-        running_tasks_map = {rt.task.task_id: rt for rt in running_tasks}
-        emulator.emulate_metrics(running_tasks=running_tasks_map)
-    else:
-        logger.warning("No running tasks provided for generation.")
-
-    records = list(emulator.create_metrics_records())
-
-    global global_epoch
-    global_epoch += 1
-    logger.info(
-        f"Advanced to epoch {global_epoch}. Generated {len(records)} records from {len(running_tasks_map)} running tasks."
-    )
-
-    return {"records": records, "epoch": global_epoch - 1}
-
-
 async def force_es_refresh() -> None:
     # Push metrics immediately and wait for ES refresh so queries can see them.
     records = list(emulator.create_metrics_records())
@@ -348,20 +324,19 @@ class MetricGenerator:
     """
     Generates emulated metric values using a noisy sinusoidal model.
     """
-    a: float
+    m: float
     b: float
-    c: float
     base_value: float = 1.0
     noise_scale: float = 0.1
     p_scalable: float = 0
-    rng: np.random.RandomGenerator = field(default_factory=lambda: np.random.default_rng())
+    rng: np.random.Generator = field(default_factory=lambda: np.random.default_rng())
 
     def __post_init__(self):
         # Randomly assign a portion of the task as scalable to resources for more realistic variability.
         self.p_scalable = self.rng.uniform(0.1, 0.9)
 
     @classmethod
-    def create(cls, base_value: float = 1.0, rng: np.random.RandomGenerator = _RNG) -> "MetricGenerator":
+    def create(cls, base_value: float = 1.0, rng: np.random.Generator = _RNG) -> "MetricGenerator":
         # Generate a noisy sinusoidal time series around the base value.
         """
         Creates a MetricGenerator with random parameters.
@@ -371,12 +346,12 @@ class MetricGenerator:
         Returns:
             A MetricGenerator instance.
         """
-        period = rng.uniform(0, 10)
-        a = rng.uniform(0.05, 0.65)
-        b = 2 * np.pi / period
-        c = rng.uniform(0, 10)
+
+        # Slope of the underlying "trend" of the metric over time, which can be positive or negative for more variability.
+        m = rng.uniform(-0.5, 0.5)
+        b = rng.uniform(0.4, 0.6)
     
-        return cls(a=a, b=b, c=c, base_value=base_value, rng=rng)
+        return cls(m=m, b=b, base_value=base_value, rng=rng)
 
     def generate(self, stop: float = 1.0, start: float = 0.0, num: int = 60, max_value: float = 1.0) -> tuple[np.ndarray, float]:
         # Generate a noisy sinusoidal time series around the base value.
@@ -395,14 +370,10 @@ class MetricGenerator:
         if self.base_value == 0:
             return np.zeros(num), 1.0
         rng = self.rng
-        a = self.a
-        # Compress timeseries by corresponding factor.
-        b = self.b
-        c = self.c
         
         t = np.linspace(start, stop, num=num)
     
-        scale_factor = 1 + a * np.sin(b * t + c)
+        scale_factor = self.m * t + self.b # Linear trend.
         noise = rng.normal(loc=0, scale=self.noise_scale, size=len(scale_factor))
         buffer = self.base_value * (scale_factor + noise)
 

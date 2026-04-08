@@ -1,62 +1,248 @@
-{"task_id": "T000", "arrival_offset_s": 46.31157051206405, "duration_s": 604.7017141994288, "initial_cpu": 6.44529479761345, "initial_memory": 33.29229506014816, "peer_bandwidths": {}}
-{"task_id": "T046", "arrival_offset_s": 46.911992362113324, "duration_s": 225.51866948962072, "initial_cpu": 5.239833168967875, "initial_memory": 10.983048633662312, "peer_bandwidths": {"T061": 2.1308413441089655}}
-{"task_id": "T023", "arrival_offset_s": 48.00370265775224, "duration_s": 670.4955650849331, "initial_cpu": 3.5235103924552837, "initial_memory": 5.178853403576816, "peer_bandwidths": {"T025": 1.6762119258942576, "T061": 1.852244248762803}}
-{"task_id": "T061", "arrival_offset_s": 63.544852162257605, "duration_s": 286.06452900336626, "initial_cpu": 3.068944330785984, "initial_memory": 29.206184790903983, "peer_bandwidths": {"T001": 8.529456257293205}}
-{"task_id": "T022", "arrival_offset_s": 68.02205423804352, "duration_s": 625.3068086801366, "initial_cpu": 5.5883952227365565, "initial_memory": 29.202208508123984, "peer_bandwidths": {"T025": 3.599638339346336}}
-{"task_id": "T007", "arrival_offset_s": 68.03319511775537, "duration_s": 518.1432276849084, "initial_cpu": 4.273420717197884, "initial_memory": 24.330981924420495, "peer_bandwidths": {"T002": 1.2129390240429616}}
-{"task_id": "T053", "arrival_offset_s": 73.0248785972546, "duration_s": 442.6538216884112, "initial_cpu": 1.881923232345231, "initial_memory": 21.03727812649532, "peer_bandwidths": {"T001": 4.868413217913766}}
-{"task_id": "T003", "arrival_offset_s": 76.49782762540703, "duration_s": 306.91996152261174, "initial_cpu": 3.0328555958489525, "initial_memory": 6.6944922030388145, "peer_bandwidths": {"T017": 4.0799305609464085, "T039": 2.0655203886754965}}
-{"task_id": "T015", "arrival_offset_s": 79.18360559235592, "duration_s": 455.8532414171907, "initial_cpu": 5.829003999340819, "initial_memory": 22.80990532448494, "peer_bandwidths": {}}
-{"task_id": "T017", "arrival_offset_s": 81.707360839523, "duration_s": 776.349551038868, "initial_cpu": 4.884096584105642, "initial_memory": 11.506057237871854, "peer_bandwidths": {"T000": 3.386921142782755}}
-{"task_id": "T039", "arrival_offset_s": 84.45055281424814, "duration_s": 552.0955408966379, "initial_cpu": 5.618723858756789, "initial_memory": 24.678553501464172, "peer_bandwidths": {}}
-{"task_id": "T002", "arrival_offset_s": 84.78239205475123, "duration_s": 814.2008835601798, "initial_cpu": 6.915931488246737, "initial_memory": 22.2637023211529, "peer_bandwidths": {"T015": 2.811518089592223}}
-{"task_id": "T001", "arrival_offset_s": 92.18787986056648, "duration_s": 525.3345314368784, "initial_cpu": 3.3037384590984082, "initial_memory": 20.319855618691793, "peer_bandwidths": {}}
-{"task_id": "T025", "arrival_offset_s": 106.5319361430767, "duration_s": 358.09047135115327, "initial_cpu": 4.534169087783609, "initial_memory": 4.985339550310401, "peer_bandwidths": {}}
-{"task_id": "T043", "arrival_offset_s": 120.23943997662752, "duration_s": 890.8292683230942, "initial_cpu": 2.762532718479195, "initial_memory": 14.404979656857524, "peer_bandwidths": {"T034": 1.7773855052622243}}
-{"task_id": "T027", "arrival_offset_s": 132.58486814508498, "duration_s": 431.88436520162156, "initial_cpu": 5.565811418381666, "initial_memory": 11.50166705164213, "peer_bandwidths": {}}
-{"task_id": "T034", "arrival_offset_s": 134.2549549010832, "duration_s": 420.48780540236544, "initial_cpu": 2.4449931232933957, "initial_memory": 14.729476209451636, "peer_bandwidths": {}}
-{"task_id": "T004", "arrival_offset_s": 137.71567710064687, "duration_s": 718.2847320255478, "initial_cpu": 6.791124856438862, "initial_memory": 19.144112600252342, "peer_bandwidths": {"T027": 2.4529403430359045, "T043": 7.032226387905181}}
-{"task_id": "T006", "arrival_offset_s": 168.0136476150283, "duration_s": 372.6126835965898, "initial_cpu": 9.760161170134321, "initial_memory": 8.635398452251266, "peer_bandwidths": {}}
-{"task_id": "T005", "arrival_offset_s": 169.35634496618886, "duration_s": 805.6123165244873, "initial_cpu": 4.588939161576758, "initial_memory": 16.428280802673996, "peer_bandwidths": {}}
-{"task_id": "T020", "arrival_offset_s": 181.43538595655747, "duration_s": 488.6777558002546, "initial_cpu": 4.89429349758834, "initial_memory": 7.178909807876785, "peer_bandwidths": {"T013": 7.216216179213032}}
-{"task_id": "T012", "arrival_offset_s": 183.48898941347883, "duration_s": 858.2980321915702, "initial_cpu": 3.7551261546551857, "initial_memory": 9.249762937767802, "peer_bandwidths": {"T020": 8.449768004614505}}
-{"task_id": "T013", "arrival_offset_s": 190.35343404989618, "duration_s": 311.5316701525009, "initial_cpu": 0.9218876981901059, "initial_memory": 29.76377809446454, "peer_bandwidths": {"T005": 4.844847664190566}}
-{"task_id": "T008", "arrival_offset_s": 196.49105545376517, "duration_s": 319.72417898015055, "initial_cpu": 9.915607332363841, "initial_memory": 20.54470051670238, "peer_bandwidths": {}}
-{"task_id": "T016", "arrival_offset_s": 200.97611415745328, "duration_s": 452.1573250474172, "initial_cpu": 1.419204496716655, "initial_memory": 16.672587008982, "peer_bandwidths": {"T012": 1.1138373486522475}}
-{"task_id": "T009", "arrival_offset_s": 284.4032552587152, "duration_s": 474.01745769435274, "initial_cpu": 1.844344464871629, "initial_memory": 13.00159898252207, "peer_bandwidths": {}}
-{"task_id": "T010", "arrival_offset_s": 348.17857697287053, "duration_s": 899.2525907685541, "initial_cpu": 2.162714895733735, "initial_memory": 25.641573103566337, "peer_bandwidths": {}}
-{"task_id": "T038", "arrival_offset_s": 369.2693748286234, "duration_s": 272.934265173654, "initial_cpu": 1.0944941334253602, "initial_memory": 21.83159060242081, "peer_bandwidths": {"T042": 1.3643685523617952}}
-{"task_id": "T042", "arrival_offset_s": 371.436771824877, "duration_s": 821.396954632132, "initial_cpu": 10.053174614457035, "initial_memory": 15.23076778930662, "peer_bandwidths": {}}
-{"task_id": "T011", "arrival_offset_s": 375.96241944259725, "duration_s": 343.8539796386138, "initial_cpu": 5.98254915044321, "initial_memory": 15.756055487986641, "peer_bandwidths": {"T038": 4.618941728766995}}
-{"task_id": "T014", "arrival_offset_s": 420.66929103543214, "duration_s": 736.1482382045825, "initial_cpu": 3.787118977479609, "initial_memory": 14.097920295803892, "peer_bandwidths": {}}
-{"task_id": "T031", "arrival_offset_s": 426.0922494490154, "duration_s": 625.0940262236325, "initial_cpu": 1.1600611760770987, "initial_memory": 18.54138508659163, "peer_bandwidths": {"T018": 3.196520393653474}}
-{"task_id": "T018", "arrival_offset_s": 434.6804267582757, "duration_s": 643.2192622604898, "initial_cpu": 4.662376680189182, "initial_memory": 15.082756710530788, "peer_bandwidths": {"T055": 5.247961828136982}}
-{"task_id": "T037", "arrival_offset_s": 441.9266082430871, "duration_s": 787.5733322828902, "initial_cpu": 9.608958265079433, "initial_memory": 9.193913972213602, "peer_bandwidths": {"T031": 7.811622624985784}}
-{"task_id": "T055", "arrival_offset_s": 448.66965929734977, "duration_s": 628.3720634851966, "initial_cpu": 3.9530633484722957, "initial_memory": 19.71311571891969, "peer_bandwidths": {}}
-{"task_id": "T019", "arrival_offset_s": 449.738111003123, "duration_s": 589.1479650359094, "initial_cpu": 2.2039948376443745, "initial_memory": 23.134309789711494, "peer_bandwidths": {}}
-{"task_id": "T058", "arrival_offset_s": 455.4440538362896, "duration_s": 692.8427298866101, "initial_cpu": 7.206104723947236, "initial_memory": 16.879495663447663, "peer_bandwidths": {"T045": 3.6135896356117896}}
-{"task_id": "T050", "arrival_offset_s": 490.9696841938792, "duration_s": 853.0995319086236, "initial_cpu": 4.036168306767648, "initial_memory": 12.918070802586792, "peer_bandwidths": {"T058": 3.228538340595747, "T021": 1.0956722371216505}}
-{"task_id": "T028", "arrival_offset_s": 495.386947663186, "duration_s": 633.7278876091066, "initial_cpu": 5.335449447231964, "initial_memory": 24.266490150239413, "peer_bandwidths": {}}
-{"task_id": "T045", "arrival_offset_s": 498.0119417873062, "duration_s": 510.63729564515495, "initial_cpu": 3.023950421599765, "initial_memory": 10.215390366717237, "peer_bandwidths": {}}
-{"task_id": "T059", "arrival_offset_s": 507.5727868055021, "duration_s": 472.340155480046, "initial_cpu": 7.152952462270207, "initial_memory": 30.386446882236616, "peer_bandwidths": {"T028": 1.5478623334594535}}
-{"task_id": "T021", "arrival_offset_s": 515.2550587990489, "duration_s": 599.0366964932688, "initial_cpu": 8.231292801483782, "initial_memory": 7.177353169985023, "peer_bandwidths": {}}
-{"task_id": "T024", "arrival_offset_s": 528.1972786374346, "duration_s": 754.8063302049424, "initial_cpu": 2.478643780547619, "initial_memory": 23.870392798751602, "peer_bandwidths": {}}
-{"task_id": "T026", "arrival_offset_s": 531.3975260755923, "duration_s": 369.07516137326957, "initial_cpu": 3.748698190557937, "initial_memory": 13.12214212078607, "peer_bandwidths": {}}
-{"task_id": "T029", "arrival_offset_s": 555.5251142280275, "duration_s": 381.6578280869404, "initial_cpu": 2.897200704064925, "initial_memory": 16.435018576449156, "peer_bandwidths": {}}
-{"task_id": "T030", "arrival_offset_s": 591.7151184001516, "duration_s": 869.3722788765571, "initial_cpu": 5.821571507401703, "initial_memory": 28.207932175248796, "peer_bandwidths": {}}
-{"task_id": "T032", "arrival_offset_s": 599.3104576526363, "duration_s": 490.35482216358525, "initial_cpu": 5.085428372804944, "initial_memory": 31.51542379030188, "peer_bandwidths": {}}
-{"task_id": "T033", "arrival_offset_s": 652.1439662484214, "duration_s": 259.92176842152514, "initial_cpu": 7.684349759695615, "initial_memory": 23.9768128226627, "peer_bandwidths": {}}
-{"task_id": "T035", "arrival_offset_s": 690.2260219038191, "duration_s": 482.2830702646179, "initial_cpu": 5.509174037203202, "initial_memory": 34.94119546126473, "peer_bandwidths": {}}
-{"task_id": "T036", "arrival_offset_s": 721.1893754670239, "duration_s": 466.6805854398696, "initial_cpu": 3.5785320328632646, "initial_memory": 25.367061890639604, "peer_bandwidths": {}}
-{"task_id": "T040", "arrival_offset_s": 788.3001675701382, "duration_s": 340.3671826230724, "initial_cpu": 1.59415458044143, "initial_memory": 12.230333374789382, "peer_bandwidths": {}}
-{"task_id": "T044", "arrival_offset_s": 823.5627320379755, "duration_s": 197.55694334592113, "initial_cpu": 0.8781159142014601, "initial_memory": 25.832565038505514, "peer_bandwidths": {}}
-{"task_id": "T041", "arrival_offset_s": 835.2748962708108, "duration_s": 725.3676307417066, "initial_cpu": 6.607614703768708, "initial_memory": 31.41301000948032, "peer_bandwidths": {"T044": 7.833100236054611}}
-{"task_id": "T047", "arrival_offset_s": 877.1181957726583, "duration_s": 255.03355863799638, "initial_cpu": 8.117568440652898, "initial_memory": 27.672425516139914, "peer_bandwidths": {}}
-{"task_id": "T048", "arrival_offset_s": 909.2692682955998, "duration_s": 757.3795678996181, "initial_cpu": 2.0439867082062815, "initial_memory": 22.132086860907325, "peer_bandwidths": {}}
-{"task_id": "T049", "arrival_offset_s": 964.5387643804514, "duration_s": 877.2331256986865, "initial_cpu": 8.248561751376236, "initial_memory": 7.329577311447042, "peer_bandwidths": {}}
-{"task_id": "T051", "arrival_offset_s": 973.8518794397828, "duration_s": 856.3094191191433, "initial_cpu": 7.0717678844733864, "initial_memory": 29.524936834223585, "peer_bandwidths": {}}
-{"task_id": "T054", "arrival_offset_s": 1047.8664871263554, "duration_s": 767.180318259745, "initial_cpu": 2.7882253787779785, "initial_memory": 10.649848315626862, "peer_bandwidths": {}}
-{"task_id": "T052", "arrival_offset_s": 1048.5474362425186, "duration_s": 858.5444554584901, "initial_cpu": 9.439139580188728, "initial_memory": 16.732597827328252, "peer_bandwidths": {}}
-{"task_id": "T056", "arrival_offset_s": 1060.7238270907146, "duration_s": 451.62890470587666, "initial_cpu": 8.459545392838356, "initial_memory": 29.281874203058116, "peer_bandwidths": {}}
-{"task_id": "T057", "arrival_offset_s": 1105.2068467149747, "duration_s": 338.06162516989497, "initial_cpu": 3.0687123122074307, "initial_memory": 25.26460587393798, "peer_bandwidths": {}}
-{"task_id": "T060", "arrival_offset_s": 1123.6629438714672, "duration_s": 846.0695490358793, "initial_cpu": 5.257338678221949, "initial_memory": 30.58395573829675, "peer_bandwidths": {}}
+{"task_id": "T000", "arrival_offset_s": 0, "duration_s": 662.976717353961, "initial_cpu": 5.474832317817067, "initial_memory": 8.292726452396517, "peer_bandwidths": {}}
+{"task_id": "T001", "arrival_offset_s": 0, "duration_s": 564.5833391145288, "initial_cpu": 2.1363982680573392, "initial_memory": 39.40624579474508, "peer_bandwidths": {}}
+{"task_id": "T002", "arrival_offset_s": 0, "duration_s": 795.1405302440038, "initial_cpu": 10.144845598360456, "initial_memory": 22.79196352942692, "peer_bandwidths": {"T063": 1.7686601311129366}}
+{"task_id": "T122", "arrival_offset_s": 0, "duration_s": 378.0101305184588, "initial_cpu": 5.466385085351219, "initial_memory": 16.848748401828143, "peer_bandwidths": {"T002": 1.8963856714447564}}
+{"task_id": "T063", "arrival_offset_s": 0, "duration_s": 333.72288428949605, "initial_cpu": 1.8615946007126332, "initial_memory": 14.011135375755291, "peer_bandwidths": {}}
+{"task_id": "T003", "arrival_offset_s": 0, "duration_s": 742.6314675347577, "initial_cpu": 1.572622194952331, "initial_memory": 27.834440394067325, "peer_bandwidths": {}}
+{"task_id": "T004", "arrival_offset_s": 0, "duration_s": 454.98841298291654, "initial_cpu": 7.229494131383178, "initial_memory": 10.244082893640568, "peer_bandwidths": {}}
+{"task_id": "T005", "arrival_offset_s": 0, "duration_s": 721.9186765012016, "initial_cpu": 6.292585921618035, "initial_memory": 26.699436486876273, "peer_bandwidths": {"T070": 3.5458622081426507}}
+{"task_id": "T070", "arrival_offset_s": 0, "duration_s": 736.4509954763282, "initial_cpu": 3.612272729692928, "initial_memory": 18.739276875312328, "peer_bandwidths": {}}
+{"task_id": "T010", "arrival_offset_s": 0, "duration_s": 405.3469916838226, "initial_cpu": 5.1587262977110235, "initial_memory": 13.41103146528197, "peer_bandwidths": {"T108": 5.106473445648006}}
+{"task_id": "T108", "arrival_offset_s": 0, "duration_s": 326.30545926878136, "initial_cpu": 4.66250532203197, "initial_memory": 10.952819959507863, "peer_bandwidths": {"T070": 10.76263932636761}}
+{"task_id": "T207", "arrival_offset_s": 0, "duration_s": 443.39830796920916, "initial_cpu": 7.289336202438983, "initial_memory": 15.853382680784598, "peer_bandwidths": {}}
+{"task_id": "T020", "arrival_offset_s": 0, "duration_s": 817.5833419179058, "initial_cpu": 3.2264015425509056, "initial_memory": 11.322109907874824, "peer_bandwidths": {"T207": 2.8972254568300455, "T010": 7.226183408824484}}
+{"task_id": "T006", "arrival_offset_s": 0, "duration_s": 871.0290277155633, "initial_cpu": 2.7976651264262453, "initial_memory": 21.525283651042642, "peer_bandwidths": {}}
+{"task_id": "T007", "arrival_offset_s": 0, "duration_s": 207.88046792425718, "initial_cpu": 1.3962471969796262, "initial_memory": 11.522617640846278, "peer_bandwidths": {}}
+{"task_id": "T008", "arrival_offset_s": 0, "duration_s": 650.6664033119894, "initial_cpu": 8.77902091104772, "initial_memory": 37.737425853372834, "peer_bandwidths": {}}
+{"task_id": "T025", "arrival_offset_s": 0, "duration_s": 342.99765712549805, "initial_cpu": 9.676060461859153, "initial_memory": 43.58291033422604, "peer_bandwidths": {"T008": 2.008305360405804}}
+{"task_id": "T135", "arrival_offset_s": 0, "duration_s": 435.4373762658188, "initial_cpu": 9.002728452842629, "initial_memory": 9.68362314465735, "peer_bandwidths": {}}
+{"task_id": "T009", "arrival_offset_s": 0, "duration_s": 831.1250561997524, "initial_cpu": 8.327254199705223, "initial_memory": 25.961220786725292, "peer_bandwidths": {"T089": 1.6285931440160382}}
+{"task_id": "T014", "arrival_offset_s": 0, "duration_s": 545.7190856358212, "initial_cpu": 7.679690363550013, "initial_memory": 12.57333468721794, "peer_bandwidths": {"T181": 1.35863153767705, "T217": 6.539415713785193}}
+{"task_id": "T023", "arrival_offset_s": 0, "duration_s": 212.91126154243028, "initial_cpu": 12.372805272419196, "initial_memory": 25.4311866510888, "peer_bandwidths": {"T135": 12.757936403146754}}
+{"task_id": "T030", "arrival_offset_s": 0, "duration_s": 881.2872232805904, "initial_cpu": 3.244094646822681, "initial_memory": 10.048056832547381, "peer_bandwidths": {}}
+{"task_id": "T160", "arrival_offset_s": 0, "duration_s": 628.1121059192986, "initial_cpu": 7.3910771458729085, "initial_memory": 13.33532877337889, "peer_bandwidths": {}}
+{"task_id": "T035", "arrival_offset_s": 0, "duration_s": 746.0657653890742, "initial_cpu": 8.07715106760882, "initial_memory": 26.592430148611093, "peer_bandwidths": {"T062": 6.237927785555346}}
+{"task_id": "T180", "arrival_offset_s": 0, "duration_s": 786.2418876355894, "initial_cpu": 6.762157645681701, "initial_memory": 27.719389888044784, "peer_bandwidths": {}}
+{"task_id": "T181", "arrival_offset_s": 0, "duration_s": 280.9967899831463, "initial_cpu": 4.472547165525992, "initial_memory": 5.066493901034958, "peer_bandwidths": {}}
+{"task_id": "T059", "arrival_offset_s": 0, "duration_s": 546.4156233129966, "initial_cpu": 2.592381736244099, "initial_memory": 26.812634922500536, "peer_bandwidths": {"T180": 2.4635748132326363, "T210": 8.97335172083113, "T217": 1.5028410108284753}}
+{"task_id": "T062", "arrival_offset_s": 0, "duration_s": 416.7561088799305, "initial_cpu": 1.8157530199577687, "initial_memory": 23.845981568224676, "peer_bandwidths": {}}
+{"task_id": "T073", "arrival_offset_s": 0, "duration_s": 240.80650408937282, "initial_cpu": 5.986119848028951, "initial_memory": 21.874590048599746, "peer_bandwidths": {"T014": 1.5496521122223976}}
+{"task_id": "T210", "arrival_offset_s": 0, "duration_s": 674.394338906521, "initial_cpu": 6.674773264335237, "initial_memory": 25.069081051381083, "peer_bandwidths": {}}
+{"task_id": "T217", "arrival_offset_s": 0, "duration_s": 266.7954467441601, "initial_cpu": 12.391913512239748, "initial_memory": 17.143018361000088, "peer_bandwidths": {"T062": 6.161596874636614}}
+{"task_id": "T089", "arrival_offset_s": 0, "duration_s": 405.23392328188254, "initial_cpu": 5.7947594756710545, "initial_memory": 12.48876445010085, "peer_bandwidths": {"T119": 17.752015036523222}}
+{"task_id": "T247", "arrival_offset_s": 0, "duration_s": 732.1885295540169, "initial_cpu": 3.8652070632192146, "initial_memory": 17.713844661356127, "peer_bandwidths": {"T030": 3.2581887177733253, "T035": 3.355635433368485}}
+{"task_id": "T110", "arrival_offset_s": 0, "duration_s": 622.7183094779195, "initial_cpu": 7.130306895954524, "initial_memory": 3.0932689210531428, "peer_bandwidths": {}}
+{"task_id": "T114", "arrival_offset_s": 0, "duration_s": 550.6305766701591, "initial_cpu": 2.0697915945056162, "initial_memory": 23.059802993105528, "peer_bandwidths": {"T135": 12.363257484928695, "T160": 2.078425330468949, "T110": 11.897319313493064}}
+{"task_id": "T118", "arrival_offset_s": 0, "duration_s": 471.51117861803, "initial_cpu": 5.907939156768824, "initial_memory": 10.70398755354698, "peer_bandwidths": {"T119": 3.7691289365731797, "T062": 3.2503936676521947, "T114": 3.899034788439912}}
+{"task_id": "T119", "arrival_offset_s": 0, "duration_s": 369.5660007785666, "initial_cpu": 1.8554766835951322, "initial_memory": 4.874976050516867, "peer_bandwidths": {}}
+{"task_id": "T011", "arrival_offset_s": 0, "duration_s": 786.1222634053373, "initial_cpu": 2.857894866621488, "initial_memory": 8.563508131721326, "peer_bandwidths": {}}
+{"task_id": "T232", "arrival_offset_s": 0, "duration_s": 739.1601961175311, "initial_cpu": 2.5248196358511397, "initial_memory": 37.550607680492504, "peer_bandwidths": {"T012": 1.2775154441650052}}
+{"task_id": "T012", "arrival_offset_s": 0, "duration_s": 216.02456980916685, "initial_cpu": 3.899513229380238, "initial_memory": 22.205415070237684, "peer_bandwidths": {}}
+{"task_id": "T013", "arrival_offset_s": 0, "duration_s": 322.3120495866041, "initial_cpu": 5.129821943367905, "initial_memory": 4.621661269989878, "peer_bandwidths": {}}
+{"task_id": "T015", "arrival_offset_s": 0, "duration_s": 198.07861381372436, "initial_cpu": 7.877681039073097, "initial_memory": 24.353804334732946, "peer_bandwidths": {}}
+{"task_id": "T016", "arrival_offset_s": 0, "duration_s": 672.3936434093041, "initial_cpu": 3.8919154994441367, "initial_memory": 16.2320410360742, "peer_bandwidths": {}}
+{"task_id": "T017", "arrival_offset_s": 0, "duration_s": 673.624860541302, "initial_cpu": 8.272179278377246, "initial_memory": 4.467925418227402, "peer_bandwidths": {}}
+{"task_id": "T212", "arrival_offset_s": 0, "duration_s": 789.1828846417018, "initial_cpu": 1.3930443912329304, "initial_memory": 25.124525609076468, "peer_bandwidths": {"T017": 3.4512604767383204, "T033": 5.418028052511659}}
+{"task_id": "T033", "arrival_offset_s": 0, "duration_s": 338.50534038221826, "initial_cpu": 3.0336097297909306, "initial_memory": 22.42453323273002, "peer_bandwidths": {}}
+{"task_id": "T018", "arrival_offset_s": 0, "duration_s": 787.4947167376702, "initial_cpu": 4.712108748741337, "initial_memory": 7.740842879032716, "peer_bandwidths": {}}
+{"task_id": "T019", "arrival_offset_s": 0, "duration_s": 876.1008830685699, "initial_cpu": 8.071092949376528, "initial_memory": 27.704657379288914, "peer_bandwidths": {}}
+{"task_id": "T021", "arrival_offset_s": 0, "duration_s": 379.9140923025173, "initial_cpu": 5.862471684927115, "initial_memory": 34.013765766561725, "peer_bandwidths": {}}
+{"task_id": "T061", "arrival_offset_s": 0, "duration_s": 193.5638194084713, "initial_cpu": 4.824742682659015, "initial_memory": 27.581963144978484, "peer_bandwidths": {}}
+{"task_id": "T022", "arrival_offset_s": 0, "duration_s": 490.1839122835236, "initial_cpu": 8.734707308025472, "initial_memory": 23.08961674254903, "peer_bandwidths": {"T061": 8.54281220848561}}
+{"task_id": "T024", "arrival_offset_s": 0, "duration_s": 195.53849458039218, "initial_cpu": 5.220400933153475, "initial_memory": 11.394583195883547, "peer_bandwidths": {"T192": 3.942734210827917}}
+{"task_id": "T112", "arrival_offset_s": 0, "duration_s": 270.8118703330208, "initial_cpu": 4.202719174785963, "initial_memory": 39.26527521277131, "peer_bandwidths": {"T024": 1.5554261774413172}}
+{"task_id": "T152", "arrival_offset_s": 0, "duration_s": 552.0207184476227, "initial_cpu": 6.861256006514401, "initial_memory": 28.667090566769723, "peer_bandwidths": {"T192": 2.7792588340027873}}
+{"task_id": "T192", "arrival_offset_s": 0, "duration_s": 658.7937787688436, "initial_cpu": 3.48643687913885, "initial_memory": 37.06558978049124, "peer_bandwidths": {}}
+{"task_id": "T026", "arrival_offset_s": 0, "duration_s": 553.8699753756557, "initial_cpu": 4.8312245255859265, "initial_memory": 43.41541304357935, "peer_bandwidths": {}}
+{"task_id": "T027", "arrival_offset_s": 0, "duration_s": 289.7253906072452, "initial_cpu": 6.24400110177527, "initial_memory": 28.913729932067355, "peer_bandwidths": {}}
+{"task_id": "T028", "arrival_offset_s": 0, "duration_s": 464.48726637380014, "initial_cpu": 7.4885030092708265, "initial_memory": 22.99123181784064, "peer_bandwidths": {}}
+{"task_id": "T100", "arrival_offset_s": 0, "duration_s": 813.5127521553837, "initial_cpu": 6.55097014197074, "initial_memory": 29.444930378668182, "peer_bandwidths": {}}
+{"task_id": "T029", "arrival_offset_s": 0, "duration_s": 294.65411812526816, "initial_cpu": 3.1780858561133263, "initial_memory": 10.270910753707167, "peer_bandwidths": {"T100": 8.995327336529183}}
+{"task_id": "T031", "arrival_offset_s": 0, "duration_s": 406.4866731162607, "initial_cpu": 1.3624469892490558, "initial_memory": 50.79528222371257, "peer_bandwidths": {}}
+{"task_id": "T032", "arrival_offset_s": 30, "duration_s": 501.070430874557, "initial_cpu": 7.528769034842036, "initial_memory": 2.5374499689893657, "peer_bandwidths": {}}
+{"task_id": "T120", "arrival_offset_s": 30, "duration_s": 851.7663194260318, "initial_cpu": 3.2413065536429073, "initial_memory": 18.522877730093143, "peer_bandwidths": {}}
+{"task_id": "T034", "arrival_offset_s": 30, "duration_s": 559.3023200652599, "initial_cpu": 5.412847191747352, "initial_memory": 12.196977827933123, "peer_bandwidths": {"T120": 3.320236123893804}}
+{"task_id": "T151", "arrival_offset_s": 30, "duration_s": 627.5064173126209, "initial_cpu": 7.6034315365749725, "initial_memory": 34.22606352446911, "peer_bandwidths": {"T034": 1.2841864425818117}}
+{"task_id": "T036", "arrival_offset_s": 30, "duration_s": 761.2777369768855, "initial_cpu": 4.199285370429658, "initial_memory": 11.762950825166792, "peer_bandwidths": {}}
+{"task_id": "T088", "arrival_offset_s": 30, "duration_s": 566.4350904494615, "initial_cpu": 6.133241969108037, "initial_memory": 37.75505402159991, "peer_bandwidths": {"T081": 3.760404493076325}}
+{"task_id": "T081", "arrival_offset_s": 30, "duration_s": 501.3918753194593, "initial_cpu": 9.367658762979453, "initial_memory": 30.656464148477657, "peer_bandwidths": {"T037": 13.221196202540895}}
+{"task_id": "T037", "arrival_offset_s": 30, "duration_s": 498.1951643916996, "initial_cpu": 1.5114137925618627, "initial_memory": 11.62330624409528, "peer_bandwidths": {}}
+{"task_id": "T038", "arrival_offset_s": 30, "duration_s": 506.8181034153938, "initial_cpu": 4.454547896529674, "initial_memory": 23.059181630644225, "peer_bandwidths": {}}
+{"task_id": "T086", "arrival_offset_s": 30, "duration_s": 770.1249313310813, "initial_cpu": 3.1747421321204614, "initial_memory": 17.846257081909645, "peer_bandwidths": {}}
+{"task_id": "T039", "arrival_offset_s": 30, "duration_s": 715.1647532112478, "initial_cpu": 1.8186544576783423, "initial_memory": 12.632123653113657, "peer_bandwidths": {"T086": 3.3224919563998463}}
+{"task_id": "T040", "arrival_offset_s": 30, "duration_s": 342.43538389439004, "initial_cpu": 2.8661425851629847, "initial_memory": 24.296411356207486, "peer_bandwidths": {}}
+{"task_id": "T041", "arrival_offset_s": 30, "duration_s": 733.000146505913, "initial_cpu": 5.90361977879215, "initial_memory": 36.94921329906892, "peer_bandwidths": {}}
+{"task_id": "T042", "arrival_offset_s": 30, "duration_s": 437.59033429153436, "initial_cpu": 5.6958471320520525, "initial_memory": 14.327163085530074, "peer_bandwidths": {}}
+{"task_id": "T153", "arrival_offset_s": 30, "duration_s": 293.3008715771595, "initial_cpu": 8.627858318139145, "initial_memory": 7.779888830125456, "peer_bandwidths": {"T146": 1.4973319361616126}}
+{"task_id": "T146", "arrival_offset_s": 30, "duration_s": 272.7385425653142, "initial_cpu": 1.5707571689931263, "initial_memory": 25.30845797806882, "peer_bandwidths": {"T043": 2.3053554334896242}}
+{"task_id": "T043", "arrival_offset_s": 30, "duration_s": 600.2795432277587, "initial_cpu": 10.944955851253987, "initial_memory": 56.12746815793413, "peer_bandwidths": {}}
+{"task_id": "T044", "arrival_offset_s": 30, "duration_s": 279.2489094404053, "initial_cpu": 11.079536107659129, "initial_memory": 27.980505320575695, "peer_bandwidths": {}}
+{"task_id": "T045", "arrival_offset_s": 30, "duration_s": 684.6954178436001, "initial_cpu": 9.426065917453512, "initial_memory": 17.466228507947914, "peer_bandwidths": {}}
+{"task_id": "T245", "arrival_offset_s": 30, "duration_s": 387.6529639240513, "initial_cpu": 6.165468559926131, "initial_memory": 20.275609215346154, "peer_bandwidths": {"T046": 9.419084990376234}}
+{"task_id": "T046", "arrival_offset_s": 30, "duration_s": 374.3468774536525, "initial_cpu": 5.03574129081656, "initial_memory": 18.830019789551987, "peer_bandwidths": {}}
+{"task_id": "T047", "arrival_offset_s": 30, "duration_s": 775.4467434304422, "initial_cpu": 6.315126256688715, "initial_memory": 41.98530883777607, "peer_bandwidths": {}}
+{"task_id": "T048", "arrival_offset_s": 30, "duration_s": 532.6340554117864, "initial_cpu": 4.432514585616931, "initial_memory": 29.65388937880703, "peer_bandwidths": {}}
+{"task_id": "T204", "arrival_offset_s": 30, "duration_s": 480.3783406126611, "initial_cpu": 4.621855271771404, "initial_memory": 11.485074806662514, "peer_bandwidths": {"T048": 3.1152234004127015}}
+{"task_id": "T049", "arrival_offset_s": 30, "duration_s": 695.439279893014, "initial_cpu": 6.017832488545513, "initial_memory": 6.776368114130411, "peer_bandwidths": {}}
+{"task_id": "T116", "arrival_offset_s": 30, "duration_s": 554.6977121672608, "initial_cpu": 1.8230769771660817, "initial_memory": 23.152357529391054, "peer_bandwidths": {"T049": 1.3656740503212388}}
+{"task_id": "T072", "arrival_offset_s": 30, "duration_s": 235.66976014482407, "initial_cpu": 4.315346069080716, "initial_memory": 36.4959654758704, "peer_bandwidths": {"T075": 4.471293578263919}}
+{"task_id": "T075", "arrival_offset_s": 30, "duration_s": 517.6293046182133, "initial_cpu": 1.5640735452402341, "initial_memory": 15.759424224623414, "peer_bandwidths": {}}
+{"task_id": "T076", "arrival_offset_s": 30, "duration_s": 532.8674459705214, "initial_cpu": 2.081821095256575, "initial_memory": 22.4993600799544, "peer_bandwidths": {"T054": 2.0459603807061364}}
+{"task_id": "T050", "arrival_offset_s": 30, "duration_s": 760.9403996732904, "initial_cpu": 0.333174133071935, "initial_memory": 21.90679950009521, "peer_bandwidths": {}}
+{"task_id": "T054", "arrival_offset_s": 30, "duration_s": 467.7466935799759, "initial_cpu": 4.6337097298238605, "initial_memory": 10.783520199710402, "peer_bandwidths": {"T075": 7.433981349217604, "T050": 3.0771508452831045}}
+{"task_id": "T051", "arrival_offset_s": 30, "duration_s": 244.0150041361676, "initial_cpu": 9.45942443413112, "initial_memory": 5.111405319507552, "peer_bandwidths": {}}
+{"task_id": "T052", "arrival_offset_s": 30, "duration_s": 302.5617590386375, "initial_cpu": 3.1598854146390534, "initial_memory": 28.02922683133543, "peer_bandwidths": {}}
+{"task_id": "T053", "arrival_offset_s": 30, "duration_s": 743.7323724163595, "initial_cpu": 3.5462109268219164, "initial_memory": 35.843574109782196, "peer_bandwidths": {}}
+{"task_id": "T055", "arrival_offset_s": 30, "duration_s": 554.4425908424387, "initial_cpu": 9.13921029746846, "initial_memory": 11.770473293598018, "peer_bandwidths": {}}
+{"task_id": "T056", "arrival_offset_s": 30, "duration_s": 681.8048904844609, "initial_cpu": 0.8633150530664315, "initial_memory": 24.429735000814926, "peer_bandwidths": {}}
+{"task_id": "T057", "arrival_offset_s": 30, "duration_s": 258.82412253851766, "initial_cpu": 4.8657522394904085, "initial_memory": 25.53325077105769, "peer_bandwidths": {}}
+{"task_id": "T058", "arrival_offset_s": 30, "duration_s": 688.6487009794174, "initial_cpu": 3.352265053918296, "initial_memory": 11.758435813152827, "peer_bandwidths": {}}
+{"task_id": "T060", "arrival_offset_s": 30, "duration_s": 327.10831829973415, "initial_cpu": 7.054414191534628, "initial_memory": 7.744592393672247, "peer_bandwidths": {}}
+{"task_id": "T064", "arrival_offset_s": 30, "duration_s": 275.2464065861495, "initial_cpu": 3.1651620379730003, "initial_memory": 28.144578660813583, "peer_bandwidths": {}}
+{"task_id": "T065", "arrival_offset_s": 30, "duration_s": 498.59961153443714, "initial_cpu": 5.964529112321854, "initial_memory": 34.8331281395034, "peer_bandwidths": {}}
+{"task_id": "T066", "arrival_offset_s": 30, "duration_s": 402.3652777975559, "initial_cpu": 2.0381902774583183, "initial_memory": 27.01731530764871, "peer_bandwidths": {}}
+{"task_id": "T067", "arrival_offset_s": 30, "duration_s": 527.0220989699806, "initial_cpu": 2.6562155528737033, "initial_memory": 26.791053911045292, "peer_bandwidths": {}}
+{"task_id": "T068", "arrival_offset_s": 30, "duration_s": 484.04597651087647, "initial_cpu": 3.0768375892425697, "initial_memory": 11.761297150159992, "peer_bandwidths": {}}
+{"task_id": "T069", "arrival_offset_s": 30, "duration_s": 612.587864378226, "initial_cpu": 3.9364480119151817, "initial_memory": 17.599864120111743, "peer_bandwidths": {}}
+{"task_id": "T071", "arrival_offset_s": 30, "duration_s": 826.7596986730852, "initial_cpu": 5.028787641327539, "initial_memory": 29.177579437236187, "peer_bandwidths": {}}
+{"task_id": "T074", "arrival_offset_s": 30, "duration_s": 728.5237038763587, "initial_cpu": 4.387565256185442, "initial_memory": 16.139021264019863, "peer_bandwidths": {}}
+{"task_id": "T238", "arrival_offset_s": 30, "duration_s": 497.4302052638198, "initial_cpu": 3.5730148825312327, "initial_memory": 12.453116350098005, "peer_bandwidths": {"T074": 1.4219958426679464}}
+{"task_id": "T077", "arrival_offset_s": 30, "duration_s": 323.1935066648052, "initial_cpu": 0.8824741003743378, "initial_memory": 45.7251013780255, "peer_bandwidths": {}}
+{"task_id": "T078", "arrival_offset_s": 30, "duration_s": 501.95009388449273, "initial_cpu": 0.5178118797489023, "initial_memory": 29.216137290771535, "peer_bandwidths": {}}
+{"task_id": "T079", "arrival_offset_s": 30, "duration_s": 527.783059438621, "initial_cpu": 1.5534616421788034, "initial_memory": 12.184385364389518, "peer_bandwidths": {}}
+{"task_id": "T080", "arrival_offset_s": 30, "duration_s": 491.0213614410815, "initial_cpu": 0.5052730398647157, "initial_memory": 10.694719299642339, "peer_bandwidths": {"T171": 2.0903912879731017}}
+{"task_id": "T171", "arrival_offset_s": 30, "duration_s": 214.85575057790322, "initial_cpu": 2.5952903198640334, "initial_memory": 22.88019387427084, "peer_bandwidths": {}}
+{"task_id": "T082", "arrival_offset_s": 30, "duration_s": 664.2937855767207, "initial_cpu": 1.085844159417223, "initial_memory": 21.992525873091495, "peer_bandwidths": {}}
+{"task_id": "T083", "arrival_offset_s": 30, "duration_s": 703.328876796258, "initial_cpu": 1.6428504487781377, "initial_memory": 8.222098950213475, "peer_bandwidths": {"T246": 1.6503311444911075}}
+{"task_id": "T246", "arrival_offset_s": 30, "duration_s": 366.6363042074314, "initial_cpu": 4.122895554803651, "initial_memory": 27.438942978080775, "peer_bandwidths": {}}
+{"task_id": "T084", "arrival_offset_s": 30, "duration_s": 896.0786940968221, "initial_cpu": 6.576678707932618, "initial_memory": 22.221590195530826, "peer_bandwidths": {}}
+{"task_id": "T085", "arrival_offset_s": 30, "duration_s": 445.2742016778926, "initial_cpu": 5.710311514328767, "initial_memory": 5.108036248274965, "peer_bandwidths": {}}
+{"task_id": "T195", "arrival_offset_s": 30, "duration_s": 211.68165639687592, "initial_cpu": 2.6167424435518463, "initial_memory": 30.2455489849211, "peer_bandwidths": {"T164": 1.3852638083879052}}
+{"task_id": "T164", "arrival_offset_s": 30, "duration_s": 724.5039072161762, "initial_cpu": 7.973072713974374, "initial_memory": 15.27560397905148, "peer_bandwidths": {}}
+{"task_id": "T163", "arrival_offset_s": 30, "duration_s": 873.7075153332322, "initial_cpu": 2.69223604571722, "initial_memory": 26.64485567571159, "peer_bandwidths": {"T195": 5.33994631265076}}
+{"task_id": "T202", "arrival_offset_s": 30, "duration_s": 503.9999302359436, "initial_cpu": 6.451536829224188, "initial_memory": 10.347131902827254, "peer_bandwidths": {"T244": 12.93620494490035}}
+{"task_id": "T244", "arrival_offset_s": 30, "duration_s": 544.4170328749759, "initial_cpu": 14.615635269892339, "initial_memory": 6.5210816221753, "peer_bandwidths": {"T150": 4.38858559294572}}
+{"task_id": "T150", "arrival_offset_s": 30, "duration_s": 379.4768071195831, "initial_cpu": 5.000354396217832, "initial_memory": 26.01606329913461, "peer_bandwidths": {}}
+{"task_id": "T087", "arrival_offset_s": 30, "duration_s": 546.7807208855609, "initial_cpu": 3.6614001157496996, "initial_memory": 24.864593270547044, "peer_bandwidths": {"T195": 2.936234563021054, "T244": 11.33957946361097}}
+{"task_id": "T090", "arrival_offset_s": 60, "duration_s": 382.46978463714083, "initial_cpu": 3.710083823944596, "initial_memory": 28.451743391715564, "peer_bandwidths": {}}
+{"task_id": "T091", "arrival_offset_s": 60, "duration_s": 463.4982336598635, "initial_cpu": 2.454791572883477, "initial_memory": 24.260825997494898, "peer_bandwidths": {}}
+{"task_id": "T092", "arrival_offset_s": 60, "duration_s": 559.6601724006371, "initial_cpu": 7.3354216103325385, "initial_memory": 35.81374037192971, "peer_bandwidths": {}}
+{"task_id": "T093", "arrival_offset_s": 60, "duration_s": 752.321309672385, "initial_cpu": 2.8672727536935287, "initial_memory": 4.270508110804591, "peer_bandwidths": {}}
+{"task_id": "T205", "arrival_offset_s": 60, "duration_s": 462.77653474480866, "initial_cpu": 4.218869971307592, "initial_memory": 23.9329037881161, "peer_bandwidths": {}}
+{"task_id": "T094", "arrival_offset_s": 60, "duration_s": 216.03143711387997, "initial_cpu": 6.003248681320192, "initial_memory": 6.886332037620978, "peer_bandwidths": {"T205": 1.188471869598188}}
+{"task_id": "T169", "arrival_offset_s": 60, "duration_s": 487.4695010232635, "initial_cpu": 3.6192870329739395, "initial_memory": 14.634789172856859, "peer_bandwidths": {"T095": 1.53226566739814}}
+{"task_id": "T103", "arrival_offset_s": 60, "duration_s": 596.0235291086707, "initial_cpu": 4.455742978768628, "initial_memory": 5.570325813862125, "peer_bandwidths": {"T169": 2.1437571075445376}}
+{"task_id": "T095", "arrival_offset_s": 60, "duration_s": 511.46079881723716, "initial_cpu": 1.789829105044511, "initial_memory": 23.496023201501586, "peer_bandwidths": {}}
+{"task_id": "T096", "arrival_offset_s": 60, "duration_s": 332.1133380213944, "initial_cpu": 1.5298982416229168, "initial_memory": 31.907832836489874, "peer_bandwidths": {}}
+{"task_id": "T097", "arrival_offset_s": 60, "duration_s": 670.9760505273905, "initial_cpu": 5.6200262796262805, "initial_memory": 10.680581418591284, "peer_bandwidths": {}}
+{"task_id": "T098", "arrival_offset_s": 60, "duration_s": 493.2126893007885, "initial_cpu": 1.730775887320303, "initial_memory": 14.740294576407342, "peer_bandwidths": {}}
+{"task_id": "T099", "arrival_offset_s": 60, "duration_s": 419.1674828723661, "initial_cpu": 5.201608291077803, "initial_memory": 17.32030943208621, "peer_bandwidths": {}}
+{"task_id": "T101", "arrival_offset_s": 60, "duration_s": 655.3485849828076, "initial_cpu": 2.3778910468553707, "initial_memory": 16.34667396543603, "peer_bandwidths": {}}
+{"task_id": "T172", "arrival_offset_s": 60, "duration_s": 743.8501844942593, "initial_cpu": 13.270843292287129, "initial_memory": 8.703500126902957, "peer_bandwidths": {}}
+{"task_id": "T102", "arrival_offset_s": 60, "duration_s": 657.1358992114845, "initial_cpu": 3.584247182202541, "initial_memory": 8.840648973668394, "peer_bandwidths": {"T172": 7.2962885447039305}}
+{"task_id": "T104", "arrival_offset_s": 60, "duration_s": 224.37087082690365, "initial_cpu": 5.791691203450602, "initial_memory": 13.512337721478136, "peer_bandwidths": {}}
+{"task_id": "T105", "arrival_offset_s": 60, "duration_s": 446.1926988701782, "initial_cpu": 10.914834953420128, "initial_memory": 21.689202807688027, "peer_bandwidths": {"T158": 4.537016507747779}}
+{"task_id": "T158", "arrival_offset_s": 60, "duration_s": 449.8899445079421, "initial_cpu": 2.1116957212383265, "initial_memory": 38.16905558157474, "peer_bandwidths": {}}
+{"task_id": "T106", "arrival_offset_s": 60, "duration_s": 659.8983359530504, "initial_cpu": 4.354276038511216, "initial_memory": 15.054619275564372, "peer_bandwidths": {}}
+{"task_id": "T107", "arrival_offset_s": 60, "duration_s": 858.7999908324612, "initial_cpu": 7.64618894074666, "initial_memory": 32.674014794869116, "peer_bandwidths": {}}
+{"task_id": "T109", "arrival_offset_s": 60, "duration_s": 771.7525371139469, "initial_cpu": 3.8061141984638334, "initial_memory": 32.726459780100896, "peer_bandwidths": {}}
+{"task_id": "T111", "arrival_offset_s": 60, "duration_s": 708.277506603887, "initial_cpu": 5.989249518505705, "initial_memory": 5.655911300932739, "peer_bandwidths": {}}
+{"task_id": "T113", "arrival_offset_s": 60, "duration_s": 441.0836666514944, "initial_cpu": 13.619245812745461, "initial_memory": 7.574163941859532, "peer_bandwidths": {}}
+{"task_id": "T145", "arrival_offset_s": 60, "duration_s": 200.41296353401336, "initial_cpu": 2.359617627214464, "initial_memory": 27.26738212693563, "peer_bandwidths": {"T113": 3.1849759649192517}}
+{"task_id": "T115", "arrival_offset_s": 60, "duration_s": 803.3373020191854, "initial_cpu": 4.677510445080045, "initial_memory": 16.03490943478955, "peer_bandwidths": {}}
+{"task_id": "T154", "arrival_offset_s": 60, "duration_s": 883.4449790212681, "initial_cpu": 2.797067410689184, "initial_memory": 33.19460653648298, "peer_bandwidths": {"T215": 7.300568257669228, "T117": 4.9724983304648}}
+{"task_id": "T117", "arrival_offset_s": 60, "duration_s": 390.32763182604253, "initial_cpu": 2.784941623638994, "initial_memory": 11.793366559609924, "peer_bandwidths": {}}
+{"task_id": "T215", "arrival_offset_s": 60, "duration_s": 542.40012547787, "initial_cpu": 5.224561116696388, "initial_memory": 10.734286134024662, "peer_bandwidths": {}}
+{"task_id": "T121", "arrival_offset_s": 60, "duration_s": 231.47356204342583, "initial_cpu": 6.630192824872626, "initial_memory": 12.840776806497427, "peer_bandwidths": {}}
+{"task_id": "T123", "arrival_offset_s": 60, "duration_s": 286.0572179831847, "initial_cpu": 1.0897834224010194, "initial_memory": 24.0599015174672, "peer_bandwidths": {}}
+{"task_id": "T124", "arrival_offset_s": 60, "duration_s": 371.7177686549703, "initial_cpu": 9.240044121098157, "initial_memory": 21.140474278604497, "peer_bandwidths": {}}
+{"task_id": "T185", "arrival_offset_s": 60, "duration_s": 459.1028407307623, "initial_cpu": 4.2762678893406445, "initial_memory": 24.371630623687278, "peer_bandwidths": {"T125": 2.0979031367794527}}
+{"task_id": "T125", "arrival_offset_s": 60, "duration_s": 791.7090709851258, "initial_cpu": 1.2137841033937762, "initial_memory": 43.14706677774649, "peer_bandwidths": {}}
+{"task_id": "T126", "arrival_offset_s": 60, "duration_s": 749.5524245475603, "initial_cpu": 3.0855831733491774, "initial_memory": 17.50757954311514, "peer_bandwidths": {}}
+{"task_id": "T127", "arrival_offset_s": 60, "duration_s": 463.60339608175576, "initial_cpu": 3.665745448751314, "initial_memory": 11.734040729444235, "peer_bandwidths": {}}
+{"task_id": "T128", "arrival_offset_s": 60, "duration_s": 425.91948610109637, "initial_cpu": 2.8642732380440434, "initial_memory": 27.871503580916286, "peer_bandwidths": {}}
+{"task_id": "T129", "arrival_offset_s": 60, "duration_s": 375.6595353184432, "initial_cpu": 8.482593746958681, "initial_memory": 19.532887365632238, "peer_bandwidths": {}}
+{"task_id": "T130", "arrival_offset_s": 60, "duration_s": 556.5933884774242, "initial_cpu": 5.776381938437158, "initial_memory": 7.468792582657655, "peer_bandwidths": {}}
+{"task_id": "T131", "arrival_offset_s": 60, "duration_s": 693.7114553963816, "initial_cpu": 4.3255189175430635, "initial_memory": 33.76899473082233, "peer_bandwidths": {}}
+{"task_id": "T132", "arrival_offset_s": 60, "duration_s": 736.2083066031191, "initial_cpu": 4.156669722248863, "initial_memory": 8.82320429402131, "peer_bandwidths": {}}
+{"task_id": "T133", "arrival_offset_s": 60, "duration_s": 249.22119244700923, "initial_cpu": 4.351295760252166, "initial_memory": 32.91515870257367, "peer_bandwidths": {}}
+{"task_id": "T134", "arrival_offset_s": 60, "duration_s": 335.0314590280594, "initial_cpu": 2.729636726519459, "initial_memory": 35.432283830114464, "peer_bandwidths": {}}
+{"task_id": "T136", "arrival_offset_s": 60, "duration_s": 891.897375316048, "initial_cpu": 3.060287974817161, "initial_memory": 11.222751363453776, "peer_bandwidths": {}}
+{"task_id": "T137", "arrival_offset_s": 60, "duration_s": 550.1095713719951, "initial_cpu": 3.6763841523040024, "initial_memory": 37.87734760876622, "peer_bandwidths": {}}
+{"task_id": "T225", "arrival_offset_s": 60, "duration_s": 716.7202617112673, "initial_cpu": 1.263612710617709, "initial_memory": 9.623466782041122, "peer_bandwidths": {"T137": 4.776785993576786}}
+{"task_id": "T138", "arrival_offset_s": 60, "duration_s": 739.3671666209617, "initial_cpu": 3.356363807548255, "initial_memory": 47.009798259610456, "peer_bandwidths": {}}
+{"task_id": "T139", "arrival_offset_s": 60, "duration_s": 713.4547501013476, "initial_cpu": 3.093498269100941, "initial_memory": 40.17012283110062, "peer_bandwidths": {}}
+{"task_id": "T156", "arrival_offset_s": 60, "duration_s": 743.4537599185476, "initial_cpu": 7.374603288793001, "initial_memory": 8.674726641382007, "peer_bandwidths": {}}
+{"task_id": "T140", "arrival_offset_s": 60, "duration_s": 448.20678675884557, "initial_cpu": 4.941083436482732, "initial_memory": 7.697018866080919, "peer_bandwidths": {"T156": 7.2480529190493}}
+{"task_id": "T141", "arrival_offset_s": 60, "duration_s": 197.72356769216725, "initial_cpu": 2.891640736498991, "initial_memory": 18.86586061066831, "peer_bandwidths": {}}
+{"task_id": "T142", "arrival_offset_s": 60, "duration_s": 808.6315275395941, "initial_cpu": 9.174688872923948, "initial_memory": 9.611827165683742, "peer_bandwidths": {}}
+{"task_id": "T143", "arrival_offset_s": 60, "duration_s": 479.33571157249116, "initial_cpu": 5.025086831911323, "initial_memory": 22.697941466519122, "peer_bandwidths": {}}
+{"task_id": "T144", "arrival_offset_s": 60, "duration_s": 330.6713572663816, "initial_cpu": 2.9239492525072217, "initial_memory": 20.38496592987807, "peer_bandwidths": {}}
+{"task_id": "T147", "arrival_offset_s": 60, "duration_s": 575.559437273344, "initial_cpu": 3.235748916482385, "initial_memory": 17.450361380311662, "peer_bandwidths": {}}
+{"task_id": "T148", "arrival_offset_s": 60, "duration_s": 184.8058644720456, "initial_cpu": 6.2387072492716795, "initial_memory": 8.953567243646638, "peer_bandwidths": {}}
+{"task_id": "T149", "arrival_offset_s": 60, "duration_s": 857.2533187464581, "initial_cpu": 5.251314630333301, "initial_memory": 13.1934960380431, "peer_bandwidths": {}}
+{"task_id": "T155", "arrival_offset_s": 60, "duration_s": 586.2899008008835, "initial_cpu": 8.614565141069509, "initial_memory": 11.199000293300076, "peer_bandwidths": {}}
+{"task_id": "T196", "arrival_offset_s": 60, "duration_s": 669.0816057905608, "initial_cpu": 3.3161606628200175, "initial_memory": 55.75363957207738, "peer_bandwidths": {}}
+{"task_id": "T157", "arrival_offset_s": 60, "duration_s": 338.2138158695677, "initial_cpu": 5.035620304213162, "initial_memory": 28.218455167403583, "peer_bandwidths": {"T196": 2.2355415775211904}}
+{"task_id": "T159", "arrival_offset_s": 60, "duration_s": 564.1012700381925, "initial_cpu": 3.5946992721477047, "initial_memory": 18.95380762684396, "peer_bandwidths": {}}
+{"task_id": "T176", "arrival_offset_s": 90, "duration_s": 251.32813408952387, "initial_cpu": 9.916191369797364, "initial_memory": 30.124732903773413, "peer_bandwidths": {"T161": 6.943888968841135}}
+{"task_id": "T161", "arrival_offset_s": 90, "duration_s": 584.7713021364575, "initial_cpu": 5.390776174548951, "initial_memory": 23.446007183871284, "peer_bandwidths": {}}
+{"task_id": "T162", "arrival_offset_s": 90, "duration_s": 388.93123702474145, "initial_cpu": 3.949804174795897, "initial_memory": 39.548829166878, "peer_bandwidths": {}}
+{"task_id": "T165", "arrival_offset_s": 90, "duration_s": 483.88384724018465, "initial_cpu": 4.433618904301205, "initial_memory": 15.303455504698936, "peer_bandwidths": {}}
+{"task_id": "T166", "arrival_offset_s": 90, "duration_s": 697.5037088195908, "initial_cpu": 11.758866553602411, "initial_memory": 27.49554003842647, "peer_bandwidths": {}}
+{"task_id": "T167", "arrival_offset_s": 90, "duration_s": 514.4841062241032, "initial_cpu": 4.166111632646798, "initial_memory": 23.22544894446751, "peer_bandwidths": {}}
+{"task_id": "T168", "arrival_offset_s": 90, "duration_s": 451.2305976744098, "initial_cpu": 5.157561139281662, "initial_memory": 6.508519969806141, "peer_bandwidths": {}}
+{"task_id": "T170", "arrival_offset_s": 90, "duration_s": 455.2737996237539, "initial_cpu": 5.193131111378326, "initial_memory": 31.672625085632895, "peer_bandwidths": {}}
+{"task_id": "T173", "arrival_offset_s": 90, "duration_s": 378.66738009375, "initial_cpu": 2.0993079854766257, "initial_memory": 8.490115034886557, "peer_bandwidths": {}}
+{"task_id": "T174", "arrival_offset_s": 90, "duration_s": 547.537416428703, "initial_cpu": 3.727066176383678, "initial_memory": 26.717110103004707, "peer_bandwidths": {}}
+{"task_id": "T175", "arrival_offset_s": 90, "duration_s": 660.3955614481833, "initial_cpu": 6.1696138039332595, "initial_memory": 16.763379998153795, "peer_bandwidths": {}}
+{"task_id": "T177", "arrival_offset_s": 90, "duration_s": 446.95091260239917, "initial_cpu": 1.9051747544294049, "initial_memory": 43.19222247827436, "peer_bandwidths": {}}
+{"task_id": "T178", "arrival_offset_s": 90, "duration_s": 736.506572623549, "initial_cpu": 5.621740136646099, "initial_memory": 49.56127175287061, "peer_bandwidths": {}}
+{"task_id": "T179", "arrival_offset_s": 90, "duration_s": 571.1853139340624, "initial_cpu": 4.589591315719998, "initial_memory": 24.21379379060856, "peer_bandwidths": {}}
+{"task_id": "T182", "arrival_offset_s": 90, "duration_s": 472.1259757072214, "initial_cpu": 7.707990134375251, "initial_memory": 10.058017373220972, "peer_bandwidths": {}}
+{"task_id": "T183", "arrival_offset_s": 90, "duration_s": 387.5280392332686, "initial_cpu": 4.277509713246095, "initial_memory": 8.040812331164972, "peer_bandwidths": {}}
+{"task_id": "T184", "arrival_offset_s": 90, "duration_s": 899.1556428377959, "initial_cpu": 4.7667051853817926, "initial_memory": 2.3286201562745275, "peer_bandwidths": {}}
+{"task_id": "T186", "arrival_offset_s": 90, "duration_s": 247.0697350319102, "initial_cpu": 7.481759716041091, "initial_memory": 13.21659327143315, "peer_bandwidths": {}}
+{"task_id": "T187", "arrival_offset_s": 90, "duration_s": 250.15036485277616, "initial_cpu": 3.164238592445711, "initial_memory": 9.058490078795113, "peer_bandwidths": {}}
+{"task_id": "T188", "arrival_offset_s": 90, "duration_s": 389.78391318439833, "initial_cpu": 4.210119694457387, "initial_memory": 28.010580971767094, "peer_bandwidths": {}}
+{"task_id": "T189", "arrival_offset_s": 90, "duration_s": 244.93815662388835, "initial_cpu": 7.594090388818215, "initial_memory": 22.22008860918905, "peer_bandwidths": {}}
+{"task_id": "T190", "arrival_offset_s": 90, "duration_s": 589.2082447675032, "initial_cpu": 3.083272350380684, "initial_memory": 11.540458279256368, "peer_bandwidths": {}}
+{"task_id": "T191", "arrival_offset_s": 90, "duration_s": 530.425071066969, "initial_cpu": 7.380290148111888, "initial_memory": 14.94292617198095, "peer_bandwidths": {}}
+{"task_id": "T193", "arrival_offset_s": 90, "duration_s": 579.2208116908635, "initial_cpu": 4.690528998430732, "initial_memory": 13.214525682621833, "peer_bandwidths": {}}
+{"task_id": "T194", "arrival_offset_s": 90, "duration_s": 183.03452990725484, "initial_cpu": 3.456294918563935, "initial_memory": 16.531599258119023, "peer_bandwidths": {}}
+{"task_id": "T197", "arrival_offset_s": 90, "duration_s": 241.01506759148677, "initial_cpu": 2.7681072422600437, "initial_memory": 32.55867493392903, "peer_bandwidths": {}}
+{"task_id": "T198", "arrival_offset_s": 90, "duration_s": 886.725454942092, "initial_cpu": 3.6719964083797376, "initial_memory": 36.14070526309835, "peer_bandwidths": {}}
+{"task_id": "T199", "arrival_offset_s": 90, "duration_s": 792.1007905693074, "initial_cpu": 6.2991763869131825, "initial_memory": 24.6366613869221, "peer_bandwidths": {}}
+{"task_id": "T200", "arrival_offset_s": 90, "duration_s": 812.8855051612533, "initial_cpu": 5.254119231082808, "initial_memory": 4.890632700050461, "peer_bandwidths": {}}
+{"task_id": "T201", "arrival_offset_s": 90, "duration_s": 323.7388333110541, "initial_cpu": 4.861073946069521, "initial_memory": 16.33953583193346, "peer_bandwidths": {}}
+{"task_id": "T208", "arrival_offset_s": 90, "duration_s": 375.11357303306374, "initial_cpu": 3.9683725102746292, "initial_memory": 22.156256037117696, "peer_bandwidths": {}}
+{"task_id": "T203", "arrival_offset_s": 90, "duration_s": 234.5624927539464, "initial_cpu": 2.8239241080777546, "initial_memory": 14.222191162130569, "peer_bandwidths": {}}
+{"task_id": "T243", "arrival_offset_s": 90, "duration_s": 308.2603351680541, "initial_cpu": 4.730224609623598, "initial_memory": 16.59487668867331, "peer_bandwidths": {"T203": 3.1219198960154744, "T208": 3.3280026036299386}}
+{"task_id": "T206", "arrival_offset_s": 90, "duration_s": 718.152921502945, "initial_cpu": 2.1583168696542594, "initial_memory": 12.797287219342103, "peer_bandwidths": {}}
+{"task_id": "T209", "arrival_offset_s": 90, "duration_s": 871.2540749156858, "initial_cpu": 3.438798280057445, "initial_memory": 26.663069511057692, "peer_bandwidths": {}}
+{"task_id": "T211", "arrival_offset_s": 90, "duration_s": 783.2202235217029, "initial_cpu": 9.839997815728486, "initial_memory": 9.679503127288289, "peer_bandwidths": {}}
+{"task_id": "T213", "arrival_offset_s": 90, "duration_s": 622.2684372388296, "initial_cpu": 7.350378054309632, "initial_memory": 14.914534020965995, "peer_bandwidths": {}}
+{"task_id": "T214", "arrival_offset_s": 90, "duration_s": 462.21929357059946, "initial_cpu": 0.46264240716570587, "initial_memory": 13.392062132617955, "peer_bandwidths": {}}
+{"task_id": "T216", "arrival_offset_s": 90, "duration_s": 739.8042812966211, "initial_cpu": 15.42996546979222, "initial_memory": 8.722953568886986, "peer_bandwidths": {}}
+{"task_id": "T218", "arrival_offset_s": 90, "duration_s": 838.5160208540109, "initial_cpu": 10.847392340521306, "initial_memory": 20.53825875880564, "peer_bandwidths": {}}
+{"task_id": "T219", "arrival_offset_s": 90, "duration_s": 548.1746081180622, "initial_cpu": 10.326979405257793, "initial_memory": 8.068907660656858, "peer_bandwidths": {}}
+{"task_id": "T220", "arrival_offset_s": 90, "duration_s": 693.5097029218913, "initial_cpu": 5.211789416046099, "initial_memory": 34.00447729765883, "peer_bandwidths": {}}
+{"task_id": "T221", "arrival_offset_s": 90, "duration_s": 742.129425987342, "initial_cpu": 16.0, "initial_memory": 12.632311907540057, "peer_bandwidths": {}}
+{"task_id": "T222", "arrival_offset_s": 90, "duration_s": 369.74325361461126, "initial_cpu": 3.11789278012088, "initial_memory": 8.891493263432874, "peer_bandwidths": {}}
+{"task_id": "T223", "arrival_offset_s": 90, "duration_s": 789.19743867685, "initial_cpu": 1.7516474109076108, "initial_memory": 36.2434160296197, "peer_bandwidths": {}}
+{"task_id": "T224", "arrival_offset_s": 90, "duration_s": 367.06766125953277, "initial_cpu": 11.224238163409536, "initial_memory": 11.833126769839923, "peer_bandwidths": {}}
+{"task_id": "T226", "arrival_offset_s": 90, "duration_s": 445.56298728740444, "initial_cpu": 7.1339507852008195, "initial_memory": 22.249168977102308, "peer_bandwidths": {}}
+{"task_id": "T227", "arrival_offset_s": 90, "duration_s": 294.731619739464, "initial_cpu": 6.283451271832608, "initial_memory": 3.040217613648607, "peer_bandwidths": {}}
+{"task_id": "T228", "arrival_offset_s": 90, "duration_s": 716.0224392085125, "initial_cpu": 3.1450484282770015, "initial_memory": 17.85962124116148, "peer_bandwidths": {}}
+{"task_id": "T229", "arrival_offset_s": 90, "duration_s": 769.8812635706516, "initial_cpu": 9.51849870170798, "initial_memory": 15.804455523749475, "peer_bandwidths": {}}
+{"task_id": "T230", "arrival_offset_s": 90, "duration_s": 618.6515097076563, "initial_cpu": 5.946050801226241, "initial_memory": 9.430976572395904, "peer_bandwidths": {}}
+{"task_id": "T231", "arrival_offset_s": 90, "duration_s": 294.9788124581361, "initial_cpu": 4.976280605015649, "initial_memory": 39.009165832554, "peer_bandwidths": {}}
+{"task_id": "T233", "arrival_offset_s": 90, "duration_s": 258.0890019098268, "initial_cpu": 4.527276688399336, "initial_memory": 20.076140459614585, "peer_bandwidths": {}}
+{"task_id": "T234", "arrival_offset_s": 90, "duration_s": 337.9755337218529, "initial_cpu": 6.610902328661757, "initial_memory": 19.36947813059736, "peer_bandwidths": {}}
+{"task_id": "T235", "arrival_offset_s": 90, "duration_s": 691.4815161948252, "initial_cpu": 7.504287149114285, "initial_memory": 11.4051622693992, "peer_bandwidths": {}}
+{"task_id": "T236", "arrival_offset_s": 90, "duration_s": 758.3473393096136, "initial_cpu": 10.260289539667266, "initial_memory": 26.723200551610248, "peer_bandwidths": {}}
+{"task_id": "T237", "arrival_offset_s": 90, "duration_s": 425.1307990420888, "initial_cpu": 7.223752847895719, "initial_memory": 21.88980055562144, "peer_bandwidths": {}}
+{"task_id": "T239", "arrival_offset_s": 90, "duration_s": 806.2905774029871, "initial_cpu": 4.456309523028605, "initial_memory": 15.56045433238313, "peer_bandwidths": {}}
+{"task_id": "T240", "arrival_offset_s": 90, "duration_s": 762.2529993708745, "initial_cpu": 2.840413645730136, "initial_memory": 25.76817370571285, "peer_bandwidths": {}}
+{"task_id": "T241", "arrival_offset_s": 90, "duration_s": 738.7374964576868, "initial_cpu": 8.718549576000532, "initial_memory": 25.14683070321694, "peer_bandwidths": {}}
+{"task_id": "T242", "arrival_offset_s": 90, "duration_s": 897.0880297472713, "initial_cpu": 1.290291820338654, "initial_memory": 17.52401062456537, "peer_bandwidths": {}}

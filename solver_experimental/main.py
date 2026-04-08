@@ -176,7 +176,7 @@ def assign_tasks(args: AppConfig):
     )
 
     # Initialize the solver and benchmarking timers.
-    solver = TaskScheduler(network=network, max_reassignments=0)
+    solver = TaskScheduler(network=network, max_reassignments=10)
 
     # Decide whether to run the ES comparison path.
     es_available = check_es_available()
