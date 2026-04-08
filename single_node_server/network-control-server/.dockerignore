@@ -1,0 +1,5 @@
+target/
+.server.log
+.server.pid
+Cargo.toml.bak
+*.csv

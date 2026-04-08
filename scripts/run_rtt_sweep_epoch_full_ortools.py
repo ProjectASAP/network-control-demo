@@ -30,7 +30,9 @@ from rtt_sweep_common import (
     reset_es_index,
     resolve_repo_path,
     start_server,
+    start_server_docker,
     stop_server,
+    stop_server_docker,
     wait_for_server,
 )
 
@@ -438,7 +440,18 @@ def main() -> None:
     )
 
     server_log_path = None if args.server_log == "-" else resolve_repo_path(args.server_log)
-    proc = start_server(server_log_path, truncate_log=args.truncate_server_log)
+    use_docker = args.server_mode == "docker"
+
+    if use_docker:
+        container = start_server_docker(
+            image=args.docker_image,
+            container_name=args.docker_container,
+            log_path=server_log_path,
+            truncate_log=args.truncate_server_log,
+        )
+    else:
+        proc = start_server(server_log_path, truncate_log=args.truncate_server_log)
+
     try:
         wait_for_server(
             args.server_url,
@@ -603,7 +616,10 @@ def main() -> None:
             csv_file.flush()
 
     finally:
-        stop_server(proc)
+        if use_docker:
+            stop_server_docker(container)
+        else:
+            stop_server(proc)
         csv_file.close()
 
     plot_results(results, out_plot, backend=args.solver_backend)

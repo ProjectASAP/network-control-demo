@@ -36,12 +36,16 @@ An Axum-based HTTP server that ingests cluster metrics and serves aggregated que
 - **Query**: `src/server/query.rs` — percentile and cumulative aggregation queries against sketches
 - **Types**: `src/server/types.rs` — `AppState`, request/response types
 - **Upstream**: `src/server/upstream.rs` — forwards queries to Elasticsearch
-- **External dep**: `sketchlib-rust` (local path: `/users/yuanyc/sketchlib-rust`)
+- **External dep**: `asap_sketchlib` (local path: `/users/yuanyc/asap_sketchlib`)
+- **Docker**: `Dockerfile` (multi-stage build) + `docker-build.sh` (vendors `asap_sketchlib` into build context)
 
 **Build & run:**
 ```bash
 cd single_node_server/network-control-server
 cargo build          # or cargo run -- --timing
+# Docker:
+./docker-build.sh -t network-control-server:latest
+docker run -p 10101:10101 network-control-server:latest
 ```
 
 **Key env vars:** `UPSTREAM_URL` (ES endpoint, default `http://localhost:9200/cluster-metrics/_search`), `AGG_CONFIG_PATH`
@@ -168,14 +172,21 @@ Usage: `bash evaluate_demo.sh [NODE_QUERY_LIMIT]`
 # Full pipeline
 bash evaluate_demo.sh
 
-# Rust server only
+# Rust server only (local)
 cd single_node_server/network-control-server && cargo run -- --timing
+
+# Rust server via Docker
+cd single_node_server/network-control-server && ./docker-build.sh -t network-control-server:latest
+docker run -p 10101:10101 network-control-server:latest
 
 # Solver only (assumes server + ES running)
 cd solver_experimental && bash run_main.sh
 
-# RTT benchmarks
+# RTT benchmarks (local server)
 bash scripts/run_rtt_sweep_all.sh
+# RTT benchmarks (docker server)
+bash scripts/run_rtt_sweep_all.sh --docker
+bash scripts/run_rtt_sweep_all.sh --docker --docker-image=my-custom:tag
 python3 scripts/run_rtt_sweep.py
 python3 scripts/run_rtt_sweep_epoch.py
 python3 scripts/run_rtt_sweep_epoch_with_solver.py --run-solver

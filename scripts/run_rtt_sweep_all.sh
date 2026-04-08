@@ -8,6 +8,19 @@ if [[ ! -x "${PYTHON_BIN}" ]]; then
   PYTHON_BIN="python3"
 fi
 
+# Parse --docker flag
+SERVER_MODE_ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --docker)
+      SERVER_MODE_ARGS+=(--server-mode docker)
+      ;;
+    --docker-image=*)
+      SERVER_MODE_ARGS+=(--docker-image "${arg#*=}")
+      ;;
+  esac
+done
+
 mkdir -p "${ROOT_DIR}/data" "${ROOT_DIR}/plots" "${ROOT_DIR}/logs"
 
 # "${PYTHON_BIN}" "${SCRIPT_DIR}/run_rtt_sweep.py" \
@@ -97,6 +110,7 @@ for BACKEND in CBC SCIP; do
     --server-log "${ROOT_DIR}/logs/server_epoch_full_ortools_${BACKEND_LOWER}_30nodes.log" \
     --truncate-csv \
     --truncate-server-log \
+    ${SERVER_MODE_ARGS[@]+"${SERVER_MODE_ARGS[@]}"} \
     2>&1 | tee -a "${ROOT_DIR}/logs/run_rtt_sweep.log"
 done
 

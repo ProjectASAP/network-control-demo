@@ -46,6 +46,8 @@ DEFAULT_INGEST_RETRIES = 2
 DEFAULT_INGEST_RETRY_BACKOFF = 2.0
 DEFAULT_TRUNCATE_CSV = False
 DEFAULT_TRUNCATE_SERVER_LOG = False
+DEFAULT_DOCKER_IMAGE = "network-control-server:latest"
+DEFAULT_DOCKER_CONTAINER = "ncs-benchmark"
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
@@ -96,6 +98,25 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--es-url", type=str, default=DEFAULT_ES_URL, help="Elasticsearch URL")
     parser.add_argument("--es-index", type=str, default=DEFAULT_ES_INDEX, help="Elasticsearch index")
     parser.add_argument("--es-api-key", type=str, default=DEFAULT_ES_API_KEY, help="Elasticsearch API key")
+    parser.add_argument(
+        "--server-mode",
+        type=str,
+        choices=["local", "docker"],
+        default="local",
+        help="How to run the sketch server: 'local' (cargo run) or 'docker'",
+    )
+    parser.add_argument(
+        "--docker-image",
+        type=str,
+        default=DEFAULT_DOCKER_IMAGE,
+        help="Docker image to use when --server-mode=docker",
+    )
+    parser.add_argument(
+        "--docker-container",
+        type=str,
+        default=DEFAULT_DOCKER_CONTAINER,
+        help="Docker container name when --server-mode=docker",
+    )
     parser.add_argument(
         "--nodes-config",
         type=str,
@@ -374,6 +395,87 @@ def stop_server(proc: subprocess.Popen) -> None:
     log_fh = getattr(proc, "_log_fh", None)
     if log_fh:
         log_fh.close()
+
+
+# ---------------------------------------------------------------------------
+# Docker server lifecycle
+# ---------------------------------------------------------------------------
+
+def start_server_docker(
+    image: str = DEFAULT_DOCKER_IMAGE,
+    container_name: str = DEFAULT_DOCKER_CONTAINER,
+    port: int = 10101,
+    log_path: Path | None = None,
+    truncate_log: bool = False,
+    extra_env: Dict[str, str] | None = None,
+) -> str:
+    """Start the sketch server as a Docker container.
+
+    Returns the container name (used by stop_server_docker).
+    """
+    # Remove any leftover container with the same name.
+    subprocess.run(
+        ["docker", "rm", "-f", container_name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    cmd = [
+        "docker", "run", "-d",
+        "--name", container_name,
+        "-p", f"{port}:{port}",
+    ]
+    for key, val in (extra_env or {}).items():
+        cmd.extend(["-e", f"{key}={val}"])
+    cmd.append(image)
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"docker run failed: {result.stderr.strip()}")
+
+    # Optionally tail logs to a file in the background.
+    if log_path is not None:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        mode = "w" if truncate_log else "a"
+        log_fh = open(log_path, mode, encoding="utf-8")
+        log_proc = subprocess.Popen(
+            ["docker", "logs", "-f", container_name],
+            stdout=log_fh,
+            stderr=subprocess.STDOUT,
+        )
+        # Stash handles for cleanup.
+        _docker_log_handles[container_name] = (log_proc, log_fh)
+
+    return container_name
+
+
+# Internal bookkeeping for docker log tailers.
+_docker_log_handles: Dict[str, Tuple] = {}
+
+
+def stop_server_docker(container_name: str) -> None:
+    """Stop and remove the Docker container."""
+    # Stop the log tailer first.
+    handles = _docker_log_handles.pop(container_name, None)
+    if handles:
+        log_proc, log_fh = handles
+        log_proc.terminate()
+        try:
+            log_proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            log_proc.kill()
+        log_fh.close()
+
+    subprocess.run(
+        ["docker", "stop", "-t", "10", container_name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        ["docker", "rm", "-f", container_name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 # ---------------------------------------------------------------------------

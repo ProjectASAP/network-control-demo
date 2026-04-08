@@ -1,0 +1,9 @@
+# Build the image first (one-time)
+cd single_node_server/network-control-server
+./docker-build.sh -t network-control-server:latest
+
+# Run benchmarks with Docker server
+bash scripts/run_rtt_sweep_all.sh --docker
+
+# Or run a single sweep with Docker
+python3 scripts/run_rtt_sweep_epoch_full_ortools.py --run-solver --server-mode docker
