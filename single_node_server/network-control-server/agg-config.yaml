@@ -1,4 +1,0 @@
-# Deprecated. Aggregation support now lives in `server-config.yaml`.
-# Supported local aggregations are:
-#   - percentiles
-#   - cumulative
