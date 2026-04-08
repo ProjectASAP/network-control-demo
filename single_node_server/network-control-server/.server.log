@@ -41,3 +41,21 @@ resolved config: bind=0.0.0.0:10101 index=cluster-metrics upstream_mode=fallback
 startup complete in 113.94ms
 server listening on 0.0.0.0:10101
 received SIGTERM, shutting down
+warning: method `contains` is never used
+  --> src/metrics/store.rs:13:8
+   |
+11 | pub trait KeyCatalog: Send + Sync {
+   |           ---------- method in this trait
+12 |     fn keys(&self) -> Vec<String>;
+13 |     fn contains(&self, key: &str) -> bool;
+   |        ^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `network-control-server` (bin "network-control-server") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running `target/debug/network-control-server`
+resolved config: bind=0.0.0.0:10101 index=cluster-metrics upstream_mode=fallback timing=false
+startup complete in 113.33ms
+server listening on 0.0.0.0:10101
+received SIGTERM, shutting down

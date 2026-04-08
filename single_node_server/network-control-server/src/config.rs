@@ -8,7 +8,6 @@ use std::{
 
 use serde::Deserialize;
 
-use crate::metrics::MetricField;
 
 const SUPPORTED_AGGREGATIONS: &[&str] = &["percentiles", "cumulative"];
 const SUPPORTED_FILTER_TYPES: &[&str] = &["term"];
@@ -176,12 +175,8 @@ impl ServerRuntimeConfig {
             if metric.name.trim().is_empty() {
                 return Err("schema.metrics[].name must not be empty".into());
             }
-            if MetricField::from_storage_field(&metric.storage_field).is_none() {
-                return Err(format!(
-                    "unsupported schema.metrics[].storage_field '{}'",
-                    metric.storage_field
-                )
-                .into());
+            if metric.storage_field.trim().is_empty() {
+                return Err("schema.metrics[].storage_field must not be empty".into());
             }
             if !metrics.insert(metric.name.trim().to_ascii_lowercase()) {
                 return Err(format!("duplicate schema metric '{}'", metric.name).into());

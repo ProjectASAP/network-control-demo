@@ -43,7 +43,13 @@ async fn main() {
             return;
         }
     };
-    let store = InMemoryNodeStore::from_catalog(&catalog);
+    let metric_names: Vec<String> = runtime_config
+        .schema
+        .metrics
+        .iter()
+        .map(|m| m.storage_field.clone())
+        .collect();
+    let store = InMemoryNodeStore::from_catalog(&catalog, &metric_names);
 
     eprintln!(
         "resolved config: bind={} index={} upstream_mode={} timing={}",

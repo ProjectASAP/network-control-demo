@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::RwLock;
 
-use asap_sketch_lib::{KLL, SketchInput};
+use asap_sketchlib::{KLL, SketchInput};
 
 use crate::config::NodeCatalogConfig;
 
@@ -17,15 +17,13 @@ pub trait MetricStore: Send + Sync {
     fn insert_sample(
         &self,
         node_id: &str,
-        cpu_value: f64,
-        mem_value: f64,
-        net_value: f64,
+        metrics: &HashMap<String, f64>,
     ) -> Result<(), String>;
-    fn cumulative_value(&self, node_id: &str, field: MetricField) -> Result<f64, String>;
+    fn cumulative_value(&self, node_id: &str, field: &MetricField) -> Result<f64, String>;
     fn query_percentiles(
         &self,
         node_id: &str,
-        field: MetricField,
+        field: &MetricField,
         percents: &[f64],
     ) -> Result<Vec<Option<f64>>, String>;
     fn clear_all(&self) -> Result<(), String>;
@@ -41,12 +39,13 @@ pub struct InMemoryNodeStore {
 }
 
 pub struct NodeData {
-    pub cpu_kll: RwLock<KLL>,
-    pub mem_kll: RwLock<KLL>,
-    pub net_kll: RwLock<KLL>,
-    pub cpu_cumulative: RwLock<f64>,
-    pub mem_cumulative: RwLock<f64>,
-    pub net_cumulative: RwLock<f64>,
+    /// Per-metric KLL sketch and cumulative value, keyed by metric storage_field name.
+    pub metrics: HashMap<String, MetricData>,
+}
+
+pub struct MetricData {
+    pub kll: RwLock<KLL>,
+    pub cumulative: RwLock<f64>,
 }
 
 impl RangeKeyCatalog {
@@ -99,10 +98,10 @@ impl KeyCatalog for RangeKeyCatalog {
 }
 
 impl InMemoryNodeStore {
-    pub fn from_catalog(catalog: &dyn KeyCatalog) -> Self {
+    pub fn from_catalog(catalog: &dyn KeyCatalog, metric_names: &[String]) -> Self {
         let mut nodes = HashMap::new();
         for key in catalog.keys() {
-            nodes.insert(key, NodeData::new());
+            nodes.insert(key, NodeData::new(metric_names));
         }
         Self { nodes }
     }
@@ -112,94 +111,72 @@ impl MetricStore for InMemoryNodeStore {
     fn insert_sample(
         &self,
         node_id: &str,
-        cpu_value: f64,
-        mem_value: f64,
-        net_value: f64,
+        metrics: &HashMap<String, f64>,
     ) -> Result<(), String> {
         let node = self
             .nodes
             .get(node_id)
             .ok_or_else(|| format!("node id '{}' not found", node_id))?;
 
-        {
-            let mut cpu = node.cpu_kll.write().map_err(|_| "failed to lock cpu kll")?;
-            cpu.update(&SketchInput::F64(cpu_value))
-                .map_err(|_| "cpu values should be numeric")?;
-        }
-        {
-            let mut mem = node.mem_kll.write().map_err(|_| "failed to lock mem kll")?;
-            mem.update(&SketchInput::F64(mem_value))
-                .map_err(|_| "mem values should be numeric")?;
-        }
-        {
-            let mut net = node.net_kll.write().map_err(|_| "failed to lock net kll")?;
-            net.update(&SketchInput::F64(net_value))
-                .map_err(|_| "net values should be numeric")?;
-        }
-        {
-            let mut cpu = node
-                .cpu_cumulative
-                .write()
-                .map_err(|_| "failed to lock cpu cumulative")?;
-            *cpu += cpu_value;
-        }
-        {
-            let mut mem = node
-                .mem_cumulative
-                .write()
-                .map_err(|_| "failed to lock mem cumulative")?;
-            *mem += mem_value;
-        }
-        {
-            let mut net = node
-                .net_cumulative
-                .write()
-                .map_err(|_| "failed to lock net cumulative")?;
-            *net += net_value;
+        for (name, value) in metrics {
+            let metric_data = node
+                .metrics
+                .get(name)
+                .ok_or_else(|| format!("unknown metric '{}' for node '{}'", name, node_id))?;
+            {
+                let mut kll = metric_data
+                    .kll
+                    .write()
+                    .map_err(|_| format!("failed to lock kll for {}", name))?;
+                kll.update(&SketchInput::F64(*value))
+                    .map_err(|_| format!("{} values should be numeric", name))?;
+            }
+            {
+                let mut cum = metric_data
+                    .cumulative
+                    .write()
+                    .map_err(|_| format!("failed to lock cumulative for {}", name))?;
+                *cum += value;
+            }
         }
 
         Ok(())
     }
 
-    fn cumulative_value(&self, node_id: &str, field: MetricField) -> Result<f64, String> {
+    fn cumulative_value(&self, node_id: &str, field: &MetricField) -> Result<f64, String> {
         let node = self
             .nodes
             .get(node_id)
             .ok_or_else(|| format!("node id '{}' not found", node_id))?;
-        let value = match field {
-            MetricField::CpuCores => node
-                .cpu_cumulative
-                .read()
-                .map_err(|_| "failed to lock cpu cumulative")?,
-            MetricField::MemoryGb => node
-                .mem_cumulative
-                .read()
-                .map_err(|_| "failed to lock mem cumulative")?,
-            MetricField::NetworkMbps => node
-                .net_cumulative
-                .read()
-                .map_err(|_| "failed to lock net cumulative")?,
-        };
+        let metric_data = node
+            .metrics
+            .get(field.as_storage_field())
+            .ok_or_else(|| format!("unknown metric '{}'", field.as_storage_field()))?;
+        let value = metric_data
+            .cumulative
+            .read()
+            .map_err(|_| format!("failed to lock cumulative for {}", field.as_storage_field()))?;
         Ok(*value)
     }
 
     fn query_percentiles(
         &self,
         node_id: &str,
-        field: MetricField,
+        field: &MetricField,
         percents: &[f64],
     ) -> Result<Vec<Option<f64>>, String> {
         let node = self
             .nodes
             .get(node_id)
             .ok_or_else(|| format!("node id '{}' not found", node_id))?;
-        let kll = match field {
-            MetricField::CpuCores => node.cpu_kll.read().map_err(|_| "failed to lock cpu kll")?,
-            MetricField::MemoryGb => node.mem_kll.read().map_err(|_| "failed to lock mem kll")?,
-            MetricField::NetworkMbps => {
-                node.net_kll.read().map_err(|_| "failed to lock net kll")?
-            }
-        };
+        let metric_data = node
+            .metrics
+            .get(field.as_storage_field())
+            .ok_or_else(|| format!("unknown metric '{}'", field.as_storage_field()))?;
+        let kll = metric_data
+            .kll
+            .read()
+            .map_err(|_| format!("failed to lock kll for {}", field.as_storage_field()))?;
         let mut results = Vec::with_capacity(percents.len());
         for percent in percents {
             if !(0.0..=100.0).contains(percent) {
@@ -213,38 +190,21 @@ impl MetricStore for InMemoryNodeStore {
 
     fn clear_all(&self) -> Result<(), String> {
         for node in self.nodes.values() {
-            {
-                let mut cpu = node.cpu_kll.write().map_err(|_| "failed to lock cpu kll")?;
-                *cpu = KLL::default();
-            }
-            {
-                let mut mem = node.mem_kll.write().map_err(|_| "failed to lock mem kll")?;
-                *mem = KLL::default();
-            }
-            {
-                let mut net = node.net_kll.write().map_err(|_| "failed to lock net kll")?;
-                *net = KLL::default();
-            }
-            {
-                let mut cpu = node
-                    .cpu_cumulative
-                    .write()
-                    .map_err(|_| "failed to lock cpu cumulative")?;
-                *cpu = 0.0;
-            }
-            {
-                let mut mem = node
-                    .mem_cumulative
-                    .write()
-                    .map_err(|_| "failed to lock mem cumulative")?;
-                *mem = 0.0;
-            }
-            {
-                let mut net = node
-                    .net_cumulative
-                    .write()
-                    .map_err(|_| "failed to lock net cumulative")?;
-                *net = 0.0;
+            for (name, metric_data) in &node.metrics {
+                {
+                    let mut kll = metric_data
+                        .kll
+                        .write()
+                        .map_err(|_| format!("failed to lock kll for {}", name))?;
+                    *kll = KLL::default();
+                }
+                {
+                    let mut cum = metric_data
+                        .cumulative
+                        .write()
+                        .map_err(|_| format!("failed to lock cumulative for {}", name))?;
+                    *cum = 0.0;
+                }
             }
         }
         Ok(())
@@ -256,15 +216,18 @@ impl MetricStore for InMemoryNodeStore {
 }
 
 impl NodeData {
-    fn new() -> Self {
-        Self {
-            cpu_kll: RwLock::new(KLL::default()),
-            mem_kll: RwLock::new(KLL::default()),
-            net_kll: RwLock::new(KLL::default()),
-            cpu_cumulative: RwLock::new(0.0),
-            mem_cumulative: RwLock::new(0.0),
-            net_cumulative: RwLock::new(0.0),
+    fn new(metric_names: &[String]) -> Self {
+        let mut metrics = HashMap::new();
+        for name in metric_names {
+            metrics.insert(
+                name.clone(),
+                MetricData {
+                    kll: RwLock::new(KLL::default()),
+                    cumulative: RwLock::new(0.0),
+                },
+            );
         }
+        Self { metrics }
     }
 }
 

@@ -19,8 +19,8 @@ use super::logging::log_request_middleware;
 use super::query::parse_quantile_spec;
 use super::timing::{QueryTiming, write_timing_log};
 use super::types::{
-    AppState, BatchQueryRequest, BatchQueryResponse, BatchQueryResult, ErrorResponse, IngestRecord,
-    MetricsQuery, QueryExecutionPlan, RootResponse, SearchRequest,
+    AppState, BatchQueryRequest, BatchQueryResponse, BatchQueryResult, ErrorResponse,
+    IngestRecord, MetricsQuery, QueryExecutionPlan, RootResponse, SearchRequest,
 };
 use super::upstream::merge_aggregations;
 
@@ -120,25 +120,49 @@ async fn healthz_handler(State(state): State<AppState>) -> Json<Value> {
 
 async fn ingest_handler(
     State(state): State<AppState>,
-    Json(record): Json<IngestRecord>,
+    Json(body): Json<Value>,
 ) -> impl IntoResponse {
-    let len = record.cpu_cores.len();
+    let mapping = &state.runtime_config.schema.ingest_field_mapping;
+    let record = match IngestRecord::from_json(&body, mapping) {
+        Ok(record) => record,
+        Err(message) => {
+            return error_json_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                ErrorResponse::bad_request(message),
+            );
+        }
+    };
+
+    let len = record.len();
     if len == 0 {
         return error_json_response(
             axum::http::StatusCode::BAD_REQUEST,
             ErrorResponse::bad_request("metrics record must contain at least one sample"),
         );
     }
-    if record.task.len() != len
-        || record.cluster.len() != len
-        || record.memory_gb.len() != len
-        || record.network_mbps.len() != len
-    {
-        return error_json_response(
-            axum::http::StatusCode::BAD_REQUEST,
-            ErrorResponse::bad_request("metrics record fields must have equal lengths"),
-        );
+    // Validate all metric arrays have the same length as the key array.
+    for (name, values) in &record.metrics {
+        if values.len() != len {
+            return error_json_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                ErrorResponse::bad_request(format!(
+                    "metric '{}' has {} values but key field has {}",
+                    name,
+                    values.len(),
+                    len
+                )),
+            );
+        }
     }
+    if let Some(ref task) = record.task {
+        if task.len() != len {
+            return error_json_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                ErrorResponse::bad_request("task field length must match key field length"),
+            );
+        }
+    }
+
     if let Some(epoch) = record.epoch {
         let mut should_clear = false;
         match state.current_epoch.lock() {
@@ -167,17 +191,22 @@ async fn ingest_handler(
 
     let mut inserted = 0usize;
     for idx in 0..len {
-        let cluster = record.cluster[idx].trim();
-        let task = record.task[idx].trim();
-        if cluster.is_empty() || task.is_empty() {
+        let key = record.key[idx].trim();
+        if key.is_empty() {
             continue;
         }
-        if let Err(message) = state.store.insert_sample(
-            cluster,
-            record.cpu_cores[idx],
-            record.memory_gb[idx],
-            record.network_mbps[idx],
-        ) {
+        // If task is configured and present, skip rows with empty task.
+        if let Some(ref task) = record.task {
+            if task[idx].trim().is_empty() {
+                continue;
+            }
+        }
+        // Build per-sample metric map for this row.
+        let mut sample_metrics = std::collections::HashMap::new();
+        for (name, values) in &record.metrics {
+            sample_metrics.insert(name.clone(), values[idx]);
+        }
+        if let Err(message) = state.store.insert_sample(key, &sample_metrics) {
             return error_json_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 ErrorResponse::bad_request(message),
@@ -624,7 +653,7 @@ async fn metrics_handler(
                 );
             }
         };
-        let values = match state.store.query_percentiles(node_id, field, &[percent]) {
+        let values = match state.store.query_percentiles(node_id, &field, &[percent]) {
             Ok(values) => values,
             Err(message) => {
                 return error_json_response(

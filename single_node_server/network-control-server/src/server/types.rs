@@ -94,15 +94,93 @@ pub(crate) struct BatchQueryResponse {
     pub(crate) results: Vec<BatchQueryResult>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 pub(crate) struct IngestRecord {
-    #[serde(default)]
     pub(crate) epoch: Option<u64>,
-    pub(crate) task: Vec<String>,
-    pub(crate) cluster: Vec<String>,
-    pub(crate) cpu_cores: Vec<f64>,
-    pub(crate) memory_gb: Vec<f64>,
-    pub(crate) network_mbps: Vec<f64>,
+    pub(crate) key: Vec<String>,
+    pub(crate) task: Option<Vec<String>>,
+    /// metric storage_field name → values
+    pub(crate) metrics: std::collections::HashMap<String, Vec<f64>>,
+}
+
+impl IngestRecord {
+    /// Parse a raw JSON value into an IngestRecord using the config's field mapping.
+    pub(crate) fn from_json(
+        value: &Value,
+        mapping: &crate::config::IngestFieldMapping,
+    ) -> Result<Self, String> {
+        let obj = value
+            .as_object()
+            .ok_or_else(|| "ingest body must be a JSON object".to_string())?;
+
+        let epoch = obj
+            .get(&mapping.epoch_field)
+            .and_then(|v| v.as_u64());
+
+        let key = parse_string_array(obj, &mapping.key_field)?;
+
+        let task = match &mapping.task_field {
+            Some(task_field) => {
+                if obj.contains_key(task_field) {
+                    Some(parse_string_array(obj, task_field)?)
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
+
+        let mut metrics = std::collections::HashMap::new();
+        for (metric_name, json_field) in &mapping.metric_fields {
+            let values = parse_f64_array(obj, json_field)?;
+            metrics.insert(metric_name.clone(), values);
+        }
+
+        Ok(Self {
+            epoch,
+            key,
+            task,
+            metrics,
+        })
+    }
+
+    /// Returns the number of samples (length of the key array).
+    pub(crate) fn len(&self) -> usize {
+        self.key.len()
+    }
+}
+
+fn parse_string_array(
+    obj: &serde_json::Map<String, Value>,
+    field: &str,
+) -> Result<Vec<String>, String> {
+    let arr = obj
+        .get(field)
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| format!("field '{}' must be a JSON array", field))?;
+    arr.iter()
+        .map(|v| {
+            v.as_str()
+                .map(|s| s.to_string())
+                .ok_or_else(|| format!("field '{}' elements must be strings", field))
+        })
+        .collect()
+}
+
+fn parse_f64_array(
+    obj: &serde_json::Map<String, Value>,
+    field: &str,
+) -> Result<Vec<f64>, String> {
+    let arr = obj
+        .get(field)
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| format!("field '{}' must be a JSON array", field))?;
+    arr.iter()
+        .map(|v| {
+            v.as_f64()
+                .ok_or_else(|| format!("field '{}' elements must be numbers", field))
+        })
+        .collect()
 }
 
 #[derive(Clone, Debug)]
@@ -241,5 +319,5 @@ pub(crate) fn metric_field_for_name(
                     .iter()
                     .any(|alias| alias.trim().eq_ignore_ascii_case(&normalized))
         })
-        .and_then(|metric| MetricField::from_storage_field(&metric.storage_field))
+        .map(|metric| MetricField::new(&metric.storage_field))
 }
