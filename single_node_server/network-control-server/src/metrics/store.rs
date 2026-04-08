@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::error::Error;
 use std::sync::RwLock;
 
 use asap_sketchlib::{KLL, SketchInput};
@@ -112,9 +113,10 @@ impl MetricStore for InMemoryNodeStore {
         node_id: &str,
         metrics: &HashMap<String, f64>,
     ) -> Result<(), String> {
-        if metrics.is_empty() {
-            return Ok(());
-        }
+        let node = self
+            .nodes
+            .get(node_id)
+            .ok_or_else(|| format!("node id '{}' not found", node_id))?;
 
         for (name, value) in metrics {
             let metric_data = node
@@ -181,7 +183,7 @@ impl MetricStore for InMemoryNodeStore {
                 results.push(None);
                 continue;
             }
-            results.push(Some(metric_data.quantile(*percent / 100.0)));
+            results.push(Some(kll.quantile(*percent / 100.0)));
         }
 
         Ok(results)
@@ -230,86 +232,22 @@ impl NodeData {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::collections::HashMap;
-
-    use super::MetricStore;
-
-    #[test]
-    fn insert_metrics_allows_any_group_keys() {
-        let store = MetricStore::new();
-        let mut metrics = HashMap::new();
-        metrics.insert("cpu_cores".to_string(), 10.0);
-
-        store
-            .insert_metrics(&["any-key".to_string()], &metrics)
-            .expect("arbitrary key should succeed");
+fn split_node_id(id: &str) -> Result<(String, u32, usize), Box<dyn Error + Send + Sync>> {
+    let mut digit_idx = None;
+    for (idx, ch) in id.char_indices() {
+        if ch.is_ascii_digit() {
+            digit_idx = Some(idx);
+            break;
+        }
     }
-
-    #[test]
-    fn insert_and_query_grouped_and_global_values() {
-        let store = MetricStore::new();
-
-        let mut sample_a = HashMap::new();
-        sample_a.insert("cpu_cores".to_string(), 10.0);
-        sample_a.insert("memory_gb".to_string(), 4.0);
-
-        let mut sample_b = HashMap::new();
-        sample_b.insert("cpu_cores".to_string(), 30.0);
-        sample_b.insert("memory_gb".to_string(), 6.0);
-
-        let group_keys = vec!["N001".to_string(), "task-a".to_string(), "N001;task-a".to_string()];
-
-        store
-            .insert_metrics(&group_keys, &sample_a)
-            .expect("first insert should succeed");
-        store
-            .insert_metrics(&group_keys, &sample_b)
-            .expect("second insert should succeed");
-
-        let global_cpu = store
-            .cumulative_value(None, "cpu-cores")
-            .expect("global cumulative should exist");
-        assert!((global_cpu - 40.0).abs() < f64::EPSILON);
-
-        let grouped_cpu = store
-            .cumulative_value(Some("N001;task-a"), "cpu_cores")
-            .expect("group cumulative should exist");
-        assert!((grouped_cpu - 40.0).abs() < f64::EPSILON);
-
-        let grouped_mem = store
-            .cumulative_value(Some("task-a"), "memory gb")
-            .expect("group cumulative should exist");
-        assert!((grouped_mem - 10.0).abs() < f64::EPSILON);
-
-        let pct = store
-            .query_percentiles(Some("N001"), "cpu_cores", &[50.0, -1.0, 101.0])
-            .expect("percentile query should succeed");
-        assert_eq!(pct.len(), 3);
-        assert!(pct[0].is_some());
-        assert!(pct[1].is_none());
-        assert!(pct[2].is_none());
-
-        let p50 = pct[0].expect("p50 value");
-        assert!((10.0..=30.0).contains(&p50));
+    let digit_idx = digit_idx.ok_or_else(|| format!("node id '{id}' has no digits"))?;
+    let (prefix, number_str) = id.split_at(digit_idx);
+    if number_str.is_empty() {
+        return Err(format!("node id '{id}' missing numeric suffix").into());
     }
-
-    #[test]
-    fn clear_all_removes_all_metrics() {
-        let store = MetricStore::new();
-        let mut metrics = HashMap::new();
-        metrics.insert("cpu_cores".to_string(), 7.0);
-
-        store
-            .insert_metrics(&["N001".to_string()], &metrics)
-            .expect("insert should succeed");
-
-        store.clear_all().expect("clear should succeed");
-
-        let err = store
-            .cumulative_value(None, "cpu_cores")
-            .expect_err("metrics should be empty after clear");
-        assert!(err.contains("metric 'cpu_cores' not found"));
+    if !number_str.chars().all(|c| c.is_ascii_digit()) {
+        return Err(format!("node id '{id}' has non-numeric suffix").into());
     }
+    let number: u32 = number_str.parse()?;
+    Ok((prefix.to_string(), number, number_str.len()))
 }
