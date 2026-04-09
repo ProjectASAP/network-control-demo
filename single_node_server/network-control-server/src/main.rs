@@ -36,27 +36,44 @@ async fn main() {
         runtime_config.server.enable_timing = true;
     }
 
-    let catalog = match RangeKeyCatalog::from_config(&runtime_config.storage.node_catalog) {
-        Ok(catalog) => catalog,
-        Err(err) => {
-            eprintln!("failed to build key catalog: {err}");
-            return;
-        }
-    };
     let metric_names: Vec<String> = runtime_config
         .schema
         .metrics
         .iter()
         .map(|m| m.storage_field.clone())
         .collect();
-    let store = InMemoryKeyStore::from_catalog(&catalog, &metric_names);
+    let mut initial_keys: Vec<String> = runtime_config
+        .storage
+        .predefined_keys
+        .iter()
+        .map(|key| key.trim().to_string())
+        .filter(|key| !key.is_empty())
+        .collect();
+
+    if let Some(range_key_catalog) = runtime_config.storage.range_key_catalog.as_ref() {
+        let catalog = match RangeKeyCatalog::from_config(range_key_catalog) {
+            Ok(catalog) => catalog,
+            Err(err) => {
+                eprintln!("failed to build key catalog: {err}");
+                return;
+            }
+        };
+        initial_keys.extend(catalog.keys());
+    }
+
+    let store = if initial_keys.is_empty() {
+        InMemoryKeyStore::new(&metric_names)
+    } else {
+        InMemoryKeyStore::with_keys(&initial_keys, &metric_names)
+    };
 
     eprintln!(
-        "resolved config: bind={} index={} upstream_mode={} timing={}",
+        "resolved config: bind={} index={} upstream_mode={} timing={} seeded_keys={}",
         runtime_config.bind_addr(),
         runtime_config.api.index_name,
         runtime_config.upstream.mode,
-        runtime_config.server.enable_timing
+        runtime_config.server.enable_timing,
+        initial_keys.len()
     );
 
     let timing_sender = if runtime_config.server.enable_timing {

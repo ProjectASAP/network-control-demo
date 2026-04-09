@@ -205,13 +205,11 @@ upstream:
   search_url:
   forward_headers: []
 storage:
-  backend: "in_memory_node_store"
-  node_catalog:
-    kind: "range"
-    count: 1
-    range:
-      start: "N001"
-      end: "N001"
+    backend: "in_memory_key_store"
+    range_key_catalog:
+        format: "N{:03}"
+        start: 1
+        end: 1
 schema:
   metrics:
     - name: "cpu_cores"

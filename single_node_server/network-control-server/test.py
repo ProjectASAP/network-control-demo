@@ -40,9 +40,9 @@ def main():
             print(resp.text)
 
     quantiles = [10 * i for i in range(1, 10)]
-    cluster = "N001"
+    key1 = "N001"
     task = "cache"
-    key = f"{cluster};{task}"
+    key2 = f"task1"
     example_value = 4
 
     # 0) Basic endpoints
@@ -76,7 +76,7 @@ def main():
                     "percentiles": {
                         "field": "cpu_cores",
                         "percents": [10, 50, 90],
-                        "key": cluster,
+                        "key": key1,
                     }
                 }
             }
@@ -91,14 +91,14 @@ def main():
                 "cpu_frequency": {
                     "frequency": {
                         "field": "cpu_cores",
-                        "key": key,
+                        "key": key1,
                         "value": example_value,
                     }
                 },
                 "cpu_frequency_cluster": {
                     "frequency": {
                         "field": "cpu_cores",
-                        "key": cluster,
+                        "key": key1,
                         "value": example_value,
                     }
                 },
@@ -131,10 +131,10 @@ def main():
         {
             "aggs": {
                 "cpu_cumulative_cluster": {
-                    "cumulative": {"field": "cpu_cores", "key": cluster}
+                    "cumulative": {"field": "cpu_cores", "key": key1}
                 },
                 "cpu_cumulative_task": {
-                    "cumulative": {"field": "cpu_cores", "key": cluster}
+                    "cumulative": {"field": "cpu_cores", "key": key2}
                 },
             }
         },

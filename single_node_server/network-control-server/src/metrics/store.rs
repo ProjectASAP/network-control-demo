@@ -1,17 +1,12 @@
 use std::collections::HashMap;
 use std::error::Error;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use asap_sketchlib::{KLL, SketchInput};
 
-use crate::config::NodeCatalogConfig;
+use crate::config::RangeKeyCatalogConfig;
 
 use super::MetricField;
-
-pub trait KeyCatalog: Send + Sync {
-    fn keys(&self) -> Vec<String>;
-    fn contains(&self, key: &str) -> bool;
-}
 
 pub trait MetricStore: Send + Sync {
     fn insert_sample(
@@ -35,7 +30,7 @@ pub struct RangeKeyCatalog {
 }
 
 pub struct InMemoryKeyStore {
-    pub key_data: HashMap<String, PerKeyData>,
+    pub key_data: RwLock<HashMap<String, Arc<PerKeyData>>>,
     pub allowed_metrics: Vec<String>,
 }
 
@@ -50,61 +45,107 @@ pub struct MetricData {
 }
 
 impl RangeKeyCatalog {
-    pub fn from_config(config: &NodeCatalogConfig) -> Result<Self, Box<dyn Error + Send + Sync>> {
-        let count = config.count;
-        let range = &config.range;
-        let (prefix, start_num, width) = split_node_id(&range.start)?;
-        let (end_prefix, end_num, end_width) = split_node_id(&range.end)?;
-
-        if prefix != end_prefix {
-            return Err(format!(
-                "node id prefixes do not match: '{}' vs '{}'",
-                prefix, end_prefix
-            )
-            .into());
-        }
-        if width != end_width {
-            return Err(format!("node id width does not match: {} vs {}", width, end_width).into());
-        }
-        if end_num < start_num {
-            return Err(format!("node range end before start: {}..{}", start_num, end_num).into());
+    pub fn from_config(
+        config: &RangeKeyCatalogConfig,
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        let start = config.start;
+        let end = config.end;
+        if end < start {
+            return Err(format!("key range end before start: {}..{}", start, end).into());
         }
 
-        let expected = (end_num - start_num + 1) as usize;
-        if count != expected {
-            return Err(format!(
-                "node count {} does not match range size {}",
-                count, expected
-            )
-            .into());
-        }
-
-        let mut keys = Vec::with_capacity(count);
-        for num in start_num..=end_num {
-            keys.push(format!("{prefix}{:0width$}", num, width = width));
+        let mut keys = Vec::with_capacity((end - start + 1) as usize);
+        for idx in start..=end {
+            keys.push(format_key_index(&config.format, idx)?);
         }
 
         Ok(Self { keys })
     }
-}
 
-impl KeyCatalog for RangeKeyCatalog {
-    fn keys(&self) -> Vec<String> {
+    pub fn keys(&self) -> Vec<String> {
         self.keys.clone()
     }
+}
 
-    fn contains(&self, key: &str) -> bool {
-        self.keys.iter().any(|candidate| candidate == key)
+fn format_key_index(format: &str, idx: u32) -> Result<String, Box<dyn Error + Send + Sync>> {
+    if let Some((prefix, suffix)) = format.split_once("{}") {
+        if prefix.contains('{') || prefix.contains('}') || suffix.contains('{') || suffix.contains('}') {
+            return Err("range key format supports exactly one placeholder".into());
+        }
+        return Ok(format!("{prefix}{idx}{suffix}"));
     }
+
+    let Some(open) = format.find("{:0") else {
+        return Err("range key format must contain {} or {:0N} placeholder".into());
+    };
+    let width_start = open + 3;
+    let Some(close_rel) = format[width_start..].find('}') else {
+        return Err("range key format has '{' without matching '}'".into());
+    };
+    let close = width_start + close_rel;
+
+    if format[close + 1..].contains('{') {
+        return Err("range key format supports exactly one placeholder".into());
+    }
+
+    let width_digits = &format[width_start..close];
+    if width_digits.is_empty() || !width_digits.chars().all(|ch| ch.is_ascii_digit()) {
+        return Err("range key format width must be numeric, e.g. {:03}".into());
+    }
+    let width: usize = width_digits.parse()?;
+    let prefix = &format[..open];
+    let suffix = &format[close + 1..];
+    Ok(format!("{prefix}{:0width$}{suffix}", idx, width = width))
 }
 
 impl InMemoryKeyStore {
-    pub fn from_catalog(catalog: &dyn KeyCatalog, metric_names: &[String]) -> Self {
-        let mut nodes = HashMap::new();
-        for key in catalog.keys() {
-            nodes.insert(key, PerKeyData::new(metric_names));
+    pub fn new(metric_names: &[String]) -> Self {
+        Self {
+            key_data: RwLock::new(HashMap::new()),
+            allowed_metrics: metric_names.to_vec(),
         }
-        Self { key_data: nodes, allowed_metrics: metric_names.to_vec() }
+    }
+
+    pub fn with_keys(keys: &[String], metric_names: &[String]) -> Self {
+        let mut seeded = HashMap::new();
+        for key in keys {
+            let normalized = key.trim();
+            if normalized.is_empty() {
+                continue;
+            }
+            seeded
+                .entry(normalized.to_string())
+                .or_insert_with(|| Arc::new(PerKeyData::new(metric_names)));
+        }
+        Self {
+            key_data: RwLock::new(seeded),
+            allowed_metrics: metric_names.to_vec(),
+        }
+    }
+
+    fn get_or_create_key_data(&self, key: &str) -> Result<Arc<PerKeyData>, String> {
+        if let Ok(guard) = self.key_data.read() {
+            if let Some(existing) = guard.get(key) {
+                return Ok(Arc::clone(existing));
+            }
+        }
+
+        let mut guard = self
+            .key_data
+            .write()
+            .map_err(|_| "failed to lock key map for write".to_string())?;
+        let entry = guard
+            .entry(key.to_string())
+            .or_insert_with(|| Arc::new(PerKeyData::new(&self.allowed_metrics)));
+        Ok(Arc::clone(entry))
+    }
+
+    fn get_key_data(&self, key: &str) -> Result<Option<Arc<PerKeyData>>, String> {
+        let guard = self
+            .key_data
+            .read()
+            .map_err(|_| "failed to lock key map for read".to_string())?;
+        Ok(guard.get(key).cloned())
     }
 }
 
@@ -114,10 +155,7 @@ impl MetricStore for InMemoryKeyStore {
         key: &str,
         metrics: &HashMap<String, f64>,
     ) -> Result<(), String> {
-        let keyed_data = self
-            .key_data
-            .get(key)
-            .ok_or_else(|| format!("key '{}' not found in store", key))?;
+        let keyed_data = self.get_or_create_key_data(key)?;
         
         for (name, value) in metrics {
             let metric_data = keyed_data
@@ -146,8 +184,7 @@ impl MetricStore for InMemoryKeyStore {
 
     fn cumulative_value(&self, key: &str, field: &MetricField) -> Result<f64, String> {
         let keyed_data = self
-            .key_data
-            .get(key)
+            .get_key_data(key)?
             .ok_or_else(|| format!("sum statistics for key '{}' not found", key))?;
         let metric_data = keyed_data
             .metrics
@@ -167,8 +204,7 @@ impl MetricStore for InMemoryKeyStore {
         percents: &[f64],
     ) -> Result<Vec<Option<f64>>, String> {
         let keyed_data = self
-            .key_data
-            .get(node_id)
+            .get_key_data(node_id)?
             .ok_or_else(|| format!("quantile statistics for key '{}' not found", node_id))?;
         let metric_data = keyed_data
             .metrics
@@ -191,7 +227,11 @@ impl MetricStore for InMemoryKeyStore {
     }
 
     fn clear_all(&self) -> Result<(), String> {
-        for keyed_data in self.key_data.values() {
+        let guard = self
+            .key_data
+            .read()
+            .map_err(|_| "failed to lock key map for read".to_string())?;
+        for keyed_data in guard.values() {
             for (name, metric_data) in &keyed_data.metrics {
                 {
                     let mut kll = metric_data
@@ -213,7 +253,10 @@ impl MetricStore for InMemoryKeyStore {
     }
 
     fn contains_key(&self, key: &str) -> bool {
-        self.key_data.contains_key(key)
+        self.key_data
+            .read()
+            .map(|guard| guard.contains_key(key))
+            .unwrap_or(false)
     }
 }
 
@@ -231,24 +274,25 @@ impl PerKeyData {
         }
         Self { metrics }
     }
+
 }
 
-fn split_node_id(id: &str) -> Result<(String, u32, usize), Box<dyn Error + Send + Sync>> {
-    let mut digit_idx = None;
-    for (idx, ch) in id.char_indices() {
-        if ch.is_ascii_digit() {
-            digit_idx = Some(idx);
-            break;
-        }
+#[cfg(test)]
+mod tests {
+    use super::format_key_index;
+
+    #[test]
+    fn formats_simple_and_zero_padded_indices() {
+        assert_eq!(format_key_index("N{}", 7).unwrap(), "N7");
+        assert_eq!(format_key_index("N{:03}", 7).unwrap(), "N007");
+        assert_eq!(format_key_index("cluster-{:02}-x", 12).unwrap(), "cluster-12-x");
     }
-    let digit_idx = digit_idx.ok_or_else(|| format!("node id '{id}' has no digits"))?;
-    let (prefix, number_str) = id.split_at(digit_idx);
-    if number_str.is_empty() {
-        return Err(format!("node id '{id}' missing numeric suffix").into());
+
+    #[test]
+    fn rejects_invalid_format_templates() {
+        assert!(format_key_index("N", 7).is_err());
+        assert!(format_key_index("N{abc}", 7).is_err());
+        assert!(format_key_index("N{:x}", 7).is_err());
+        assert!(format_key_index("N{}-{}", 7).is_err());
     }
-    if !number_str.chars().all(|c| c.is_ascii_digit()) {
-        return Err(format!("node id '{id}' has non-numeric suffix").into());
-    }
-    let number: u32 = number_str.parse()?;
-    Ok((prefix.to_string(), number, number_str.len()))
 }

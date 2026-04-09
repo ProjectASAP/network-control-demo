@@ -59,20 +59,17 @@ pub struct UpstreamConfig {
 #[derive(Clone, Debug, Deserialize)]
 pub struct StorageConfig {
     pub backend: String,
-    pub node_catalog: NodeCatalogConfig,
+    #[serde(default)]
+    pub predefined_keys: Vec<String>,
+    #[serde(default, alias = "node_catalog")]
+    pub range_key_catalog: Option<RangeKeyCatalogConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct NodeCatalogConfig {
-    pub kind: String,
-    pub count: usize,
-    pub range: NodeCatalogRange,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct NodeCatalogRange {
-    pub start: String,
-    pub end: String,
+pub struct RangeKeyCatalogConfig {
+    pub format: String,
+    pub start: u32,
+    pub end: u32,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -133,22 +130,32 @@ impl ServerRuntimeConfig {
         if self.api.index_name.trim().is_empty() {
             return Err("api.index_name must not be empty".into());
         }
-        if self.storage.backend.trim() != "in_memory_node_store" {
+        let backend = self.storage.backend.trim().to_ascii_lowercase();
+        if backend != "in_memory_key_store" && backend != "in_memory_node_store" {
             return Err(format!(
-                "unsupported storage.backend '{}'; expected in_memory_node_store",
+                "unsupported storage.backend '{}'; expected in_memory_key_store",
                 self.storage.backend
             )
             .into());
         }
-        if self.storage.node_catalog.kind.trim() != "range" {
-            return Err(format!(
-                "unsupported storage.node_catalog.kind '{}'; expected range",
-                self.storage.node_catalog.kind
-            )
-            .into());
+
+        for key in &self.storage.predefined_keys {
+            if key.trim().is_empty() {
+                return Err("storage.predefined_keys must not contain empty values".into());
+            }
         }
-        if self.storage.node_catalog.count == 0 {
-            return Err("storage.node_catalog.count must be > 0".into());
+
+        if let Some(range_key_catalog) = self.storage.range_key_catalog.as_ref() {
+            if range_key_catalog.format.trim().is_empty() {
+                return Err("storage.range_key_catalog.format must not be empty".into());
+            }
+            if range_key_catalog.end < range_key_catalog.start {
+                return Err(format!(
+                    "storage.range_key_catalog.end {} must be >= start {}",
+                    range_key_catalog.end, range_key_catalog.start
+                )
+                .into());
+            }
         }
         let upstream_mode = self.upstream.mode.trim().to_ascii_lowercase();
         if !SUPPORTED_UPSTREAM_MODES.contains(&upstream_mode.as_str()) {
@@ -390,13 +397,11 @@ upstream:
   search_url: "http://localhost:9200/cluster-metrics/_search"
   forward_headers: ["x-request-id"]
 storage:
-  backend: "in_memory_node_store"
-  node_catalog:
-    kind: "range"
-    count: 2
-    range:
-      start: "N001"
-      end: "N002"
+    backend: "in_memory_key_store"
+    range_key_catalog:
+        format: "N{:03}"
+        start: 1
+        end: 2
 schema:
   metrics:
     - name: "cpu_cores"
