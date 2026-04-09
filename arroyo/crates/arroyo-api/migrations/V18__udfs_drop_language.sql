@@ -1,1 +1,0 @@
-ALTER TABLE udfs DROP COLUMN language;

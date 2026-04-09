@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX case_insensitive_connection_unique ON connection_tables (organization_id, LOWER(name));

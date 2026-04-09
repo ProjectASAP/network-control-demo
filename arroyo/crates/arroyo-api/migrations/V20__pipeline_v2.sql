@@ -1,2 +1,0 @@
-ALTER TABLE pipelines
-ADD COLUMN proto_version INT NOT NULL DEFAULT 1;
