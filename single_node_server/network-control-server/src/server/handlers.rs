@@ -19,8 +19,8 @@ use super::logging::log_request_middleware;
 use super::query::parse_quantile_spec;
 use super::timing::{QueryTiming, write_timing_log};
 use super::types::{
-    AppState, BatchQueryRequest, BatchQueryResponse, BatchQueryResult, ErrorResponse,
-    IngestRecord, MetricsQuery, QueryExecutionPlan, RootResponse, SearchRequest,
+    AppState, BatchQueryRequest, BatchQueryResponse, BatchQueryResult, ErrorResponse, IngestRecord,
+    MetricsQuery, QueryExecutionPlan, RootResponse, SearchRequest,
 };
 use super::upstream::merge_aggregations;
 

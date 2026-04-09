@@ -113,9 +113,7 @@ impl IngestRecord {
             .as_object()
             .ok_or_else(|| "ingest body must be a JSON object".to_string())?;
 
-        let epoch = obj
-            .get(&mapping.epoch_field)
-            .and_then(|v| v.as_u64());
+        let epoch = obj.get(&mapping.epoch_field).and_then(|v| v.as_u64());
 
         let key = parse_string_array(obj, &mapping.key_field)?;
 
@@ -167,10 +165,7 @@ fn parse_string_array(
         .collect()
 }
 
-fn parse_f64_array(
-    obj: &serde_json::Map<String, Value>,
-    field: &str,
-) -> Result<Vec<f64>, String> {
+fn parse_f64_array(obj: &serde_json::Map<String, Value>, field: &str) -> Result<Vec<f64>, String> {
     let arr = obj
         .get(field)
         .and_then(|v| v.as_array())

@@ -1,5 +1,4 @@
 mod config;
-mod ingest;
 mod metrics;
 mod server;
 

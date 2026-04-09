@@ -21,7 +21,8 @@ upstream:
 
 storage:
   backend: "in_memory_key_store"
-  range_key_catalog:
+  predefined_keys: [] # Optional list of predefined keys to initialize the store with.
+  range_key_catalog: # Optional configuration for initializing store with keys based on a range pattern.
     format: "N{:03}"
     start: 1
     end: 30

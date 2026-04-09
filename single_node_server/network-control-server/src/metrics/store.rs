@@ -9,15 +9,11 @@ use crate::config::RangeKeyCatalogConfig;
 use super::MetricField;
 
 pub trait MetricStore: Send + Sync {
-    fn insert_sample(
-        &self,
-        node_id: &str,
-        metrics: &HashMap<String, f64>,
-    ) -> Result<(), String>;
-    fn cumulative_value(&self, node_id: &str, field: &MetricField) -> Result<f64, String>;
+    fn insert_sample(&self, key: &str, metrics: &HashMap<String, f64>) -> Result<(), String>;
+    fn cumulative_value(&self, key: &str, field: &MetricField) -> Result<f64, String>;
     fn query_percentiles(
         &self,
-        node_id: &str,
+        key: &str,
         field: &MetricField,
         percents: &[f64],
     ) -> Result<Vec<Option<f64>>, String>;
@@ -69,7 +65,11 @@ impl RangeKeyCatalog {
 
 fn format_key_index(format: &str, idx: u32) -> Result<String, Box<dyn Error + Send + Sync>> {
     if let Some((prefix, suffix)) = format.split_once("{}") {
-        if prefix.contains('{') || prefix.contains('}') || suffix.contains('{') || suffix.contains('}') {
+        if prefix.contains('{')
+            || prefix.contains('}')
+            || suffix.contains('{')
+            || suffix.contains('}')
+        {
             return Err("range key format supports exactly one placeholder".into());
         }
         return Ok(format!("{prefix}{idx}{suffix}"));
@@ -107,7 +107,7 @@ impl InMemoryKeyStore {
     }
 
     pub fn with_keys(keys: &[String], metric_names: &[String]) -> Self {
-        let mut seeded = HashMap::new();
+        let mut seeded = HashMap::with_capacity(2 * keys.len());
         for key in keys {
             let normalized = key.trim();
             if normalized.is_empty() {
@@ -150,13 +150,9 @@ impl InMemoryKeyStore {
 }
 
 impl MetricStore for InMemoryKeyStore {
-    fn insert_sample(
-        &self,
-        key: &str,
-        metrics: &HashMap<String, f64>,
-    ) -> Result<(), String> {
+    fn insert_sample(&self, key: &str, metrics: &HashMap<String, f64>) -> Result<(), String> {
         let keyed_data = self.get_or_create_key_data(key)?;
-        
+
         for (name, value) in metrics {
             let metric_data = keyed_data
                 .metrics
@@ -199,13 +195,13 @@ impl MetricStore for InMemoryKeyStore {
 
     fn query_percentiles(
         &self,
-        node_id: &str,
+        key: &str,
         field: &MetricField,
         percents: &[f64],
     ) -> Result<Vec<Option<f64>>, String> {
         let keyed_data = self
-            .get_key_data(node_id)?
-            .ok_or_else(|| format!("quantile statistics for key '{}' not found", node_id))?;
+            .get_key_data(key)?
+            .ok_or_else(|| format!("quantile statistics for key '{}' not found", key))?;
         let metric_data = keyed_data
             .metrics
             .get(field.as_storage_field())
@@ -274,7 +270,6 @@ impl PerKeyData {
         }
         Self { metrics }
     }
-
 }
 
 #[cfg(test)]
@@ -285,7 +280,10 @@ mod tests {
     fn formats_simple_and_zero_padded_indices() {
         assert_eq!(format_key_index("N{}", 7).unwrap(), "N7");
         assert_eq!(format_key_index("N{:03}", 7).unwrap(), "N007");
-        assert_eq!(format_key_index("cluster-{:02}-x", 12).unwrap(), "cluster-12-x");
+        assert_eq!(
+            format_key_index("cluster-{:02}-x", 12).unwrap(),
+            "cluster-12-x"
+        );
     }
 
     #[test]

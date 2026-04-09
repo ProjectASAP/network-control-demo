@@ -8,7 +8,6 @@ use std::{
 
 use serde::Deserialize;
 
-
 const SUPPORTED_AGGREGATIONS: &[&str] = &["percentiles", "cumulative"];
 const SUPPORTED_FILTER_TYPES: &[&str] = &["term"];
 const SUPPORTED_UPSTREAM_MODES: &[&str] = &["disabled", "fallback"];
@@ -432,5 +431,3 @@ query_support:
         config.validate().unwrap();
     }
 }
-
-
