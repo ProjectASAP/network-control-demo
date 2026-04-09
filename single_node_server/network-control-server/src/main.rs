@@ -14,7 +14,7 @@ use std::{
 };
 
 use config::ServerRuntimeConfig;
-use metrics::{InMemoryNodeStore, RangeKeyCatalog};
+use metrics::{InMemoryKeyStore, RangeKeyCatalog};
 use reqwest::Client;
 use server::{
     AppState, DefaultRequestPlanner, EsFallbackUpstreamClient, SketchAggregationEngine,
@@ -49,7 +49,7 @@ async fn main() {
         .iter()
         .map(|m| m.storage_field.clone())
         .collect();
-    let store = InMemoryNodeStore::from_catalog(&catalog, &metric_names);
+    let store = InMemoryKeyStore::from_catalog(&catalog, &metric_names);
 
     eprintln!(
         "resolved config: bind={} index={} upstream_mode={} timing={}",

@@ -34,11 +34,12 @@ pub struct RangeKeyCatalog {
     keys: Vec<String>,
 }
 
-pub struct InMemoryNodeStore {
-    pub nodes: HashMap<String, NodeData>,
+pub struct InMemoryKeyStore {
+    pub key_data: HashMap<String, PerKeyData>,
+    pub allowed_metrics: Vec<String>,
 }
 
-pub struct NodeData {
+pub struct PerKeyData {
     /// Per-metric KLL sketch and cumulative value, keyed by metric storage_field name.
     pub metrics: HashMap<String, MetricData>,
 }
@@ -97,32 +98,32 @@ impl KeyCatalog for RangeKeyCatalog {
     }
 }
 
-impl InMemoryNodeStore {
+impl InMemoryKeyStore {
     pub fn from_catalog(catalog: &dyn KeyCatalog, metric_names: &[String]) -> Self {
         let mut nodes = HashMap::new();
         for key in catalog.keys() {
-            nodes.insert(key, NodeData::new(metric_names));
+            nodes.insert(key, PerKeyData::new(metric_names));
         }
-        Self { nodes }
+        Self { key_data: nodes, allowed_metrics: metric_names.to_vec() }
     }
 }
 
-impl MetricStore for InMemoryNodeStore {
+impl MetricStore for InMemoryKeyStore {
     fn insert_sample(
         &self,
-        node_id: &str,
+        key: &str,
         metrics: &HashMap<String, f64>,
     ) -> Result<(), String> {
-        let node = self
-            .nodes
-            .get(node_id)
-            .ok_or_else(|| format!("node id '{}' not found", node_id))?;
-
+        let keyed_data = self
+            .key_data
+            .get(key)
+            .ok_or_else(|| format!("key '{}' not found in store", key))?;
+        
         for (name, value) in metrics {
-            let metric_data = node
+            let metric_data = keyed_data
                 .metrics
                 .get(name)
-                .ok_or_else(|| format!("unknown metric '{}' for node '{}'", name, node_id))?;
+                .ok_or_else(|| format!("unknown metric '{}' for key '{}'", name, key))?;
             {
                 let mut kll = metric_data
                     .kll
@@ -143,12 +144,12 @@ impl MetricStore for InMemoryNodeStore {
         Ok(())
     }
 
-    fn cumulative_value(&self, node_id: &str, field: &MetricField) -> Result<f64, String> {
-        let node = self
-            .nodes
-            .get(node_id)
-            .ok_or_else(|| format!("node id '{}' not found", node_id))?;
-        let metric_data = node
+    fn cumulative_value(&self, key: &str, field: &MetricField) -> Result<f64, String> {
+        let keyed_data = self
+            .key_data
+            .get(key)
+            .ok_or_else(|| format!("sum statistics for key '{}' not found", key))?;
+        let metric_data = keyed_data
             .metrics
             .get(field.as_storage_field())
             .ok_or_else(|| format!("unknown metric '{}'", field.as_storage_field()))?;
@@ -165,11 +166,11 @@ impl MetricStore for InMemoryNodeStore {
         field: &MetricField,
         percents: &[f64],
     ) -> Result<Vec<Option<f64>>, String> {
-        let node = self
-            .nodes
+        let keyed_data = self
+            .key_data
             .get(node_id)
-            .ok_or_else(|| format!("node id '{}' not found", node_id))?;
-        let metric_data = node
+            .ok_or_else(|| format!("quantile statistics for key '{}' not found", node_id))?;
+        let metric_data = keyed_data
             .metrics
             .get(field.as_storage_field())
             .ok_or_else(|| format!("unknown metric '{}'", field.as_storage_field()))?;
@@ -190,8 +191,8 @@ impl MetricStore for InMemoryNodeStore {
     }
 
     fn clear_all(&self) -> Result<(), String> {
-        for node in self.nodes.values() {
-            for (name, metric_data) in &node.metrics {
+        for keyed_data in self.key_data.values() {
+            for (name, metric_data) in &keyed_data.metrics {
                 {
                     let mut kll = metric_data
                         .kll
@@ -212,11 +213,11 @@ impl MetricStore for InMemoryNodeStore {
     }
 
     fn contains_key(&self, key: &str) -> bool {
-        self.nodes.contains_key(key)
+        self.key_data.contains_key(key)
     }
 }
 
-impl NodeData {
+impl PerKeyData {
     fn new(metric_names: &[String]) -> Self {
         let mut metrics = HashMap::new();
         for name in metric_names {

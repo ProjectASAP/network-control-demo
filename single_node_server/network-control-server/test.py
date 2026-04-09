@@ -40,7 +40,7 @@ def main():
             print(resp.text)
 
     quantiles = [10 * i for i in range(1, 10)]
-    cluster = "cluster-a"
+    cluster = "N001"
     task = "cache"
     key = f"{cluster};{task}"
     example_value = 4
@@ -76,7 +76,7 @@ def main():
                     "percentiles": {
                         "field": "cpu_cores",
                         "percents": [10, 50, 90],
-                        "key": key,
+                        "key": cluster,
                     }
                 }
             }
@@ -130,14 +130,11 @@ def main():
         "/cluster-metrics/_search",
         {
             "aggs": {
-                "cpu_cumulative": {
-                    "cumulative": {"field": "cpu_cores", "key": key}
-                },
                 "cpu_cumulative_cluster": {
                     "cumulative": {"field": "cpu_cores", "key": cluster}
                 },
                 "cpu_cumulative_task": {
-                    "cumulative": {"field": "cpu_cores", "key": task}
+                    "cumulative": {"field": "cpu_cores", "key": cluster}
                 },
             }
         },

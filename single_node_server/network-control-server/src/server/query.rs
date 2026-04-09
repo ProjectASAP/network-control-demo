@@ -101,13 +101,6 @@ pub(crate) fn parse_quantile_spec(spec: &str) -> Option<f64> {
     candidate.parse::<f64>().ok()
 }
 
-fn normalize_field_name(spec: &str) -> String {
-    spec.trim()
-        .to_ascii_lowercase()
-        .replace('-', "_")
-        .replace(' ', "_")
-}
-
 #[cfg(test)]
 mod tests {
     use super::parse_quantile_spec;
