@@ -143,26 +143,48 @@ def resolve_repo_path(path_str: str) -> Path:
 # ---------------------------------------------------------------------------
 
 def parse_nodes_config(path: str) -> List[str]:
+    """Parse node IDs from server-config.yaml.
+
+    Supports the current range_key_catalog format (format + start + end)
+    and the legacy node_catalog format (range.start/end as string IDs).
+    """
+    import yaml  # available via serde_yaml's Python equivalent
+
     cfg_path = Path(path)
     if not cfg_path.is_absolute() and not cfg_path.exists():
         cfg_path = REPO_ROOT / cfg_path
-    start = None
-    end = None
     with open(cfg_path, "r", encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if line.startswith("start:"):
-                start = line.split(":", 1)[1].strip().strip('"').strip("'")
-            elif line.startswith("end:"):
-                end = line.split(":", 1)[1].strip().strip('"').strip("'")
-    if not start or not end:
-        raise ValueError("nodes-config.yaml missing start/end")
-    prefix_start, start_num = start[:-3], int(start[-3:])
-    prefix_end, end_num = end[:-3], int(end[-3:])
+        cfg = yaml.safe_load(fh)
+
+    storage = cfg.get("storage", {})
+
+    # New format: range_key_catalog with format/start/end
+    rkc = storage.get("range_key_catalog") or storage.get("node_catalog", {}).get("range_key_catalog")
+    if rkc and "format" in rkc:
+        fmt = rkc["format"]
+        start = int(rkc["start"])
+        end = int(rkc["end"])
+        nodes = []
+        for i in range(start, end + 1):
+            # Support both {} and {:0N} placeholders
+            if "{}" in fmt:
+                nodes.append(fmt.replace("{}", str(i), 1))
+            else:
+                nodes.append(fmt.format(i))
+        return nodes
+
+    # Legacy format: node_catalog.range with start/end as string IDs like "N001"
+    nc = storage.get("node_catalog", {})
+    rng = nc.get("range", {})
+    start_id = rng.get("start")
+    end_id = rng.get("end")
+    if not start_id or not end_id:
+        raise ValueError("server-config.yaml missing range_key_catalog or node_catalog.range")
+    prefix_start, start_num = start_id[:-3], int(start_id[-3:])
+    prefix_end, end_num = end_id[:-3], int(end_id[-3:])
     if prefix_start != prefix_end:
         raise ValueError("node id prefixes do not match")
-    nodes = [f"{prefix_start}{i:03d}" for i in range(start_num, end_num + 1)]
-    return nodes
+    return [f"{prefix_start}{i:03d}" for i in range(start_num, end_num + 1)]
 
 
 # ---------------------------------------------------------------------------

@@ -10,7 +10,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKETCHLIB_SRC="/users/yuanyc/asap_sketchlib"
+SKETCHLIB_SRC="$SCRIPT_DIR/../../../asap_sketchlib"
 DOCKER_DEPS_DIR="$SCRIPT_DIR/.docker-deps"
 
 # --- Prepare vendored dependencies ---
@@ -24,7 +24,7 @@ rsync -a --exclude='target' "$SKETCHLIB_SRC/" "$DOCKER_DEPS_DIR/asap_sketchlib/"
 echo "patching Cargo.toml for Docker build..."
 cp "$SCRIPT_DIR/Cargo.toml" "$SCRIPT_DIR/Cargo.toml.bak"
 
-sed -i 's|path = "/users/yuanyc/asap_sketchlib"|path = ".docker-deps/asap_sketchlib"|' \
+sed -i 's|path = "../../../asap_sketchlib"|path = ".docker-deps/asap_sketchlib"|' \
     "$SCRIPT_DIR/Cargo.toml"
 
 cleanup() {

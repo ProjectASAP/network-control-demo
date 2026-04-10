@@ -43,11 +43,10 @@ COPY --from=builder /build/target/release/network-control-server /app/network-co
 
 # Copy default config files
 COPY server-config.yaml /app/server-config.yaml
-COPY agg-config.yaml /app/agg-config.yaml
-COPY nodes-config.yaml /app/nodes-config.yaml
 
 EXPOSE 10101
 
 ENV NCS_CONFIG_PATH=/app/server-config.yaml
+ENV NCS_SERVER_HOST=0.0.0.0
 
 ENTRYPOINT ["/app/network-control-server"]
