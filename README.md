@@ -4,20 +4,30 @@ Proof-of-concept network control demo for epoch-based task placement.
 
 ## Problem Specification
 
-At each scheduling epoch, a controller must place arriving tasks onto a compute cluster.
-Each node and link has finite resources:
+### Problem Definition
 
-- node CPU and memory
-- inter-node link bandwidth
-- optional placement constraints and migration limits
+Given a set of arriving tasks with specific resource demands (CPU, RAM) and inter-task communication requirements (bandwidth), a central controller must maximize number of task allocations while adhering to physical cluster constraints.
 
-The controller depends on fresh telemetry to estimate available capacity before solving the
-placement problem. Query latency can become a bottleneck as data grows. This demo compares:
+The controller enforces joint optimization over:
 
-- Elasticsearch queries over raw telemetry
-- sketch-based approximate queries from a Rust server (KLL sketches)
+- Node Constraints: Total CPU and Memory capacity.
+- Network Constraints: Hierarchical tree topology with finite inter-node link bandwidth.
 
-The goal is to reduce query time while keeping placement quality and metric accuracy usable.
+### Experimental Evaluation
+
+This repository evaluates a telemetry architecture designed to accelerate Elasticsearch analytic queries loop by leveraging sketch techniques. We compare three distinct approaches:
+
+- Exact Retrieval (Baseline): Queries executed over raw telemetry stored in Elasticsearch.
+
+- Approximate Fast Layer: Accelerated telemetry retrieval using a high-performance Rust-based sketch server (utilizing KLL sketches for rank-based statistics and quantile estimation).
+
+- Static Baseline: Task placement based on initial capacity without periodic telemetry updates.
+
+### Key Metrics:
+
+- End-to-End Control-Loop Latency: Time elapsed from telemetry query initiation to solver completion.
+
+- Task Placement Quality: Total tasks successfully assigned per epoch.
 
 ## Repository Components
 
@@ -106,8 +116,3 @@ This script resets index state, starts/restarts the sketch server, and runs the 
 cd solver_experimental
 uv run pytest python_solver/tests/
 ```
-
-## Notes
-
-- Approximate telemetry from sketches accelerates query-phase latency, especially at scale.
-- OR-Tools and PuLP solver paths coexist; OR-Tools is the more mature solver implementation.
