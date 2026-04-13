@@ -1,4 +1,0 @@
-node_id,cpu,gpu,memory
-nodeA,4,2,16
-nodeB,6,1,32
-nodeC,2,1,8
