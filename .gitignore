@@ -1,3 +1,11 @@
 misc/*
+.es_api_key
 target
-__pycache__
+target-*/
+__pycache__/
+.venv/
+dummy_data/
+logs/
+.claude/
+settings.json
+.vscode

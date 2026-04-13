@@ -1,0 +1,12 @@
+[package]
+name = "sketch-experiments"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "tumbling-window"
+path = "src/tumbling_window.rs"
+
+[dependencies]
+asap_sketchlib = { path = "/users/yuanyc/asap_sketchlib" }
+rand = "0.9"

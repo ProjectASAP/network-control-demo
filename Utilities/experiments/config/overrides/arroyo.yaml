@@ -1,8 +1,0 @@
-# @package _global_
-# Arroyo streaming engine configuration
-
-streaming:
-  engine: "arroyo"
-  flink_input_format: "json"
-  flink_output_format: "json"
-  do_local_flink: false

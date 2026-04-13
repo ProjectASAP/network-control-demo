@@ -14,7 +14,9 @@ import pprint
 import os
 
 
-def load_network_topology(node_path: str | Path, edge_path: str | Path) -> NetworkTopology:
+def load_network_topology(
+    node_path: str | Path, edge_path: str | Path
+) -> NetworkTopology:
     nodes = load_nodes(node_path)
     edges = load_edges(edge_path)
     network = NetworkTopology(nodes.values(), edges.values())
@@ -37,7 +39,7 @@ def solve_scheduling_problem(node_path, edge_path, task_path, task_comms_path):
         tasks,
         task_graph=task_graph,
         running_tasks={"t1": RunningTask("n4", time.time(), tasks["t1"])},
-        paths=paths
+        paths=paths,
     )
     return assignment, obj_value, status_code
 
@@ -56,18 +58,14 @@ if __name__ == "__main__":
         task_comms_path = os.path.join(case_dir, "task_comms.csv")
 
         assignment, obj_value, status_code = solve_scheduling_problem(
-            node_path,
-            edge_path,
-            tasks_path,
-            task_comms_path
+            node_path, edge_path, tasks_path, task_comms_path
         )
-        if plp.LpStatus[status_code] == 'Optimal':
+        if plp.LpStatus[status_code] == "Optimal":
             print("Optimal Assignment:")
             for task, node in sorted(assignment.items()):
                 print(f"  {task} -> {node}")
-            
+
             display_obj_value = f"{obj_value:.2f}" if obj_value is not None else "N/A"
             print(f"\nObjective Value: {display_obj_value}")
         else:
             print("No optimal assignment found.")
-    

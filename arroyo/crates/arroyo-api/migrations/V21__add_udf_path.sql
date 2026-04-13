@@ -1,2 +1,0 @@
-ALTER TABLE udfs
-ADD COLUMN dylib_url TEXT NOT NULL DEFAULT '';

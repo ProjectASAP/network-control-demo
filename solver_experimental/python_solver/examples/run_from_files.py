@@ -28,7 +28,9 @@ def _load_json(path: Path) -> dict:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Solve the network controller ILP instance.")
+    parser = argparse.ArgumentParser(
+        description="Solve the network controller ILP instance."
+    )
     parser.add_argument(
         "--data-dir",
         type=Path,

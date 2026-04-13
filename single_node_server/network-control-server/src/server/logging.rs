@@ -1,0 +1,103 @@
+use axum::{
+    body::{Body, Bytes, to_bytes},
+    extract::State,
+    http::HeaderMap,
+    middleware::Next,
+    response::Response,
+};
+// use serde_json::Value;
+use tokio::sync::mpsc;
+
+use super::types::AppState;
+
+#[derive(Debug)]
+pub struct LogEntry {
+    pub method: axum::http::Method,
+    pub uri: axum::http::Uri,
+    pub headers: HeaderMap,
+    pub body: Bytes,
+}
+
+pub type LogSender = mpsc::Sender<LogEntry>;
+
+pub(crate) async fn log_request_middleware(
+    State(state): State<AppState>,
+    req: axum::http::Request<Body>,
+    next: Next,
+) -> Response {
+    let (parts, body) = req.into_parts();
+    if let Some(log_tx) = &state.log_tx {
+        let body_bytes = match to_bytes(body, usize::MAX).await {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                eprintln!("failed to read request body: {err}");
+                Bytes::new()
+            }
+        };
+        let log_entry = LogEntry {
+            method: parts.method.clone(),
+            uri: parts.uri.clone(),
+            headers: parts.headers.clone(),
+            body: body_bytes.clone(),
+        };
+        let _ = log_tx.try_send(log_entry);
+        let req = axum::http::Request::from_parts(parts, Body::from(body_bytes));
+        let response = next.run(req).await;
+        let status = response.status();
+        eprintln!("response status: {}", status);
+        return response;
+    }
+
+    let req = axum::http::Request::from_parts(parts, body);
+    let response = next.run(req).await;
+    let status = response.status();
+    eprintln!("response status: {}", status);
+    response
+}
+
+fn log_request_details(
+    method: axum::http::Method,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    body: Bytes,
+) {
+    eprintln!("incoming request: {method} {uri}");
+
+    let mut header_pairs: Vec<(String, String)> = headers
+        .iter()
+        .map(|(name, value)| {
+            let value_str = value
+                .to_str()
+                .map(|val| val.to_string())
+                .unwrap_or_else(|_| format!("<non-utf8:{} bytes>", value.as_bytes().len()));
+            (name.to_string(), value_str)
+        })
+        .collect();
+    header_pairs.sort_by(|a, b| a.0.cmp(&b.0));
+
+    eprintln!("headers:");
+    if header_pairs.is_empty() {
+        eprintln!("  <none>");
+    } else {
+        for (name, value) in header_pairs {
+            eprintln!("  {name}: {value}");
+        }
+    }
+
+    if body.is_empty() {
+        eprintln!("body: <empty>");
+    } else {
+        eprintln!("body: <redacted>");
+    }
+    eprintln!("end request");
+}
+
+pub fn start_request_logger(buffer: usize) -> LogSender {
+    let (log_tx, mut log_rx) = mpsc::channel::<LogEntry>(buffer);
+    tokio::spawn(async move {
+        while let Some(entry) = log_rx.recv().await {
+            log_request_details(entry.method, entry.uri, entry.headers, entry.body);
+        }
+    });
+    log_tx
+}

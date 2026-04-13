@@ -1,0 +1,6077 @@
+
+=== Sweep rows=10000 ===
+  ingest progress: 1/10 batches (10%)
+  ingest progress: 2/10 batches (20%)
+  ingest progress: 3/10 batches (30%)
+  ingest progress: 4/10 batches (40%)
+  ingest progress: 5/10 batches (50%)
+  ingest progress: 6/10 batches (60%)
+  ingest progress: 7/10 batches (70%)
+  ingest progress: 8/10 batches (80%)
+  ingest progress: 9/10 batches (90%)
+  ingest progress: 10/10 batches (100%)
+server RTT: 13.45 ms | ES RTT: 155.89 ms | max diff >=2%: 2491.62%
+comparisons:
+N002:
+  cpu_cores: p0:0.247/0.193(27.73%)
+  memory_gb: p0:2.177/2.078(4.74%)
+N003:
+  memory_gb: p0:0.235/0.143(63.91%)
+N004:
+  cpu_cores: p0:0.407/0.398(2.13%)
+N005:
+  network_mbps: p0:15.001/5.051(196.98%)
+N007:
+  cpu_cores: p0:0.319/0.239(33.43%)
+  memory_gb: p0:1.464/0.169(764.70%)
+N008:
+  network_mbps: p0:104.059/6.859(1417.06%)
+N010:
+  memory_gb: p0:1.861/0.122(1427.07%)
+N011:
+  cpu_cores: p0:0.654/0.106(517.13%)
+N012:
+  memory_gb: p0:0.246/0.204(20.83%)
+N013:
+  cpu_cores: p0:0.692/0.281(146.16%)
+N014:
+  memory_gb: p0:0.530/0.245(116.05%)
+N015:
+  network_mbps: p0:45.800/6.935(560.43%)
+N017:
+  cpu_cores: p0:0.693/0.508(36.63%)
+N018:
+  network_mbps: p0:111.029/61.157(81.55%)
+N019:
+  cpu_cores: p0:0.438/0.271(61.56%)
+  network_mbps: p0:42.012/6.600(536.53%)
+N020:
+  cpu_cores: p0:0.480/0.283(69.66%)
+N022:
+  cpu_cores: p0:0.331/0.189(74.50%)
+  memory_gb: p0:0.670/0.356(88.04%)
+N025:
+  memory_gb: p0:1.067/0.124(762.32%)
+  network_mbps: p0:99.586/6.061(1543.03%)
+N027:
+  memory_gb: p0:2.289/0.405(465.56%)
+N028:
+  cpu_cores: p0:0.398/0.141(182.14%)
+N030:
+  cpu_cores: p0:0.315/0.146(116.03%)
+  network_mbps: p0:11.847/0.457(2491.62%)
+
+=== Sweep rows=20000 ===
+  ingest progress: 2/20 batches (10%)
+  ingest progress: 4/20 batches (20%)
+  ingest progress: 6/20 batches (30%)
+  ingest progress: 8/20 batches (40%)
+  ingest progress: 10/20 batches (50%)
+  ingest progress: 12/20 batches (60%)
+  ingest progress: 14/20 batches (70%)
+  ingest progress: 16/20 batches (80%)
+  ingest progress: 18/20 batches (90%)
+  ingest progress: 20/20 batches (100%)
+server RTT: 10.16 ms | ES RTT: 220.70 ms | max diff >=2%: 11523.25%
+comparisons:
+N001:
+  cpu_cores: p0:0.605/0.110(449.29%)
+  network_mbps: p0:135.153/68.899(96.16%)
+N002:
+  cpu_cores: p0:0.529/0.235(125.75%)
+  memory_gb: p0:1.264/0.605(108.87%)
+N003:
+  cpu_cores: p0:0.511/0.311(64.60%)
+N004:
+  cpu_cores: p0:0.405/0.192(111.35%)
+  network_mbps: p0:41.936/9.792(328.28%)
+N005:
+  cpu_cores: p0:0.278/0.236(17.57%)
+  network_mbps: p0:129.003/4.240(2942.20%)
+N006:
+  memory_gb: p0:1.628/1.320(23.38%)
+N007:
+  cpu_cores: p0:0.503/0.189(165.55%)
+  memory_gb: p0:0.937/0.221(323.10%)
+N008:
+  cpu_cores: p0:0.226/0.217(3.91%)
+  network_mbps: p0:111.443/55.502(100.79%)
+N009:
+  cpu_cores: p0:0.193/0.107(81.15%)
+  memory_gb: p0:1.011/0.723(39.88%)
+N010:
+  cpu_cores: p0:0.310/0.225(37.97%)
+  memory_gb: p0:0.373/0.151(146.56%)
+  network_mbps: p0:70.693/0.608(11523.25%)
+N011:
+  memory_gb: p0:0.876/0.168(420.36%)
+  network_mbps: p0:111.180/39.767(179.58%)
+N012:
+  cpu_cores: p0:0.276/0.176(56.94%)
+  memory_gb: p0:0.164/0.114(44.22%)
+  network_mbps: p0:124.607/63.112(97.44%)
+N013:
+  cpu_cores: p0:0.164/0.130(26.47%)
+  network_mbps: p0:62.293/24.529(153.96%)
+N014:
+  cpu_cores: p0:0.293/0.163(79.72%)
+  memory_gb: p0:1.428/1.028(38.98%)
+N015:
+  network_mbps: p0:61.657/8.229(649.27%)
+N016:
+  cpu_cores: p0:0.568/0.246(131.47%)
+  memory_gb: p0:0.728/0.324(124.55%)
+N017:
+  cpu_cores: p0:0.349/0.265(31.92%)
+  memory_gb: p0:0.209/0.174(20.08%)
+N018:
+  cpu_cores: p0:0.394/0.198(99.15%)
+  memory_gb: p0:1.226/0.366(234.53%)
+  network_mbps: p0:23.464/1.667(1307.36%)
+N019:
+  memory_gb: p0:0.789/0.412(91.45%)
+  network_mbps: p0:14.542/4.263(241.14%)
+N020:
+  memory_gb: p0:1.988/0.144(1282.13%)
+N022:
+  cpu_cores: p0:0.256/0.195(31.10%)
+  network_mbps: p0:68.250/9.436(623.27%)
+N023:
+  memory_gb: p0:0.426/0.120(255.48%)
+N024:
+  network_mbps: p0:14.836/8.730(69.93%)
+N026:
+  cpu_cores: p0:0.524/0.200(161.88%)
+  memory_gb: p0:2.388/1.189(100.86%)
+  network_mbps: p0:58.596/37.530(56.13%)
+N027:
+  cpu_cores: p0:0.275/0.227(21.05%)
+  memory_gb: p0:0.560/0.204(175.29%)
+N028:
+  memory_gb: p0:1.208/0.294(310.81%)
+  network_mbps: p0:94.887/8.501(1016.14%)
+N029:
+  network_mbps: p0:32.342/11.634(178.00%)
+N030:
+  cpu_cores: p0:0.364/0.220(65.19%)
+  memory_gb: p0:2.980/0.394(656.86%)
+  network_mbps: p0:79.200/16.294(386.06%)
+
+=== Sweep rows=30000 ===
+  ingest progress: 3/30 batches (10%)
+  ingest progress: 6/30 batches (20%)
+  ingest progress: 9/30 batches (30%)
+  ingest progress: 12/30 batches (40%)
+  ingest progress: 15/30 batches (50%)
+  ingest progress: 18/30 batches (60%)
+  ingest progress: 21/30 batches (70%)
+  ingest progress: 24/30 batches (80%)
+  ingest progress: 27/30 batches (90%)
+  ingest progress: 30/30 batches (100%)
+server RTT: 12.82 ms | ES RTT: 204.22 ms | max diff >=2%: 1557.40%
+comparisons:
+N001:
+  memory_gb: p0:0.219/0.123(78.29%)
+  network_mbps: p0:31.658/9.557(231.27%)
+N002:
+  cpu_cores: p0:0.247/0.224(10.11%)
+  memory_gb: p0:1.947/0.292(565.81%)
+  network_mbps: p0:10.380/2.586(301.41%)
+N003:
+  memory_gb: p0:1.072/0.410(161.72%)
+N004:
+  cpu_cores: p0:0.291/0.188(55.06%)
+  memory_gb: p0:0.899/0.381(136.20%)
+  network_mbps: p0:28.748/9.254(210.67%)
+N005:
+  memory_gb: p0:0.234/0.196(19.27%)
+N006:
+  cpu_cores: p0:0.265/0.103(156.75%)
+  network_mbps: p0:50.620/29.933(69.11%)
+N007:
+  cpu_cores: p0:0.201/0.181(11.14%)
+  memory_gb: p0:0.610/0.246(147.80%)
+  network_mbps: p0:39.583/19.290(105.20%)
+N008:
+  memory_gb: p0:0.221/0.125(76.18%)
+  network_mbps: p0:19.291/5.841(230.25%)
+N011:
+  cpu_cores: p0:0.294/0.226(30.17%)
+  network_mbps: p0:39.329/2.373(1557.40%)
+N012:
+  network_mbps: p0:6.699/1.265(429.38%)
+N013:
+  cpu_cores: p0:0.367/0.224(63.88%)
+  memory_gb: p0:2.520/0.211(1096.81%)
+N014:
+  memory_gb: p0:0.778/0.168(363.02%)
+N015:
+  memory_gb: p0:0.558/0.396(40.88%)
+N016:
+  cpu_cores: p0:0.385/0.161(138.60%)
+  memory_gb: p0:0.603/0.111(441.67%)
+  network_mbps: p0:7.066/4.609(53.32%)
+N017:
+  memory_gb: p0:1.317/0.220(497.42%)
+  network_mbps: p0:18.695/13.943(34.07%)
+N018:
+  cpu_cores: p0:0.363/0.143(154.14%)
+  network_mbps: p0:49.690/9.257(436.76%)
+N019:
+  cpu_cores: p0:0.237/0.110(115.90%)
+N020:
+  memory_gb: p0:0.743/0.266(178.79%)
+N021:
+  cpu_cores: p0:0.129/0.117(10.11%)
+  memory_gb: p0:1.380/0.313(341.14%)
+N022:
+  memory_gb: p0:1.549/0.236(556.33%)
+N024:
+  cpu_cores: p0:0.253/0.105(140.49%)
+  memory_gb: p0:1.422/1.327(7.16%)
+  network_mbps: p0:15.152/8.832(71.55%)
+N025:
+  cpu_cores: p0:0.283/0.170(66.87%)
+N026:
+  cpu_cores: p0:0.598/0.212(182.66%)
+  memory_gb: p0:2.293/0.664(245.57%)
+  network_mbps: p0:40.848/13.031(213.46%)
+N027:
+  memory_gb: p0:1.122/0.758(48.09%)
+  network_mbps: p0:63.489/7.184(783.76%)
+N028:
+  cpu_cores: p0:0.205/0.193(5.98%)
+  network_mbps: p0:80.670/34.949(130.82%)
+N030:
+  cpu_cores: p0:0.224/0.218(2.97%)
+  network_mbps: p0:9.392/2.718(245.54%)
+
+=== Sweep rows=40000 ===
+  ingest progress: 4/40 batches (10%)
+  ingest progress: 8/40 batches (20%)
+  ingest progress: 12/40 batches (30%)
+  ingest progress: 16/40 batches (40%)
+  ingest progress: 20/40 batches (50%)
+  ingest progress: 24/40 batches (60%)
+  ingest progress: 28/40 batches (70%)
+  ingest progress: 32/40 batches (80%)
+  ingest progress: 36/40 batches (90%)
+  ingest progress: 40/40 batches (100%)
+server RTT: 10.86 ms | ES RTT: 257.70 ms | max diff >=2%: 17992.87%
+comparisons:
+N001:
+  network_mbps: p0:25.470/1.998(1175.07%)
+N002:
+  cpu_cores: p0:0.113/0.101(11.80%)
+  memory_gb: p0:0.938/0.217(332.38%)
+N003:
+  cpu_cores: p0:0.189/0.112(68.98%)
+  memory_gb: p0:1.237/0.160(672.23%)
+  network_mbps: p0:33.419/3.316(907.95%)
+N004:
+  cpu_cores: p0:0.642/0.105(510.25%)
+  memory_gb: p0:0.301/0.132(127.08%)
+  network_mbps: p0:69.586/28.586(143.43%)
+N005:
+  cpu_cores: p0:0.198/0.163(21.63%)
+  memory_gb: p0:1.702/0.198(758.78%)
+N006:
+  network_mbps: p0:29.923/4.609(549.16%)
+N007:
+  cpu_cores: p0:0.196/0.128(53.48%)
+  memory_gb: p0:0.831/0.346(140.26%)
+  network_mbps: p50:4820.519/4945.773(2.53%)
+N008:
+  cpu_cores: p0:0.353/0.296(19.29%)
+  memory_gb: p0:1.301/0.715(81.96%)
+N009:
+  cpu_cores: p0:0.394/0.112(250.15%)
+  memory_gb: p0:0.740/0.414(78.65%)
+  network_mbps: p0:41.247/0.659(6159.84%)
+N010:
+  cpu_cores: p0:0.201/0.160(25.13%)
+  memory_gb: p0:0.813/0.741(9.74%)
+N011:
+  memory_gb: p0:1.000/0.549(82.22%)
+  network_mbps: p0:33.683/6.316(433.32%)
+N012:
+  memory_gb: p0:0.534/0.271(97.07%)
+  network_mbps: p0:44.674/15.138(195.11%)
+N013:
+  cpu_cores: p0:0.303/0.140(116.80%)
+  memory_gb: p0:1.200/0.157(665.41%)
+  network_mbps: p0:56.982/2.412(2262.17%)
+N014:
+  cpu_cores: p0:0.451/0.129(250.37%)
+  memory_gb: p0:1.206/0.182(562.55%)
+  network_mbps: p0:108.506/4.879(2123.85%)
+N015:
+  cpu_cores: p0:0.143/0.111(28.64%)
+  network_mbps: p0:42.286/4.239(897.52%)
+N016:
+  cpu_cores: p0:0.256/0.104(146.60%)
+  network_mbps: p0:72.615/0.401(17992.87%)
+N017:
+  memory_gb: p0:0.944/0.896(5.40%)
+  network_mbps: p0:8.803/0.223(3851.65%)
+N018:
+  cpu_cores: p0:0.224/0.116(93.67%)
+  memory_gb: p0:0.809/0.174(364.71%)
+  network_mbps: p0:55.093/10.139(443.40%)
+N019:
+  memory_gb: p0:0.258/0.124(108.23%)
+  network_mbps: p0:47.278/8.542(453.50%)
+N020:
+  cpu_cores: p0:0.471/0.240(96.16%)
+  memory_gb: p0:0.440/0.325(35.46%)
+  network_mbps: p0:39.771/4.930(706.63%)
+N021:
+  cpu_cores: p0:0.233/0.142(64.38%)
+  memory_gb: p0:0.509/0.462(10.16%)
+  network_mbps: p0:64.813/14.796(338.05%)
+N022:
+  memory_gb: p0:1.226/0.542(126.08%)
+N023:
+  cpu_cores: p0:0.249/0.133(87.94%)
+  memory_gb: p0:1.635/0.828(97.34%)
+  network_mbps: p0:50.529/0.417(12013.07%)
+N024:
+  network_mbps: p0:36.857/2.256(1533.60%)
+N025:
+  memory_gb: p0:1.479/0.102(1344.38%)
+  network_mbps: p0:12.161/2.086(483.10%)
+N026:
+  cpu_cores: p0:0.366/0.135(171.31%)
+  memory_gb: p0:0.911/0.136(569.84%)
+  network_mbps: p0:20.152/9.923(103.09%)
+N027:
+  cpu_cores: p0:0.200/0.103(95.02%)
+  network_mbps: p0:6.898/0.340(1927.78%)
+N028:
+  cpu_cores: p0:0.772/0.110(603.61%)
+  memory_gb: p0:0.842/0.197(328.09%)
+  network_mbps: p0:26.821/0.622(4211.98%)
+N029:
+  network_mbps: p0:71.327/7.700(826.30%)
+N030:
+  cpu_cores: p0:0.223/0.118(88.29%)
+  network_mbps: p0:60.112/2.812(2037.69%)
+
+=== Sweep rows=50000 ===
+  ingest progress: 5/50 batches (10%)
+  ingest progress: 10/50 batches (20%)
+  ingest progress: 15/50 batches (30%)
+  ingest progress: 20/50 batches (40%)
+  ingest progress: 25/50 batches (50%)
+  ingest progress: 30/50 batches (60%)
+  ingest progress: 35/50 batches (70%)
+  ingest progress: 40/50 batches (80%)
+  ingest progress: 45/50 batches (90%)
+  ingest progress: 50/50 batches (100%)
+server RTT: 12.33 ms | ES RTT: 403.31 ms | max diff >=2%: 9488.58%
+comparisons:
+N001:
+  cpu_cores: p0:0.559/0.135(315.45%)
+  memory_gb: p0:1.048/0.105(895.18%)
+  network_mbps: p0:35.651/10.320(245.46%)
+N002:
+  cpu_cores: p0:0.484/0.191(153.99%)
+  memory_gb: p0:1.343/0.244(449.36%)
+  network_mbps: p0:18.333/6.289(191.53%)
+N003:
+  memory_gb: p0:0.357/0.252(41.58%)
+N004:
+  cpu_cores: p0:0.389/0.102(280.96%)
+  network_mbps: p0:92.921/14.768(529.20%)
+N005:
+  cpu_cores: p0:0.220/0.106(108.77%)
+  memory_gb: p0:1.360/0.238(470.64%)
+  network_mbps: p0:74.593/17.356(329.78%)
+N006:
+  memory_gb: p0:0.651/0.200(225.60%)
+  network_mbps: p0:44.210/0.487(8983.33%)
+N007:
+  cpu_cores: p0:0.337/0.141(139.74%)
+  memory_gb: p0:0.315/0.114(176.00%)
+  network_mbps: p0:56.784/10.152(459.32%)
+N008:
+  cpu_cores: p0:0.225/0.134(67.31%)
+  memory_gb: p0:0.617/0.255(141.99%)
+N009:
+  cpu_cores: p0:0.377/0.172(119.40%)
+  network_mbps: p0:11.493/8.126(41.43%)
+N010:
+  cpu_cores: p0:0.189/0.168(12.45%)
+  memory_gb: p0:0.913/0.283(222.42%)
+  network_mbps: p0:33.795/12.064(180.12%)
+N011:
+  cpu_cores: p0:0.566/0.286(98.23%)
+  memory_gb: p0:1.037/0.168(517.81%)
+  network_mbps: p0:22.562/3.579(530.32%)
+N012:
+  memory_gb: p0:0.539/0.301(78.95%)
+  network_mbps: p0:116.084/1.211(9488.58%)
+N013:
+  cpu_cores: p0:0.281/0.107(163.28%)
+  memory_gb: p0:1.457/0.115(1171.72%)
+  network_mbps: p0:10.185/7.511(35.60%)
+N014:
+  cpu_cores: p50:32.713/33.393(2.04%)
+  memory_gb: p0:1.116/0.249(348.78%)
+  network_mbps: p0:5.685/0.943(502.82%)
+N015:
+  cpu_cores: p0:0.224/0.107(108.20%)
+  memory_gb: p0:2.543/0.230(1006.44%)
+  network_mbps: p0:49.422/2.017(2350.86%)
+N016:
+  memory_gb: p0:2.129/0.186(1045.63%)
+  network_mbps: p0:36.189/4.132(775.79%)
+N017:
+  cpu_cores: p0:0.421/0.119(254.36%)
+  memory_gb: p0:1.577/0.418(277.28%)
+N018:
+  cpu_cores: p0:0.232/0.175(32.77%)
+  network_mbps: p0:16.748/0.695(2308.52%)
+N019:
+  cpu_cores: p0:0.516/0.136(280.33%)
+  memory_gb: p0:0.432/0.424(2.00%)
+  network_mbps: p0:46.578/10.255(354.22%)
+N020:
+  cpu_cores: p0:0.400/0.124(222.94%)
+  memory_gb: p0:0.336/0.126(166.77%)
+  network_mbps: p0:21.491/3.374(536.86%)
+N021:
+  cpu_cores: p0:0.424/0.179(136.80%)
+  memory_gb: p0:0.406/0.258(57.45%)
+  network_mbps: p0:36.354/4.169(771.95%)
+N022:
+  memory_gb: p0:0.576/0.198(190.42%)
+  network_mbps: p0:38.565/14.077(173.95%)
+N023:
+  cpu_cores: p0:0.408/0.121(237.92%)
+  memory_gb: p0:1.503/0.301(399.60%)
+N024:
+  cpu_cores: p0:0.529/0.134(293.22%)
+  network_mbps: p0:22.075/13.813(59.81%)
+N025:
+  cpu_cores: p0:0.365/0.101(261.22%)
+  memory_gb: p0:0.776/0.239(224.21%)
+N026:
+  cpu_cores: p0:0.160/0.108(47.87%)
+  memory_gb: p0:1.186/0.203(484.75%)
+  network_mbps: p0:47.059/1.402(3256.96%)
+N027:
+  cpu_cores: p0:0.166/0.122(36.50%)
+  memory_gb: p0:0.406/0.174(133.27%)
+  network_mbps: p0:42.520/2.537(1576.17%)
+N028:
+  cpu_cores: p0:0.395/0.139(183.37%)
+  memory_gb: p0:1.859/0.118(1474.24%)
+  network_mbps: p0:5.034/1.132(344.92%)
+N029:
+  cpu_cores: p0:0.395/0.164(141.53%)
+  memory_gb: p0:1.686/0.152(1008.67%)
+  network_mbps: p0:20.547/7.104(189.22%)
+N030:
+  cpu_cores: p0:0.415/0.115(261.78%)
+  memory_gb: p0:0.286/0.207(38.33%)
+  network_mbps: p0:49.504/11.281(338.81%)
+
+=== Sweep rows=60000 ===
+  ingest progress: 6/60 batches (10%)
+  ingest progress: 12/60 batches (20%)
+  ingest progress: 18/60 batches (30%)
+  ingest progress: 24/60 batches (40%)
+  ingest progress: 30/60 batches (50%)
+  ingest progress: 36/60 batches (60%)
+  ingest progress: 42/60 batches (70%)
+  ingest progress: 48/60 batches (80%)
+  ingest progress: 54/60 batches (90%)
+  ingest progress: 60/60 batches (100%)
+server RTT: 12.55 ms | ES RTT: 389.32 ms | max diff >=2%: 14615.71%
+comparisons:
+N001:
+  cpu_cores: p0:0.321/0.137(133.96%)
+  memory_gb: p0:0.982/0.127(673.78%)
+  network_mbps: p0:22.792/3.416(567.28%)
+N002:
+  cpu_cores: p0:0.379/0.164(130.66%)
+N003:
+  cpu_cores: p0:0.200/0.101(96.87%)
+  memory_gb: p0:0.113/0.104(8.95%)
+  network_mbps: p0:12.624/7.559(67.01%)
+N004:
+  cpu_cores: p0:0.124/0.108(14.62%)
+  memory_gb: p0:1.838/0.353(420.56%)
+N005:
+  cpu_cores: p0:0.169/0.105(61.75%)
+N006:
+  memory_gb: p0:0.326/0.115(184.03%)
+N007:
+  cpu_cores: p0:0.187/0.167(11.73%)
+  network_mbps: p0:13.192/1.225(976.90%)
+N008:
+  cpu_cores: p0:0.104/0.101(3.09%)
+  memory_gb: p0:0.975/0.157(521.54%)
+  network_mbps: p0:41.891/12.221(242.79%)
+N009:
+  cpu_cores: p0:0.196/0.104(88.32%)
+  network_mbps: p0:35.438/1.785(1885.06%)
+N010:
+  cpu_cores: p0:0.592/0.129(360.63%)
+  memory_gb: p0:1.084/0.349(211.08%)
+  network_mbps: p0:12.365/0.764(1518.14%)
+N011:
+  cpu_cores: p0:0.295/0.102(188.50%)
+  memory_gb: p0:1.167/0.563(107.22%)
+  network_mbps: p0:34.637/0.790(4283.96%)
+N012:
+  cpu_cores: p0:0.357/0.100(255.87%)
+  network_mbps: p0:18.627/4.158(347.96%)
+N013:
+  cpu_cores: p0:0.139/0.132(5.18%)
+  memory_gb: p0:1.002/0.172(483.42%)
+  network_mbps: p0:1.121/0.849(32.06%)
+N014:
+  cpu_cores: p0:0.623/0.188(231.90%)
+  memory_gb: p0:0.654/0.130(402.17%)
+  network_mbps: p0:36.154/5.311(580.79%)
+N015:
+  cpu_cores: p0:0.479/0.118(306.85%)
+N016:
+  cpu_cores: p0:0.323/0.153(111.38%)
+  memory_gb: p0:0.613/0.259(136.52%)
+  network_mbps: p0:10.186/5.127(98.65%)
+N017:
+  cpu_cores: p0:0.401/0.118(240.85%)
+  memory_gb: p0:0.565/0.209(169.86%)
+  network_mbps: p0:20.327/4.263(376.88%) p50:5011.340/4906.776(2.13%)
+N018:
+  cpu_cores: p0:0.195/0.118(65.34%)
+  memory_gb: p0:0.638/0.134(377.68%)
+  network_mbps: p0:42.275/0.518(8058.19%)
+N019:
+  memory_gb: p0:0.351/0.129(171.74%)
+  network_mbps: p0:20.144/3.990(404.82%)
+N020:
+  cpu_cores: p0:0.233/0.122(91.24%)
+  network_mbps: p0:37.225/3.780(884.67%)
+N021:
+  network_mbps: p0:16.493/2.277(624.47%)
+N022:
+  cpu_cores: p0:0.247/0.101(143.29%)
+  memory_gb: p0:1.191/0.577(106.51%)
+  network_mbps: p0:25.606/10.180(151.52%)
+N023:
+  cpu_cores: p0:0.492/0.118(315.96%)
+  memory_gb: p0:1.562/0.332(370.94%)
+  network_mbps: p0:31.133/0.212(14615.71%)
+N024:
+  cpu_cores: p0:0.200/0.169(18.55%)
+  memory_gb: p0:0.338/0.163(107.16%)
+  network_mbps: p0:19.985/4.844(312.53%)
+N025:
+  cpu_cores: p0:0.564/0.156(261.59%)
+  memory_gb: p0:0.345/0.141(144.44%)
+  network_mbps: p0:11.092/1.117(892.55%)
+N026:
+  cpu_cores: p0:0.385/0.146(163.84%)
+  memory_gb: p0:0.250/0.162(54.77%)
+  network_mbps: p0:69.939/7.113(883.22%)
+N027:
+  cpu_cores: p0:0.367/0.123(197.96%)
+  memory_gb: p0:0.371/0.222(67.23%)
+  network_mbps: p0:18.911/3.231(485.28%)
+N028:
+  cpu_cores: p0:0.218/0.128(70.95%)
+  memory_gb: p0:0.333/0.192(73.29%)
+  network_mbps: p0:58.495/1.637(3473.46%)
+N029:
+  cpu_cores: p0:0.193/0.170(13.62%)
+  memory_gb: p0:0.435/0.259(67.98%)
+  network_mbps: p0:20.509/0.397(5063.63%)
+N030:
+  cpu_cores: p0:0.147/0.142(3.84%)
+  memory_gb: p0:0.439/0.185(137.34%)
+  network_mbps: p0:7.444/4.491(65.75%)
+
+=== Sweep rows=70000 ===
+  ingest progress: 7/70 batches (10%)
+  ingest progress: 14/70 batches (20%)
+  ingest progress: 21/70 batches (30%)
+  ingest progress: 28/70 batches (40%)
+  ingest progress: 35/70 batches (50%)
+  ingest progress: 42/70 batches (60%)
+  ingest progress: 49/70 batches (70%)
+  ingest progress: 56/70 batches (80%)
+  ingest progress: 63/70 batches (90%)
+  ingest progress: 70/70 batches (100%)
+server RTT: 10.30 ms | ES RTT: 214.27 ms | max diff >=2%: 10622.11%
+comparisons:
+N001:
+  cpu_cores: p0:0.338/0.108(212.20%)
+  memory_gb: p0:0.688/0.135(410.02%)
+  network_mbps: p0:22.792/9.862(131.12%)
+N002:
+  cpu_cores: p0:0.247/0.109(126.26%)
+  memory_gb: p0:1.315/0.223(490.23%)
+  network_mbps: p0:16.391/3.911(319.12%)
+N003:
+  cpu_cores: p0:0.365/0.110(230.73%)
+  memory_gb: p0:2.471/0.291(749.89%)
+  network_mbps: p0:13.090/0.122(10622.11%)
+N004:
+  cpu_cores: p0:0.158/0.100(57.91%)
+  memory_gb: p0:0.824/0.201(310.68%)
+  network_mbps: p0:11.023/2.155(411.49%)
+N005:
+  cpu_cores: p0:0.335/0.108(211.63%)
+  memory_gb: p0:0.569/0.109(420.88%)
+  network_mbps: p0:41.233/2.168(1802.06%)
+N006:
+  cpu_cores: p0:0.275/0.139(98.13%)
+  memory_gb: p0:0.593/0.165(259.50%)
+  network_mbps: p0:27.117/3.645(643.87%)
+N007:
+  cpu_cores: p0:0.492/0.124(297.83%)
+  memory_gb: p0:0.165/0.129(27.43%)
+N008:
+  cpu_cores: p0:0.595/0.149(298.71%)
+  memory_gb: p0:2.227/0.267(734.41%)
+N009:
+  memory_gb: p0:0.325/0.124(162.75%)
+N010:
+  memory_gb: p0:1.551/0.437(255.04%) p50:130.538/127.794(2.15%)
+  network_mbps: p0:31.947/8.914(258.40%)
+N011:
+  cpu_cores: p0:0.136/0.102(32.27%)
+  memory_gb: p0:1.520/0.150(910.15%)
+  network_mbps: p0:5.427/2.830(91.78%)
+N012:
+  cpu_cores: p0:0.325/0.108(201.91%)
+  memory_gb: p0:0.532/0.144(269.14%)
+  network_mbps: p0:13.096/1.855(606.03%)
+N013:
+  cpu_cores: p0:0.342/0.149(129.90%)
+  memory_gb: p0:0.741/0.104(612.14%)
+N014:
+  cpu_cores: p0:0.279/0.114(145.56%)
+  memory_gb: p0:0.951/0.180(427.23%)
+  network_mbps: p0:5.966/0.877(580.08%)
+N015:
+  cpu_cores: p0:0.232/0.138(68.39%) p50:33.507/32.748(2.32%)
+  memory_gb: p0:0.468/0.310(51.15%)
+  network_mbps: p0:17.165/4.614(272.04%)
+N016:
+  cpu_cores: p0:0.190/0.178(6.72%)
+  memory_gb: p0:0.652/0.103(534.07%)
+  network_mbps: p0:43.954/6.263(601.83%)
+N017:
+  cpu_cores: p0:0.492/0.121(305.72%)
+  network_mbps: p0:21.440/6.938(209.02%)
+N018:
+  cpu_cores: p0:0.717/0.159(351.21%)
+  memory_gb: p0:1.780/0.247(620.38%)
+  network_mbps: p0:21.733/0.385(5548.91%)
+N019:
+  cpu_cores: p0:0.190/0.124(53.42%)
+  memory_gb: p0:0.277/0.105(164.41%)
+  network_mbps: p0:48.244/3.491(1281.81%)
+N020:
+  cpu_cores: p0:0.272/0.125(117.42%)
+  memory_gb: p0:0.416/0.259(60.29%)
+  network_mbps: p0:18.887/5.597(237.47%)
+N021:
+  cpu_cores: p0:0.341/0.126(169.58%)
+  network_mbps: p0:54.682/3.132(1645.78%)
+N022:
+  cpu_cores: p0:0.642/0.109(489.49%)
+  memory_gb: p0:1.250/0.261(379.78%)
+  network_mbps: p0:41.473/16.307(154.32%)
+N023:
+  cpu_cores: p0:0.331/0.111(198.45%)
+  memory_gb: p0:2.044/0.146(1295.90%)
+  network_mbps: p0:18.761/0.188(9892.47%)
+N024:
+  cpu_cores: p0:0.164/0.159(3.55%)
+  memory_gb: p0:0.259/0.111(132.54%)
+  network_mbps: p0:27.876/4.572(509.66%)
+N025:
+  cpu_cores: p0:0.185/0.123(50.89%)
+  memory_gb: p0:0.757/0.210(260.90%)
+  network_mbps: p0:18.990/2.346(709.61%)
+N026:
+  cpu_cores: p0:0.230/0.156(48.14%)
+  memory_gb: p0:0.758/0.201(277.08%)
+  network_mbps: p0:29.150/0.840(3370.46%)
+N027:
+  memory_gb: p0:0.229/0.105(117.34%)
+  network_mbps: p0:53.018/7.213(635.08%)
+N028:
+  cpu_cores: p0:0.370/0.145(154.53%)
+  memory_gb: p0:0.768/0.126(510.14%)
+  network_mbps: p0:34.286/21.826(57.08%)
+N029:
+  cpu_cores: p0:0.249/0.122(103.59%)
+  network_mbps: p0:36.574/4.231(764.44%)
+N030:
+  cpu_cores: p0:0.252/0.148(70.76%)
+  memory_gb: p0:1.187/0.140(747.09%)
+  network_mbps: p0:54.562/5.479(895.90%)
+
+=== Sweep rows=80000 ===
+  ingest progress: 8/80 batches (10%)
+  ingest progress: 16/80 batches (20%)
+  ingest progress: 24/80 batches (30%)
+  ingest progress: 32/80 batches (40%)
+  ingest progress: 40/80 batches (50%)
+  ingest progress: 48/80 batches (60%)
+  ingest progress: 56/80 batches (70%)
+  ingest progress: 64/80 batches (80%)
+  ingest progress: 72/80 batches (90%)
+  ingest progress: 80/80 batches (100%)
+server RTT: 12.94 ms | ES RTT: 235.88 ms | max diff >=2%: 54453.11%
+comparisons:
+N001:
+  cpu_cores: p0:0.200/0.104(92.01%)
+  memory_gb: p0:0.669/0.136(391.34%)
+  network_mbps: p0:16.372/0.698(2245.41%)
+N002:
+  cpu_cores: p0:0.149/0.129(15.71%)
+  memory_gb: p0:0.634/0.535(18.61%)
+  network_mbps: p0:20.356/3.450(490.09%)
+N003:
+  cpu_cores: p0:0.163/0.117(38.59%)
+  memory_gb: p0:0.201/0.194(3.59%)
+  network_mbps: p0:53.247/3.484(1428.54%)
+N004:
+  cpu_cores: p0:0.232/0.102(126.41%)
+  memory_gb: p0:2.703/0.201(1247.72%)
+  network_mbps: p0:41.357/2.120(1851.07%)
+N005:
+  cpu_cores: p0:0.341/0.106(221.54%)
+  memory_gb: p0:1.669/0.294(468.46%)
+  network_mbps: p0:55.006/11.398(382.59%)
+N006:
+  cpu_cores: p0:0.342/0.125(173.12%)
+  memory_gb: p0:0.922/0.205(348.78%)
+  network_mbps: p0:17.822/3.178(460.80%)
+N007:
+  cpu_cores: p0:0.416/0.136(204.95%)
+  memory_gb: p0:1.219/0.198(514.82%)
+  network_mbps: p0:11.759/0.569(1964.95%)
+N008:
+  cpu_cores: p0:0.440/0.105(319.02%)
+  memory_gb: p0:1.598/0.106(1406.36%)
+  network_mbps: p0:102.410/0.898(11300.18%)
+N009:
+  cpu_cores: p0:0.195/0.112(73.89%)
+  memory_gb: p0:1.441/0.114(1158.93%)
+  network_mbps: p0:16.410/6.913(137.39%)
+N010:
+  cpu_cores: p0:0.352/0.160(120.23%)
+  memory_gb: p0:0.433/0.191(126.62%)
+  network_mbps: p0:14.966/5.310(181.85%)
+N011:
+  cpu_cores: p0:0.134/0.103(30.54%)
+  memory_gb: p0:0.233/0.105(121.14%)
+  network_mbps: p0:28.875/6.238(362.92%)
+N012:
+  cpu_cores: p0:0.346/0.125(177.41%)
+  memory_gb: p0:1.638/0.233(604.09%)
+  network_mbps: p0:43.254/2.712(1494.80%)
+N013:
+  cpu_cores: p0:0.218/0.105(107.00%)
+  memory_gb: p0:2.883/0.544(430.23%)
+  network_mbps: p0:25.341/5.029(403.87%)
+N014:
+  cpu_cores: p0:0.331/0.130(153.82%)
+  memory_gb: p0:0.495/0.112(341.31%)
+  network_mbps: p0:21.495/5.919(263.18%)
+N015:
+  cpu_cores: p0:0.491/0.147(234.20%)
+  memory_gb: p0:0.196/0.107(83.31%)
+  network_mbps: p0:0.626/0.594(5.35%)
+N016:
+  cpu_cores: p0:0.320/0.104(207.33%)
+  memory_gb: p0:0.783/0.206(279.42%)
+  network_mbps: p50:4731.197/4869.000(2.83%)
+N017:
+  cpu_cores: p0:0.830/0.145(472.88%)
+  memory_gb: p0:0.336/0.114(193.12%)
+  network_mbps: p0:1.008/0.105(860.05%)
+N018:
+  cpu_cores: p0:0.242/0.113(113.80%)
+  memory_gb: p0:1.898/0.223(752.25%)
+  network_mbps: p0:13.228/1.640(706.48%)
+N019:
+  cpu_cores: p0:0.375/0.131(185.82%)
+  memory_gb: p0:0.512/0.172(197.25%)
+  network_mbps: p0:43.610/1.842(2267.75%)
+N020:
+  cpu_cores: p0:0.378/0.105(259.59%)
+  memory_gb: p0:0.663/0.214(210.03%)
+  network_mbps: p0:10.320/0.226(4464.22%)
+N021:
+  cpu_cores: p0:0.312/0.111(180.22%)
+  memory_gb: p0:1.283/0.162(693.20%)
+  network_mbps: p0:21.236/3.444(516.58%)
+N022:
+  cpu_cores: p0:0.282/0.142(98.99%)
+  network_mbps: p0:99.282/3.985(2391.33%)
+N023:
+  cpu_cores: p0:0.315/0.113(179.53%)
+  memory_gb: p0:0.953/0.189(405.29%)
+  network_mbps: p0:29.257/5.173(465.57%)
+N024:
+  cpu_cores: p0:0.152/0.116(30.91%)
+  memory_gb: p0:0.729/0.397(83.82%)
+  network_mbps: p0:37.417/2.362(1484.33%)
+N025:
+  cpu_cores: p0:0.207/0.145(42.62%)
+  memory_gb: p0:1.504/0.200(651.07%)
+  network_mbps: p0:22.581/0.333(6685.16%)
+N026:
+  cpu_cores: p0:0.317/0.142(123.48%)
+  memory_gb: p0:1.209/0.160(657.82%)
+  network_mbps: p0:61.982/10.775(475.24%)
+N027:
+  cpu_cores: p0:0.281/0.135(109.12%)
+  memory_gb: p0:1.218/0.109(1013.50%)
+  network_mbps: p0:93.418/0.171(54453.11%)
+N028:
+  cpu_cores: p0:0.585/0.135(332.97%)
+  memory_gb: p0:0.509/0.136(275.65%)
+  network_mbps: p0:25.089/12.359(103.00%)
+N029:
+  cpu_cores: p0:0.335/0.134(150.91%)
+  memory_gb: p0:0.446/0.270(65.05%)
+  network_mbps: p0:33.021/1.183(2692.33%)
+N030:
+  cpu_cores: p0:0.127/0.108(17.94%)
+  memory_gb: p0:0.379/0.219(73.46%)
+  network_mbps: p0:18.380/4.855(278.59%)
+
+=== Sweep rows=90000 ===
+  ingest progress: 9/90 batches (10%)
+  ingest progress: 18/90 batches (20%)
+  ingest progress: 27/90 batches (30%)
+  ingest progress: 36/90 batches (40%)
+  ingest progress: 45/90 batches (50%)
+  ingest progress: 54/90 batches (60%)
+  ingest progress: 63/90 batches (70%)
+  ingest progress: 72/90 batches (80%)
+  ingest progress: 81/90 batches (90%)
+  ingest progress: 90/90 batches (100%)
+server RTT: 13.85 ms | ES RTT: 279.65 ms | max diff >=2%: 8745.12%
+comparisons:
+N001:
+  memory_gb: p0:0.697/0.265(162.87%)
+  network_mbps: p0:10.655/0.902(1080.82%)
+N002:
+  cpu_cores: p0:0.153/0.109(40.35%)
+  memory_gb: p0:1.048/0.161(549.33%)
+  network_mbps: p0:9.061/2.767(227.43%)
+N003:
+  cpu_cores: p0:0.534/0.152(252.50%)
+  memory_gb: p0:0.392/0.113(245.41%)
+  network_mbps: p0:90.839/1.027(8745.12%)
+N004:
+  cpu_cores: p0:0.342/0.172(99.18%)
+  memory_gb: p0:0.635/0.202(214.62%)
+  network_mbps: p0:21.435/12.060(77.73%)
+N005:
+  cpu_cores: p0:0.217/0.103(109.48%)
+  memory_gb: p0:0.557/0.279(99.42%)
+  network_mbps: p0:12.026/6.070(98.12%)
+N006:
+  cpu_cores: p0:0.196/0.121(61.77%)
+  memory_gb: p0:1.356/0.182(645.28%)
+  network_mbps: p0:6.785/3.660(85.40%)
+N007:
+  cpu_cores: p0:0.540/0.146(270.87%)
+  memory_gb: p0:1.056/0.498(112.21%)
+  network_mbps: p0:3.490/2.763(26.32%)
+N008:
+  cpu_cores: p0:0.344/0.103(234.90%)
+  memory_gb: p0:0.272/0.241(12.90%)
+  network_mbps: p0:38.843/1.255(2995.68%)
+N009:
+  cpu_cores: p0:0.428/0.125(242.40%)
+  memory_gb: p0:0.259/0.114(127.53%)
+  network_mbps: p0:57.147/5.414(955.44%)
+N010:
+  cpu_cores: p0:0.483/0.101(376.24%)
+  memory_gb: p0:0.139/0.105(32.93%)
+  network_mbps: p0:29.406/3.125(840.85%)
+N011:
+  memory_gb: p0:0.749/0.345(117.55%)
+  network_mbps: p0:9.788/1.382(608.28%)
+N012:
+  cpu_cores: p0:0.206/0.118(73.97%)
+  memory_gb: p0:0.186/0.126(47.88%)
+  network_mbps: p0:11.545/0.827(1295.33%)
+N013:
+  memory_gb: p0:0.699/0.141(394.81%)
+N014:
+  memory_gb: p0:0.841/0.114(638.15%)
+  network_mbps: p0:32.554/0.778(4086.64%)
+N015:
+  cpu_cores: p0:0.674/0.107(529.70%)
+  memory_gb: p0:1.614/0.107(1402.76%)
+  network_mbps: p0:38.398/11.496(234.01%)
+N016:
+  cpu_cores: p0:0.169/0.122(38.25%)
+  memory_gb: p0:0.812/0.167(386.86%)
+N017:
+  cpu_cores: p0:0.431/0.111(287.93%)
+  memory_gb: p0:0.725/0.116(524.46%)
+N018:
+  cpu_cores: p0:0.468/0.142(229.37%)
+  memory_gb: p0:2.322/0.101(2195.84%)
+  network_mbps: p0:101.118/4.927(1952.40%)
+N019:
+  cpu_cores: p0:0.255/0.110(132.78%)
+  memory_gb: p0:0.806/0.283(184.38%)
+  network_mbps: p0:6.746/4.517(49.37%)
+N020:
+  cpu_cores: p0:0.198/0.108(82.67%)
+  memory_gb: p0:0.423/0.179(136.39%)
+  network_mbps: p0:71.737/7.838(815.25%)
+N021:
+  cpu_cores: p0:0.139/0.104(33.73%)
+  memory_gb: p0:0.564/0.118(377.16%)
+  network_mbps: p0:86.967/11.682(644.45%)
+N022:
+  cpu_cores: p0:0.195/0.101(93.77%)
+  memory_gb: p0:1.431/0.119(1097.47%)
+  network_mbps: p0:5.831/2.356(147.51%)
+N023:
+  cpu_cores: p0:0.203/0.118(73.08%)
+  memory_gb: p0:0.837/0.297(181.94%)
+  network_mbps: p0:15.373/1.943(691.29%)
+N024:
+  cpu_cores: p0:0.172/0.133(28.86%)
+  memory_gb: p0:1.099/0.253(334.29%)
+  network_mbps: p0:21.708/13.765(57.70%)
+N025:
+  cpu_cores: p0:0.342/0.147(132.50%)
+  memory_gb: p0:0.293/0.273(7.33%)
+  network_mbps: p0:18.013/6.725(167.84%)
+N026:
+  cpu_cores: p0:0.142/0.113(25.73%)
+  memory_gb: p0:0.350/0.191(83.43%)
+  network_mbps: p0:9.670/5.904(63.77%)
+N027:
+  cpu_cores: p0:0.277/0.164(69.00%)
+N028:
+  cpu_cores: p0:0.382/0.104(266.23%)
+  memory_gb: p0:0.281/0.144(95.27%)
+  network_mbps: p0:15.940/2.632(505.67%)
+N029:
+  cpu_cores: p0:0.577/0.133(332.24%)
+  memory_gb: p0:0.387/0.145(167.99%)
+N030:
+  cpu_cores: p0:0.137/0.106(29.51%)
+  memory_gb: p0:0.246/0.114(115.11%)
+  network_mbps: p0:47.902/3.423(1299.41%)
+
+=== Sweep rows=100000 ===
+  ingest progress: 10/100 batches (10%)
+  ingest progress: 20/100 batches (20%)
+  ingest progress: 30/100 batches (30%)
+  ingest progress: 40/100 batches (40%)
+  ingest progress: 50/100 batches (50%)
+  ingest progress: 60/100 batches (60%)
+  ingest progress: 70/100 batches (70%)
+  ingest progress: 80/100 batches (80%)
+  ingest progress: 90/100 batches (90%)
+  ingest progress: 100/100 batches (100%)
+server RTT: 11.64 ms | ES RTT: 249.03 ms | max diff >=2%: 14089.45%
+comparisons:
+N001:
+  cpu_cores: p0:0.145/0.127(14.26%)
+  memory_gb: p0:0.618/0.195(216.34%) p50:122.508/125.163(2.12%)
+  network_mbps: p0:55.289/5.792(854.54%)
+N002:
+  cpu_cores: p0:0.861/0.118(629.83%)
+  memory_gb: p0:0.223/0.173(29.43%)
+  network_mbps: p0:77.920/5.089(1431.15%)
+N003:
+  cpu_cores: p0:0.173/0.149(15.80%)
+  memory_gb: p0:0.780/0.213(266.30%)
+  network_mbps: p0:37.222/5.922(528.52%)
+N004:
+  cpu_cores: p0:0.288/0.102(182.86%)
+  memory_gb: p0:1.749/0.173(909.18%)
+  network_mbps: p0:22.604/2.147(952.96%)
+N005:
+  cpu_cores: p0:0.413/0.119(245.92%)
+  memory_gb: p0:1.804/0.181(897.46%)
+  network_mbps: p0:87.430/3.573(2346.93%)
+N006:
+  cpu_cores: p0:0.370/0.103(258.27%)
+  memory_gb: p0:2.408/0.115(1994.17%)
+  network_mbps: p0:14.958/4.917(204.23%) p50:4866.174/4984.421(2.37%)
+N007:
+  cpu_cores: p0:0.358/0.102(252.11%)
+  memory_gb: p0:0.838/0.182(359.73%)
+  network_mbps: p0:36.651/3.812(861.50%)
+N008:
+  cpu_cores: p0:0.685/0.150(357.26%)
+  memory_gb: p0:1.312/0.202(549.52%)
+  network_mbps: p0:51.057/0.360(14089.45%)
+N009:
+  cpu_cores: p0:0.216/0.101(113.58%)
+  memory_gb: p0:1.761/0.103(1618.10%)
+  network_mbps: p0:6.382/4.678(36.44%)
+N010:
+  cpu_cores: p0:0.162/0.113(43.14%)
+  memory_gb: p0:1.113/0.162(586.55%)
+  network_mbps: p0:17.665/4.729(273.54%)
+N011:
+  cpu_cores: p0:0.264/0.110(140.43%)
+  memory_gb: p0:1.022/0.151(574.98%)
+  network_mbps: p0:76.039/3.834(1883.47%)
+N012:
+  cpu_cores: p0:0.355/0.106(236.14%)
+  memory_gb: p0:0.798/0.100(696.38%)
+  network_mbps: p0:32.447/2.135(1419.80%)
+N013:
+  cpu_cores: p0:0.244/0.117(109.06%)
+  memory_gb: p0:2.904/0.207(1305.03%)
+N014:
+  cpu_cores: p0:0.473/0.101(370.17%)
+  network_mbps: p0:6.467/3.655(76.95%)
+N015:
+  cpu_cores: p0:0.531/0.102(420.79%)
+  memory_gb: p0:1.099/0.124(789.77%)
+  network_mbps: p0:14.547/0.769(1791.84%)
+N016:
+  cpu_cores: p0:0.150/0.117(28.20%)
+  memory_gb: p0:1.757/0.257(584.37%)
+  network_mbps: p0:10.796/3.824(182.31%)
+N017:
+  cpu_cores: p0:0.603/0.137(340.63%)
+  memory_gb: p0:0.221/0.148(49.06%)
+  network_mbps: p0:83.465/5.336(1464.29%)
+N018:
+  cpu_cores: p0:0.246/0.117(110.00%)
+  memory_gb: p0:0.396/0.166(138.92%)
+  network_mbps: p0:61.066/0.448(13532.57%)
+N019:
+  cpu_cores: p0:0.802/0.134(497.82%)
+  memory_gb: p0:2.385/0.104(2198.63%)
+  network_mbps: p0:28.454/3.874(634.49%)
+N020:
+  cpu_cores: p0:0.480/0.100(378.87%) p50:32.650/31.969(2.13%)
+  memory_gb: p0:0.475/0.180(163.29%)
+  network_mbps: p0:75.432/2.696(2698.17%)
+N021:
+  cpu_cores: p0:0.265/0.114(132.98%)
+  memory_gb: p0:1.328/0.116(1043.60%)
+  network_mbps: p0:15.081/1.609(837.06%)
+N022:
+  cpu_cores: p0:0.560/0.108(417.42%)
+  memory_gb: p0:3.214/0.423(659.48%)
+  network_mbps: p0:14.230/3.344(325.52%)
+N023:
+  cpu_cores: p0:0.569/0.122(368.16%)
+  memory_gb: p0:0.884/0.345(156.45%)
+  network_mbps: p0:54.404/0.442(12204.90%)
+N024:
+  cpu_cores: p0:0.165/0.109(52.30%)
+  memory_gb: p0:3.866/0.121(3102.63%)
+  network_mbps: p0:74.627/5.070(1371.85%)
+N025:
+  cpu_cores: p0:1.013/0.103(883.45%)
+  memory_gb: p0:1.015/0.104(877.36%)
+  network_mbps: p0:8.884/2.322(282.59%)
+N026:
+  cpu_cores: p0:0.275/0.115(138.47%)
+  memory_gb: p0:0.607/0.113(438.75%)
+  network_mbps: p0:33.063/3.256(915.49%)
+N027:
+  cpu_cores: p0:0.132/0.107(23.44%)
+  memory_gb: p0:1.035/0.164(529.81%)
+  network_mbps: p0:43.375/1.466(2859.21%)
+N028:
+  cpu_cores: p0:0.198/0.104(90.84%) p50:31.112/31.797(2.16%)
+  memory_gb: p0:3.586/0.116(2979.89%)
+N029:
+  cpu_cores: p0:0.445/0.147(202.18%)
+  memory_gb: p0:3.051/0.136(2145.05%)
+  network_mbps: p0:68.529/1.575(4249.78%)
+N030:
+  cpu_cores: p0:1.241/0.112(1005.44%) p50:32.502/31.863(2.01%)
+  memory_gb: p0:2.627/0.195(1249.54%)
+  network_mbps: p0:3.205/2.203(45.52%)
+
+=== Sweep rows=110000 ===
+  ingest progress: 11/110 batches (10%)
+  ingest progress: 22/110 batches (20%)
+  ingest progress: 33/110 batches (30%)
+  ingest progress: 44/110 batches (40%)
+  ingest progress: 55/110 batches (50%)
+  ingest progress: 66/110 batches (60%)
+  ingest progress: 77/110 batches (70%)
+  ingest progress: 88/110 batches (80%)
+  ingest progress: 99/110 batches (90%)
+  ingest progress: 110/110 batches (100%)
+server RTT: 12.47 ms | ES RTT: 318.26 ms | max diff >=2%: 12058.67%
+comparisons:
+N001:
+  cpu_cores: p0:0.180/0.143(25.13%)
+  memory_gb: p0:0.151/0.127(19.06%)
+  network_mbps: p0:48.893/3.828(1177.30%)
+N002:
+  cpu_cores: p0:0.562/0.104(439.80%)
+  memory_gb: p0:0.259/0.210(23.80%)
+  network_mbps: p0:10.632/0.811(1210.54%)
+N003:
+  cpu_cores: p0:0.190/0.125(52.17%)
+  memory_gb: p0:1.484/0.135(1002.05%)
+  network_mbps: p0:16.738/4.027(315.61%)
+N004:
+  cpu_cores: p0:0.348/0.105(230.44%)
+  memory_gb: p0:1.904/0.152(1149.46%)
+  network_mbps: p0:63.421/0.652(9633.96%)
+N005:
+  memory_gb: p0:0.368/0.104(254.84%)
+  network_mbps: p0:10.644/0.444(2294.70%)
+N006:
+  cpu_cores: p0:0.418/0.125(235.02%)
+  memory_gb: p0:0.191/0.115(66.32%)
+  network_mbps: p0:6.083/4.618(31.74%)
+N007:
+  cpu_cores: p0:0.400/0.103(287.88%)
+  network_mbps: p0:13.320/0.536(2387.31%)
+N008:
+  cpu_cores: p0:0.349/0.104(236.57%)
+  memory_gb: p0:0.693/0.134(416.11%)
+  network_mbps: p0:10.520/7.497(40.33%)
+N009:
+  cpu_cores: p0:0.207/0.111(86.00%)
+  memory_gb: p0:0.191/0.143(33.26%)
+  network_mbps: p0:34.507/2.142(1511.31%)
+N010:
+  cpu_cores: p0:0.204/0.118(72.38%)
+  memory_gb: p0:0.131/0.119(10.04%)
+  network_mbps: p0:67.884/1.085(6154.29%)
+N011:
+  cpu_cores: p0:0.657/0.114(474.85%)
+  memory_gb: p0:1.640/0.196(734.75%)
+  network_mbps: p0:7.771/0.378(1956.84%)
+N012:
+  cpu_cores: p0:0.208/0.179(16.15%)
+  memory_gb: p0:2.198/0.115(1814.15%)
+  network_mbps: p0:35.143/0.931(3674.91%)
+N013:
+  memory_gb: p0:0.355/0.204(73.68%)
+  network_mbps: p0:3.643/3.157(15.40%)
+N014:
+  cpu_cores: p0:0.488/0.117(316.21%)
+  memory_gb: p0:1.830/0.218(739.81%)
+  network_mbps: p0:21.992/2.345(837.65%)
+N015:
+  cpu_cores: p0:0.146/0.116(26.28%)
+  memory_gb: p0:1.306/0.104(1160.48%)
+  network_mbps: p0:83.088/0.683(12058.67%)
+N016:
+  cpu_cores: p0:0.519/0.127(308.21%)
+  memory_gb: p0:2.054/0.213(862.03%)
+  network_mbps: p0:12.995/2.205(489.21%)
+N017:
+  cpu_cores: p0:0.437/0.115(278.53%)
+  memory_gb: p0:1.158/0.186(523.32%)
+N018:
+  cpu_cores: p0:0.332/0.126(163.20%)
+  memory_gb: p0:1.083/0.212(411.83%)
+N019:
+  cpu_cores: p0:0.376/0.107(249.96%)
+  memory_gb: p0:0.208/0.105(97.71%)
+  network_mbps: p0:48.357/4.184(1055.75%)
+N020:
+  cpu_cores: p0:0.325/0.128(153.22%)
+  memory_gb: p0:1.948/0.109(1691.99%)
+  network_mbps: p0:64.100/3.044(2005.75%)
+N021:
+  cpu_cores: p0:0.562/0.159(253.43%)
+  memory_gb: p0:0.270/0.126(114.14%)
+  network_mbps: p0:4.758/3.057(55.62%)
+N022:
+  cpu_cores: p0:0.161/0.108(48.32%)
+  memory_gb: p0:2.625/0.191(1275.77%)
+  network_mbps: p0:13.458/3.477(287.10%)
+N023:
+  cpu_cores: p0:0.250/0.101(146.68%)
+  memory_gb: p0:1.211/0.149(711.54%)
+  network_mbps: p0:7.830/0.815(861.00%)
+N024:
+  memory_gb: p0:0.261/0.183(42.61%)
+  network_mbps: p0:88.729/5.349(1558.84%)
+N025:
+  cpu_cores: p0:0.219/0.109(100.72%)
+  memory_gb: p0:2.425/0.216(1022.29%)
+N026:
+  cpu_cores: p0:0.108/0.103(4.50%)
+  memory_gb: p0:1.882/0.179(952.98%)
+  network_mbps: p0:86.179/2.367(3540.67%)
+N027:
+  cpu_cores: p0:0.496/0.128(288.55%)
+  network_mbps: p0:51.453/0.678(7485.89%)
+N028:
+  cpu_cores: p0:0.218/0.110(97.21%)
+  memory_gb: p0:0.245/0.240(2.02%)
+  network_mbps: p0:17.352/3.789(358.01%)
+N029:
+  cpu_cores: p0:0.518/0.114(352.37%)
+  memory_gb: p0:2.276/0.157(1349.46%)
+N030:
+  cpu_cores: p0:0.252/0.104(142.72%)
+  memory_gb: p0:1.991/0.111(1694.95%)
+  network_mbps: p0:19.931/6.805(192.90%)
+
+=== Sweep rows=120000 ===
+  ingest progress: 12/120 batches (10%)
+  ingest progress: 24/120 batches (20%)
+  ingest progress: 36/120 batches (30%)
+  ingest progress: 48/120 batches (40%)
+  ingest progress: 60/120 batches (50%)
+  ingest progress: 72/120 batches (60%)
+  ingest progress: 84/120 batches (70%)
+  ingest progress: 96/120 batches (80%)
+  ingest progress: 108/120 batches (90%)
+  ingest progress: 120/120 batches (100%)
+server RTT: 10.91 ms | ES RTT: 280.34 ms | max diff >=2%: 21490.03%
+comparisons:
+N001:
+  cpu_cores: p0:0.186/0.104(79.70%)
+  memory_gb: p0:1.136/0.166(585.07%)
+  network_mbps: p0:60.780/3.953(1437.47%)
+N002:
+  cpu_cores: p0:0.289/0.130(122.62%)
+  memory_gb: p0:2.866/0.170(1582.59%)
+  network_mbps: p0:19.871/4.532(338.47%)
+N003:
+  cpu_cores: p0:0.411/0.100(310.83%)
+  memory_gb: p0:1.174/0.433(171.23%)
+  network_mbps: p0:49.638/0.711(6877.86%)
+N004:
+  cpu_cores: p0:0.155/0.123(26.06%)
+  network_mbps: p0:15.679/1.757(792.28%)
+N005:
+  cpu_cores: p0:0.139/0.102(35.99%)
+  memory_gb: p0:0.307/0.154(98.73%)
+  network_mbps: p0:5.784/1.323(337.31%)
+N006:
+  cpu_cores: p0:0.644/0.124(418.60%)
+  memory_gb: p0:0.846/0.118(614.44%)
+  network_mbps: p0:56.572/0.304(18518.66%)
+N007:
+  cpu_cores: p0:0.390/0.124(214.31%)
+  network_mbps: p0:96.937/1.936(4906.29%)
+N008:
+  cpu_cores: p0:0.118/0.103(14.58%)
+  memory_gb: p0:0.368/0.124(197.48%)
+  network_mbps: p0:43.134/0.200(21490.03%)
+N009:
+  cpu_cores: p0:0.236/0.114(108.15%)
+  memory_gb: p0:1.538/0.139(1005.67%)
+  network_mbps: p0:69.413/5.031(1279.80%)
+N010:
+  cpu_cores: p0:0.122/0.108(12.91%)
+  memory_gb: p0:1.492/0.127(1075.09%)
+N011:
+  cpu_cores: p0:0.107/0.104(2.24%) p50:30.913/31.953(3.26%)
+  memory_gb: p0:0.723/0.169(327.84%)
+N012:
+  cpu_cores: p0:0.465/0.100(364.43%)
+  memory_gb: p0:0.760/0.188(303.83%)
+  network_mbps: p0:25.309/1.636(1447.17%)
+N013:
+  cpu_cores: p0:0.168/0.160(4.61%)
+  memory_gb: p0:0.427/0.180(136.92%)
+  network_mbps: p0:49.968/0.941(5210.34%)
+N014:
+  cpu_cores: p0:0.280/0.101(175.67%)
+  memory_gb: p0:0.445/0.217(104.81%)
+  network_mbps: p0:8.329/1.746(377.04%)
+N015:
+  cpu_cores: p0:0.396/0.109(262.77%)
+  memory_gb: p0:0.805/0.363(122.10%)
+  network_mbps: p0:71.323/0.637(11089.15%) p50:5218.352/5068.856(2.95%)
+N016:
+  cpu_cores: p0:0.224/0.109(104.92%)
+  memory_gb: p0:1.091/0.312(250.08%)
+  network_mbps: p0:12.143/1.876(547.11%)
+N017:
+  cpu_cores: p0:0.176/0.135(30.15%)
+  memory_gb: p0:0.602/0.138(336.39%)
+  network_mbps: p0:40.721/2.874(1316.93%)
+N018:
+  cpu_cores: p0:0.254/0.114(123.21%)
+  memory_gb: p0:1.133/0.263(330.25%)
+  network_mbps: p0:17.523/2.127(724.02%)
+N019:
+  cpu_cores: p0:0.606/0.101(499.98%)
+  memory_gb: p0:0.594/0.161(268.59%)
+  network_mbps: p0:13.589/4.040(236.40%)
+N020:
+  cpu_cores: p0:0.253/0.124(103.49%)
+  memory_gb: p0:0.459/0.130(252.68%)
+  network_mbps: p0:9.409/0.830(1034.16%)
+N021:
+  network_mbps: p0:38.701/3.981(872.06%)
+N022:
+  network_mbps: p0:53.631/0.354(15048.95%)
+N023:
+  cpu_cores: p0:0.385/0.106(264.86%)
+  memory_gb: p0:2.375/0.241(885.03%)
+  network_mbps: p0:42.871/0.872(4815.24%)
+N024:
+  cpu_cores: p0:0.200/0.161(24.28%)
+  memory_gb: p0:0.168/0.115(46.93%)
+  network_mbps: p0:38.533/8.037(379.45%)
+N025:
+  cpu_cores: p0:0.276/0.169(63.45%)
+  memory_gb: p0:1.794/0.195(819.72%)
+N026:
+  cpu_cores: p0:0.371/0.108(244.86%)
+  memory_gb: p0:0.811/0.211(283.56%)
+N027:
+  memory_gb: p0:1.400/0.139(907.91%)
+  network_mbps: p0:9.667/1.622(496.09%)
+N028:
+  cpu_cores: p0:0.345/0.110(212.89%)
+  memory_gb: p0:0.549/0.142(285.66%)
+  network_mbps: p0:30.578/1.700(1698.89%)
+N029:
+  cpu_cores: p0:0.253/0.112(126.77%)
+  memory_gb: p0:0.989/0.103(856.07%)
+  network_mbps: p0:6.440/0.137(4588.74%)
+N030:
+  cpu_cores: p0:0.153/0.135(13.74%)
+  network_mbps: p0:80.065/3.889(1958.79%)
+
+=== Sweep rows=130000 ===
+  ingest progress: 13/130 batches (10%)
+  ingest progress: 26/130 batches (20%)
+  ingest progress: 39/130 batches (30%)
+  ingest progress: 52/130 batches (40%)
+  ingest progress: 65/130 batches (50%)
+  ingest progress: 78/130 batches (60%)
+  ingest progress: 91/130 batches (70%)
+  ingest progress: 104/130 batches (80%)
+  ingest progress: 117/130 batches (90%)
+  ingest progress: 130/130 batches (100%)
+server RTT: 10.58 ms | ES RTT: 379.04 ms | max diff >=2%: 60646.50%
+comparisons:
+N001:
+  cpu_cores: p0:0.143/0.100(43.16%)
+  memory_gb: p0:0.479/0.202(137.02%)
+  network_mbps: p0:131.549/0.460(28497.96%)
+N002:
+  cpu_cores: p0:0.388/0.105(270.13%)
+  memory_gb: p0:0.966/0.219(340.60%)
+  network_mbps: p0:48.085/4.033(1092.30%)
+N003:
+  cpu_cores: p0:0.308/0.102(201.03%)
+  memory_gb: p0:0.850/0.117(628.18%)
+  network_mbps: p0:1.482/0.566(161.69%)
+N004:
+  cpu_cores: p0:0.231/0.103(125.47%)
+  memory_gb: p0:1.714/0.106(1513.94%)
+  network_mbps: p0:12.801/0.359(3463.47%)
+N005:
+  cpu_cores: p0:0.699/0.103(581.56%)
+  memory_gb: p0:0.737/0.138(432.99%)
+  network_mbps: p0:31.766/2.977(966.90%)
+N006:
+  cpu_cores: p0:0.302/0.104(190.11%)
+  memory_gb: p0:2.846/0.130(2092.08%)
+N007:
+  cpu_cores: p0:0.524/0.103(408.90%)
+  network_mbps: p0:63.749/0.312(20327.97%)
+N008:
+  cpu_cores: p0:0.235/0.104(125.10%)
+  memory_gb: p0:2.544/0.109(2241.03%)
+  network_mbps: p0:92.289/0.152(60646.50%)
+N009:
+  cpu_cores: p0:0.148/0.129(13.97%)
+  network_mbps: p0:54.817/5.182(957.76%)
+N010:
+  cpu_cores: p0:0.433/0.127(242.18%)
+  memory_gb: p0:2.071/0.190(990.39%) p50:130.170/126.651(2.78%)
+  network_mbps: p0:47.918/0.680(6951.07%)
+N011:
+  cpu_cores: p0:0.228/0.107(113.53%)
+  memory_gb: p0:1.599/0.168(853.51%)
+  network_mbps: p0:27.242/2.415(1027.90%)
+N012:
+  cpu_cores: p0:0.293/0.105(180.33%)
+  memory_gb: p0:3.499/0.113(3007.76%)
+  network_mbps: p0:40.241/0.446(8929.61%)
+N013:
+  cpu_cores: p0:0.430/0.150(185.98%)
+  memory_gb: p0:1.268/0.151(742.18%)
+  network_mbps: p0:24.992/4.743(426.97%)
+N014:
+  cpu_cores: p0:0.155/0.110(40.72%)
+  memory_gb: p0:1.593/0.145(997.59%) p50:132.470/128.389(3.18%)
+  network_mbps: p0:75.665/1.642(4507.23%)
+N015:
+  cpu_cores: p0:0.273/0.107(156.02%)
+  memory_gb: p0:1.345/0.181(642.84%)
+  network_mbps: p0:55.369/2.108(2526.07%)
+N016:
+  cpu_cores: p0:0.257/0.100(156.17%)
+  memory_gb: p0:1.628/0.178(813.52%)
+  network_mbps: p0:80.752/0.361(22245.22%)
+N017:
+  cpu_cores: p0:0.170/0.133(28.09%)
+  memory_gb: p0:1.048/0.151(594.60%)
+  network_mbps: p0:139.962/2.251(6118.13%)
+N018:
+  cpu_cores: p0:0.216/0.119(81.71%)
+  memory_gb: p0:0.794/0.133(495.87%)
+  network_mbps: p0:87.806/0.816(10665.38%)
+N019:
+  cpu_cores: p0:0.228/0.124(84.81%)
+  memory_gb: p0:0.226/0.137(64.06%)
+  network_mbps: p0:35.740/2.562(1295.09%)
+N020:
+  cpu_cores: p0:0.200/0.101(97.65%)
+  memory_gb: p0:0.901/0.147(514.14%)
+  network_mbps: p0:3.226/0.213(1411.66%)
+N021:
+  cpu_cores: p0:0.257/0.103(148.92%)
+  memory_gb: p0:0.752/0.145(418.01%)
+  network_mbps: p0:61.532/5.402(1039.07%)
+N022:
+  memory_gb: p0:2.084/0.122(1614.55%)
+  network_mbps: p0:45.777/3.038(1406.91%)
+N023:
+  cpu_cores: p0:0.226/0.126(78.91%)
+  memory_gb: p0:2.384/0.341(599.78%)
+  network_mbps: p0:36.591/1.219(2902.82%)
+N024:
+  cpu_cores: p0:0.496/0.102(384.81%)
+  memory_gb: p0:1.282/0.176(628.53%)
+  network_mbps: p0:41.095/4.641(785.52%)
+N025:
+  cpu_cores: p0:0.155/0.102(52.29%) p50:31.674/32.388(2.20%)
+  memory_gb: p0:1.194/0.141(744.39%)
+  network_mbps: p0:26.544/3.021(778.69%)
+N026:
+  cpu_cores: p0:0.477/0.122(290.99%)
+  memory_gb: p0:1.686/0.201(738.74%)
+N027:
+  cpu_cores: p0:0.195/0.120(62.38%)
+  memory_gb: p0:1.371/0.156(779.59%)
+  network_mbps: p0:11.516/0.359(3111.03%)
+N028:
+  cpu_cores: p0:0.676/0.119(467.34%)
+  memory_gb: p0:0.506/0.199(154.89%)
+  network_mbps: p0:64.275/1.179(5349.63%)
+N029:
+  cpu_cores: p0:0.176/0.105(67.09%)
+  memory_gb: p0:1.135/0.204(456.81%)
+  network_mbps: p0:49.331/7.196(585.50%)
+N030:
+  cpu_cores: p0:0.231/0.120(92.86%)
+  memory_gb: p0:3.124/0.238(1215.17%)
+  network_mbps: p0:5.507/2.711(103.15%)
+
+=== Sweep rows=140000 ===
+  ingest progress: 14/140 batches (10%)
+  ingest progress: 28/140 batches (20%)
+  ingest progress: 42/140 batches (30%)
+  ingest progress: 56/140 batches (40%)
+  ingest progress: 70/140 batches (50%)
+  ingest progress: 84/140 batches (60%)
+  ingest progress: 98/140 batches (70%)
+  ingest progress: 112/140 batches (80%)
+  ingest progress: 126/140 batches (90%)
+  ingest progress: 140/140 batches (100%)
+server RTT: 13.66 ms | ES RTT: 236.11 ms | max diff >=2%: 11800.23%
+comparisons:
+N001:
+  cpu_cores: p0:0.361/0.101(257.09%)
+  memory_gb: p0:0.333/0.147(126.93%)
+  network_mbps: p0:4.211/2.474(70.23%)
+N002:
+  cpu_cores: p0:0.354/0.120(195.01%)
+  memory_gb: p0:0.528/0.149(254.34%)
+  network_mbps: p0:5.812/1.411(311.95%)
+N003:
+  cpu_cores: p0:0.413/0.130(216.21%)
+  memory_gb: p0:2.064/0.237(771.02%)
+  network_mbps: p0:71.161/1.277(5471.24%)
+N004:
+  cpu_cores: p0:0.498/0.106(369.80%) p50:31.611/30.771(2.73%)
+  memory_gb: p0:0.761/0.103(638.62%)
+N005:
+  cpu_cores: p0:0.203/0.106(91.46%)
+  memory_gb: p0:0.407/0.114(258.20%)
+  network_mbps: p0:39.466/1.955(1918.39%)
+N006:
+  memory_gb: p0:1.006/0.122(726.04%)
+  network_mbps: p0:24.545/1.399(1654.87%)
+N007:
+  cpu_cores: p0:0.552/0.101(449.34%)
+  memory_gb: p0:0.337/0.225(49.93%)
+  network_mbps: p0:25.218/1.547(1530.32%)
+N008:
+  cpu_cores: p0:0.270/0.104(159.25%)
+  memory_gb: p0:0.765/0.134(470.28%)
+N009:
+  cpu_cores: p0:0.188/0.103(82.97%)
+  memory_gb: p0:0.783/0.123(537.29%)
+  network_mbps: p0:61.361/2.648(2217.43%)
+N010:
+  cpu_cores: p0:0.256/0.151(70.16%)
+  memory_gb: p0:0.816/0.107(665.41%)
+  network_mbps: p0:25.048/1.147(2083.03%)
+N011:
+  cpu_cores: p0:0.259/0.113(129.49%)
+  memory_gb: p0:1.576/0.194(711.39%)
+  network_mbps: p0:64.110/11.481(458.41%)
+N012:
+  cpu_cores: p0:0.527/0.104(408.77%)
+  memory_gb: p0:1.062/0.142(647.06%)
+  network_mbps: p0:66.806/1.629(4000.43%)
+N013:
+  cpu_cores: p0:0.614/0.102(504.81%)
+  memory_gb: p0:0.966/0.163(493.42%)
+  network_mbps: p0:27.812/5.134(441.71%)
+N014:
+  cpu_cores: p0:0.584/0.110(429.65%)
+  memory_gb: p0:1.036/0.187(454.20%)
+  network_mbps: p0:35.950/3.326(981.03%)
+N015:
+  cpu_cores: p0:0.115/0.110(4.41%)
+  memory_gb: p0:1.593/0.130(1124.13%)
+N016:
+  cpu_cores: p0:0.174/0.103(68.15%)
+  memory_gb: p0:2.138/0.123(1631.46%)
+  network_mbps: p0:55.879/2.621(2031.74%)
+N017:
+  cpu_cores: p0:0.198/0.115(71.95%)
+  memory_gb: p0:0.236/0.212(11.58%)
+  network_mbps: p0:75.108/0.631(11800.23%)
+N018:
+  cpu_cores: p0:0.200/0.103(94.04%)
+  memory_gb: p0:1.017/0.111(815.89%)
+  network_mbps: p0:32.447/3.616(797.21%)
+N019:
+  cpu_cores: p0:0.577/0.103(459.51%)
+  memory_gb: p0:0.275/0.135(103.40%)
+N020:
+  cpu_cores: p0:0.454/0.147(209.23%)
+  memory_gb: p0:0.971/0.133(631.25%)
+  network_mbps: p0:27.899/2.089(1235.31%)
+N021:
+  cpu_cores: p0:0.153/0.103(48.85%)
+  network_mbps: p0:33.922/0.727(4564.84%)
+N022:
+  cpu_cores: p0:0.242/0.111(117.54%)
+  memory_gb: p0:0.176/0.121(45.41%)
+  network_mbps: p0:20.252/1.260(1507.38%)
+N023:
+  cpu_cores: p0:0.319/0.130(145.00%)
+  memory_gb: p0:0.207/0.108(92.37%)
+  network_mbps: p0:44.558/1.557(2762.34%)
+N024:
+  cpu_cores: p0:0.990/0.111(795.49%)
+  memory_gb: p0:0.230/0.150(53.69%)
+  network_mbps: p0:34.959/0.912(3733.03%)
+N025:
+  cpu_cores: p0:0.185/0.120(54.06%)
+  memory_gb: p0:0.224/0.180(24.63%)
+  network_mbps: p0:3.517/2.086(68.58%)
+N026:
+  cpu_cores: p0:0.168/0.103(62.57%)
+  memory_gb: p0:0.395/0.148(167.48%)
+  network_mbps: p0:5.263/0.379(1287.90%)
+N027:
+  cpu_cores: p0:0.160/0.107(49.82%)
+  memory_gb: p0:0.284/0.153(84.86%)
+  network_mbps: p0:66.989/4.026(1563.90%)
+N028:
+  cpu_cores: p0:0.539/0.140(286.22%)
+  memory_gb: p0:1.643/0.137(1100.25%)
+  network_mbps: p0:17.192/0.274(6185.50%)
+N029:
+  memory_gb: p0:0.691/0.136(408.21%)
+  network_mbps: p0:12.248/0.778(1474.20%)
+N030:
+  cpu_cores: p0:0.932/0.139(569.70%)
+  memory_gb: p0:0.876/0.137(538.17%)
+  network_mbps: p0:17.073/7.606(124.47%)
+
+=== Sweep rows=150000 ===
+  ingest progress: 15/150 batches (10%)
+  ingest progress: 30/150 batches (20%)
+  ingest progress: 45/150 batches (30%)
+  ingest progress: 60/150 batches (40%)
+  ingest progress: 75/150 batches (50%)
+  ingest progress: 90/150 batches (60%)
+  ingest progress: 105/150 batches (70%)
+  ingest progress: 120/150 batches (80%)
+  ingest progress: 135/150 batches (90%)
+  ingest progress: 150/150 batches (100%)
+server RTT: 14.45 ms | ES RTT: 262.80 ms | max diff >=2%: 24772.84%
+comparisons:
+N001:
+  cpu_cores: p0:0.313/0.101(208.20%)
+  memory_gb: p0:0.636/0.104(511.68%)
+  network_mbps: p0:50.066/1.093(4480.20%)
+N002:
+  cpu_cores: p0:0.341/0.103(231.63%)
+  memory_gb: p0:0.308/0.128(140.03%)
+  network_mbps: p0:74.172/2.279(3155.21%)
+N003:
+  cpu_cores: p0:0.298/0.127(134.91%)
+  memory_gb: p0:0.684/0.141(384.26%)
+  network_mbps: p0:49.477/8.763(464.61%)
+N004:
+  cpu_cores: p0:0.195/0.100(93.96%)
+  memory_gb: p0:0.676/0.118(472.77%)
+  network_mbps: p0:57.210/3.953(1347.42%)
+N005:
+  memory_gb: p0:0.681/0.101(575.91%)
+  network_mbps: p0:20.752/4.035(414.31%)
+N006:
+  cpu_cores: p0:0.534/0.106(404.50%)
+  memory_gb: p0:2.585/0.120(2047.75%)
+  network_mbps: p0:36.044/0.233(15344.90%)
+N007:
+  cpu_cores: p0:0.588/0.142(312.64%)
+  network_mbps: p0:47.366/3.754(1161.63%)
+N008:
+  cpu_cores: p0:0.121/0.102(18.57%)
+  memory_gb: p0:1.542/0.116(1223.52%)
+  network_mbps: p0:26.912/0.388(6842.45%)
+N009:
+  cpu_cores: p0:0.140/0.106(31.53%)
+  memory_gb: p0:0.726/0.113(545.11%)
+  network_mbps: p0:43.290/1.083(3895.60%)
+N010:
+  cpu_cores: p0:0.610/0.116(425.40%)
+  memory_gb: p0:1.714/0.228(650.42%)
+  network_mbps: p0:71.521/5.223(1269.27%)
+N011:
+  cpu_cores: p0:0.191/0.120(58.72%)
+  network_mbps: p0:21.680/4.367(396.40%)
+N012:
+  cpu_cores: p0:0.197/0.128(54.20%)
+  memory_gb: p0:3.352/0.129(2491.35%)
+  network_mbps: p0:46.470/0.303(15248.91%)
+N013:
+  cpu_cores: p0:0.232/0.117(97.92%)
+  memory_gb: p0:1.506/0.118(1176.84%)
+  network_mbps: p0:10.935/1.148(852.41%)
+N014:
+  cpu_cores: p0:0.399/0.130(205.66%)
+  memory_gb: p0:1.183/0.121(876.41%)
+N015:
+  cpu_cores: p0:0.169/0.104(62.51%)
+  network_mbps: p0:38.808/2.744(1314.33%)
+N016:
+  cpu_cores: p0:0.555/0.108(412.71%)
+  memory_gb: p0:2.357/0.236(897.78%)
+  network_mbps: p0:69.774/0.281(24772.84%)
+N017:
+  cpu_cores: p0:0.362/0.111(226.46%)
+  memory_gb: p0:0.389/0.147(164.92%)
+  network_mbps: p0:24.156/0.442(5363.33%)
+N018:
+  cpu_cores: p0:0.699/0.112(524.69%)
+  memory_gb: p0:1.015/0.116(777.67%)
+  network_mbps: p0:23.166/0.321(7127.66%)
+N019:
+  cpu_cores: p0:0.338/0.107(217.00%)
+  memory_gb: p0:0.421/0.120(249.53%)
+  network_mbps: p0:27.760/1.620(1613.40%)
+N020:
+  cpu_cores: p0:0.430/0.116(269.71%)
+  memory_gb: p0:0.483/0.132(265.52%)
+  network_mbps: p0:7.435/6.755(10.07%)
+N021:
+  cpu_cores: p0:0.267/0.131(104.25%)
+  memory_gb: p0:1.354/0.102(1229.56%)
+  network_mbps: p0:5.781/0.902(540.66%)
+N022:
+  cpu_cores: p0:0.274/0.102(169.08%)
+  memory_gb: p0:1.068/0.198(440.17%)
+  network_mbps: p0:31.824/0.753(4125.39%)
+N023:
+  memory_gb: p0:0.807/0.169(376.64%)
+N024:
+  cpu_cores: p0:0.132/0.116(13.83%)
+  memory_gb: p0:2.980/0.105(2743.30%)
+  network_mbps: p0:19.009/0.128(14749.08%)
+N025:
+  cpu_cores: p0:0.855/0.102(741.65%)
+  memory_gb: p0:0.316/0.177(78.25%)
+  network_mbps: p0:34.330/0.906(3689.54%)
+N026:
+  cpu_cores: p0:0.207/0.107(93.54%)
+  memory_gb: p0:1.291/0.103(1148.18%)
+  network_mbps: p0:16.109/1.801(794.65%)
+N027:
+  cpu_cores: p0:0.151/0.112(34.72%)
+  memory_gb: p0:1.628/0.109(1392.91%)
+  network_mbps: p0:9.046/2.019(347.96%)
+N028:
+  cpu_cores: p0:0.414/0.109(277.94%)
+  memory_gb: p0:0.869/0.169(412.74%)
+  network_mbps: p0:80.621/1.676(4710.59%)
+N029:
+  cpu_cores: p0:0.409/0.118(246.03%)
+  memory_gb: p0:0.772/0.105(633.24%)
+  network_mbps: p0:73.221/1.994(3571.51%)
+N030:
+  cpu_cores: p0:0.165/0.106(56.07%)
+  memory_gb: p0:0.824/0.177(366.31%)
+  network_mbps: p0:28.082/2.351(1094.32%)
+
+=== Sweep rows=160000 ===
+  ingest progress: 16/160 batches (10%)
+  ingest progress: 32/160 batches (20%)
+  ingest progress: 48/160 batches (30%)
+  ingest progress: 64/160 batches (40%)
+  ingest progress: 80/160 batches (50%)
+  ingest progress: 96/160 batches (60%)
+  ingest progress: 112/160 batches (70%)
+  ingest progress: 128/160 batches (80%)
+  ingest progress: 144/160 batches (90%)
+  ingest progress: 160/160 batches (100%)
+server RTT: 12.04 ms | ES RTT: 262.60 ms | max diff >=2%: 17767.10%
+comparisons:
+N001:
+  cpu_cores: p0:0.225/0.102(120.11%)
+  memory_gb: p0:0.200/0.122(63.95%)
+  network_mbps: p0:49.154/0.587(8276.13%)
+N002:
+  cpu_cores: p0:0.214/0.118(80.53%)
+  memory_gb: p0:0.838/0.125(572.09%)
+  network_mbps: p0:29.194/3.075(849.32%)
+N003:
+  cpu_cores: p0:0.585/0.118(394.61%)
+  memory_gb: p0:0.160/0.106(52.07%)
+  network_mbps: p0:40.067/4.533(783.88%)
+N004:
+  cpu_cores: p0:0.340/0.132(157.51%)
+  memory_gb: p0:1.050/0.102(932.91%)
+  network_mbps: p0:10.347/1.075(862.69%)
+N005:
+  cpu_cores: p0:0.518/0.100(417.38%)
+  network_mbps: p0:3.253/2.153(51.09%)
+N006:
+  cpu_cores: p0:0.123/0.101(22.12%)
+  memory_gb: p0:1.322/0.114(1057.59%)
+  network_mbps: p0:18.135/0.104(17259.61%)
+N007:
+  cpu_cores: p0:0.276/0.106(158.78%)
+N008:
+  cpu_cores: p0:0.240/0.107(124.80%)
+  memory_gb: p0:0.637/0.140(353.48%)
+  network_mbps: p0:5.009/0.406(1134.89%)
+N009:
+  cpu_cores: p0:0.301/0.117(156.56%)
+  memory_gb: p0:0.297/0.115(158.27%)
+  network_mbps: p0:47.653/2.295(1976.50%)
+N010:
+  cpu_cores: p0:0.357/0.105(241.41%)
+  memory_gb: p0:0.827/0.139(494.65%)
+  network_mbps: p0:6.318/1.517(316.60%)
+N011:
+  cpu_cores: p0:0.189/0.105(80.43%)
+  memory_gb: p0:0.628/0.116(442.62%)
+  network_mbps: p0:9.304/0.706(1218.61%)
+N012:
+  cpu_cores: p0:0.457/0.108(321.57%)
+  memory_gb: p0:0.626/0.144(334.72%)
+  network_mbps: p0:30.801/2.206(1296.04%)
+N013:
+  cpu_cores: p0:0.216/0.102(111.39%)
+  memory_gb: p0:1.114/0.315(254.05%)
+  network_mbps: p0:62.109/0.432(14286.64%)
+N014:
+  cpu_cores: p0:0.131/0.103(27.46%)
+  memory_gb: p0:1.801/0.166(986.77%)
+  network_mbps: p0:20.165/7.542(167.38%)
+N015:
+  memory_gb: p0:0.520/0.139(274.31%)
+  network_mbps: p0:78.740/1.108(7007.94%)
+N016:
+  cpu_cores: p0:0.152/0.132(15.09%)
+  memory_gb: p0:0.272/0.156(74.10%)
+  network_mbps: p0:55.063/2.061(2571.58%)
+N017:
+  cpu_cores: p0:0.128/0.104(22.94%)
+  memory_gb: p0:0.422/0.138(204.85%)
+  network_mbps: p0:23.844/2.245(961.94%)
+N018:
+  cpu_cores: p0:0.160/0.137(16.96%)
+  memory_gb: p0:0.279/0.111(150.13%)
+  network_mbps: p0:74.454/0.417(17767.10%)
+N019:
+  memory_gb: p0:0.771/0.188(309.27%)
+  network_mbps: p0:2.105/1.053(99.87%)
+N020:
+  cpu_cores: p0:0.287/0.108(164.90%)
+  memory_gb: p0:0.388/0.235(64.73%)
+  network_mbps: p0:11.336/1.430(692.89%)
+N021:
+  cpu_cores: p0:0.428/0.107(301.56%)
+  memory_gb: p0:0.739/0.104(610.54%)
+  network_mbps: p0:70.260/0.955(7253.82%)
+N022:
+  cpu_cores: p0:0.105/0.101(4.08%)
+  memory_gb: p0:0.982/0.100(878.98%)
+  network_mbps: p0:3.493/0.724(382.69%)
+N023:
+  cpu_cores: p0:0.490/0.108(354.52%)
+  network_mbps: p0:38.070/0.229(16507.66%)
+N024:
+  memory_gb: p0:0.650/0.139(366.24%)
+  network_mbps: p0:13.974/0.124(11196.92%)
+N025:
+  cpu_cores: p0:0.481/0.103(365.30%)
+  memory_gb: p0:0.466/0.131(256.91%)
+  network_mbps: p0:1.529/0.523(192.28%)
+N026:
+  cpu_cores: p0:0.286/0.106(170.77%)
+  memory_gb: p0:0.468/0.135(246.69%)
+  network_mbps: p0:20.562/1.525(1248.22%)
+N027:
+  memory_gb: p0:0.353/0.103(242.20%)
+  network_mbps: p0:35.831/0.308(11526.17%)
+N028:
+  cpu_cores: p0:0.230/0.106(116.93%)
+  memory_gb: p0:1.041/0.116(800.20%)
+  network_mbps: p0:6.036/1.712(252.51%)
+N029:
+  cpu_cores: p0:0.304/0.108(182.08%)
+  memory_gb: p0:0.170/0.107(59.65%)
+  network_mbps: p0:27.715/0.356(7680.06%)
+N030:
+  cpu_cores: p0:0.117/0.110(5.80%)
+  memory_gb: p0:0.350/0.103(238.69%)
+  network_mbps: p0:41.706/5.504(657.78%)
+
+=== Sweep rows=170000 ===
+  ingest progress: 17/170 batches (10%)
+  ingest progress: 34/170 batches (20%)
+  ingest progress: 51/170 batches (30%)
+  ingest progress: 68/170 batches (40%)
+  ingest progress: 85/170 batches (50%)
+  ingest progress: 102/170 batches (60%)
+  ingest progress: 119/170 batches (70%)
+  ingest progress: 136/170 batches (80%)
+  ingest progress: 153/170 batches (90%)
+  ingest progress: 170/170 batches (100%)
+server RTT: 9.97 ms | ES RTT: 333.92 ms | max diff >=2%: 24386.47%
+comparisons:
+N001:
+  cpu_cores: p0:0.378/0.130(191.44%)
+  memory_gb: p0:2.851/0.119(2290.20%)
+  network_mbps: p0:12.033/0.323(3626.41%)
+N002:
+  cpu_cores: p0:0.267/0.107(148.46%)
+  memory_gb: p0:0.660/0.108(509.29%)
+  network_mbps: p0:52.583/0.315(16608.45%)
+N003:
+  cpu_cores: p0:0.331/0.105(215.30%)
+  memory_gb: p0:0.747/0.110(577.56%)
+  network_mbps: p0:16.697/1.474(1032.42%)
+N004:
+  cpu_cores: p0:0.116/0.106(8.99%)
+  memory_gb: p0:0.397/0.152(161.61%)
+  network_mbps: p0:0.351/0.217(61.52%)
+N005:
+  cpu_cores: p0:0.756/0.150(403.94%)
+  memory_gb: p0:0.271/0.157(72.84%) p50:132.227/128.314(3.05%)
+  network_mbps: p0:3.883/1.262(207.71%) p50:4908.673/5022.395(2.26%)
+N006:
+  cpu_cores: p0:0.303/0.108(179.02%) p50:33.906/33.185(2.17%)
+  memory_gb: p0:1.105/0.289(282.63%)
+  network_mbps: p0:2.571/0.565(354.60%)
+N007:
+  cpu_cores: p0:0.128/0.102(25.47%)
+  memory_gb: p0:2.193/0.200(996.65%)
+  network_mbps: p0:8.757/0.294(2875.79%)
+N008:
+  cpu_cores: p0:0.184/0.104(76.19%)
+  memory_gb: p0:3.132/0.133(2258.98%)
+  network_mbps: p0:70.275/1.686(4067.51%)
+N009:
+  cpu_cores: p0:0.504/0.114(341.66%)
+  memory_gb: p0:3.998/0.376(963.95%)
+  network_mbps: p0:79.729/0.548(14444.76%)
+N010:
+  cpu_cores: p0:0.107/0.103(4.42%)
+  memory_gb: p0:1.999/0.115(1644.84%)
+  network_mbps: p0:60.465/0.247(24386.47%)
+N011:
+  cpu_cores: p0:0.294/0.129(128.46%)
+  memory_gb: p0:0.370/0.101(265.23%)
+  network_mbps: p0:131.366/4.226(3008.17%)
+N012:
+  cpu_cores: p0:0.140/0.125(11.56%)
+  memory_gb: p0:0.480/0.202(137.98%)
+  network_mbps: p0:92.330/1.387(6558.84%)
+N013:
+  cpu_cores: p0:0.277/0.104(166.28%)
+  memory_gb: p0:1.431/0.212(573.38%)
+  network_mbps: p0:3.872/2.600(48.91%)
+N014:
+  cpu_cores: p0:0.284/0.110(159.24%)
+  memory_gb: p0:2.323/0.171(1256.52%)
+  network_mbps: p0:61.405/0.354(17268.88%)
+N015:
+  cpu_cores: p0:0.452/0.112(302.52%)
+  memory_gb: p0:0.426/0.113(277.88%)
+  network_mbps: p0:4.914/1.248(293.70%)
+N016:
+  cpu_cores: p0:0.370/0.105(251.11%)
+  memory_gb: p0:0.755/0.130(481.82%)
+  network_mbps: p0:21.774/3.101(602.16%)
+N017:
+  cpu_cores: p0:0.198/0.102(94.75%)
+  memory_gb: p0:0.928/0.140(564.27%)
+  network_mbps: p0:78.975/0.701(11161.10%)
+N018:
+  cpu_cores: p0:0.433/0.101(327.55%)
+  memory_gb: p0:0.422/0.203(107.66%)
+  network_mbps: p0:14.782/0.472(3032.83%)
+N019:
+  cpu_cores: p0:0.160/0.127(26.46%)
+  memory_gb: p0:0.539/0.201(168.10%)
+  network_mbps: p0:51.123/0.648(7790.71%) p50:5145.847/5040.107(2.10%)
+N020:
+  cpu_cores: p0:0.462/0.119(287.89%)
+  memory_gb: p0:0.995/0.103(864.73%)
+  network_mbps: p0:61.996/1.055(5774.88%)
+N021:
+  cpu_cores: p0:0.203/0.114(78.22%)
+  memory_gb: p0:1.832/0.146(1155.88%)
+  network_mbps: p0:27.718/1.007(2653.38%)
+N022:
+  cpu_cores: p0:0.122/0.105(15.45%)
+  memory_gb: p0:0.652/0.163(299.85%)
+  network_mbps: p0:31.061/3.679(744.30%)
+N023:
+  cpu_cores: p0:0.515/0.102(402.73%)
+  memory_gb: p0:0.344/0.273(25.91%)
+  network_mbps: p0:34.930/1.441(2324.65%)
+N024:
+  cpu_cores: p0:0.433/0.117(269.72%)
+  memory_gb: p0:0.851/0.154(453.66%)
+  network_mbps: p0:7.187/3.119(130.41%)
+N025:
+  cpu_cores: p0:0.448/0.101(341.27%)
+  memory_gb: p0:0.317/0.125(154.04%)
+  network_mbps: p0:16.726/3.911(327.71%)
+N026:
+  cpu_cores: p0:0.690/0.101(583.25%)
+  network_mbps: p0:28.334/0.530(5250.01%)
+N027:
+  cpu_cores: p0:0.190/0.103(84.89%) p50:31.941/32.595(2.00%)
+  memory_gb: p0:0.621/0.109(467.54%)
+  network_mbps: p0:40.257/4.261(844.82%)
+N028:
+  cpu_cores: p0:0.182/0.113(61.02%)
+  memory_gb: p0:1.496/0.102(1366.19%)
+  network_mbps: p0:44.635/5.326(738.12%)
+N029:
+  cpu_cores: p0:0.415/0.114(263.11%)
+  network_mbps: p0:45.799/1.048(4270.28%)
+N030:
+  memory_gb: p0:0.466/0.105(343.07%)
+  network_mbps: p0:14.595/4.787(204.92%) p50:5034.801/4913.135(2.48%)
+
+=== Sweep rows=180000 ===
+  ingest progress: 18/180 batches (10%)
+  ingest progress: 36/180 batches (20%)
+  ingest progress: 54/180 batches (30%)
+  ingest progress: 72/180 batches (40%)
+  ingest progress: 90/180 batches (50%)
+  ingest progress: 108/180 batches (60%)
+  ingest progress: 126/180 batches (70%)
+  ingest progress: 144/180 batches (80%)
+  ingest progress: 162/180 batches (90%)
+  ingest progress: 180/180 batches (100%)
+server RTT: 11.40 ms | ES RTT: 295.33 ms | max diff >=2%: 16661.64%
+comparisons:
+N001:
+  cpu_cores: p0:0.293/0.117(150.16%)
+  memory_gb: p0:0.846/0.175(384.38%)
+  network_mbps: p0:18.036/6.223(189.83%)
+N002:
+  cpu_cores: p0:0.368/0.104(253.77%)
+  memory_gb: p0:0.378/0.127(198.74%)
+  network_mbps: p0:43.850/0.615(7031.40%)
+N003:
+  cpu_cores: p0:0.112/0.103(9.14%)
+  memory_gb: p0:1.241/0.121(921.52%)
+  network_mbps: p0:5.157/0.299(1626.43%)
+N004:
+  cpu_cores: p0:0.177/0.107(65.48%)
+  memory_gb: p0:0.591/0.116(409.00%)
+  network_mbps: p0:26.941/0.512(5163.47%)
+N005:
+  cpu_cores: p0:0.313/0.101(209.16%)
+  memory_gb: p0:0.120/0.101(18.40%)
+  network_mbps: p0:28.415/2.462(1053.96%)
+N006:
+  cpu_cores: p0:0.156/0.109(43.28%)
+  memory_gb: p0:0.506/0.101(399.08%)
+  network_mbps: p0:0.953/0.561(69.74%)
+N007:
+  cpu_cores: p0:0.180/0.123(46.88%)
+  memory_gb: p0:0.592/0.244(143.12%)
+  network_mbps: p0:69.482/3.059(2171.22%)
+N008:
+  cpu_cores: p0:0.245/0.103(137.85%)
+  memory_gb: p0:2.135/0.105(1939.62%)
+  network_mbps: p0:22.231/0.181(12184.55%)
+N009:
+  cpu_cores: p0:0.164/0.104(57.42%)
+  memory_gb: p0:1.968/0.369(433.61%)
+  network_mbps: p0:16.463/4.298(283.06%)
+N010:
+  network_mbps: p0:15.932/0.918(1635.90%)
+N011:
+  cpu_cores: p0:0.257/0.127(102.17%) p50:32.489/31.802(2.16%)
+  memory_gb: p0:0.278/0.164(69.78%)
+  network_mbps: p0:96.292/1.739(5438.43%)
+N012:
+  cpu_cores: p0:0.205/0.104(97.73%)
+  memory_gb: p0:0.288/0.108(167.14%)
+  network_mbps: p0:40.661/1.471(2664.69%)
+N013:
+  cpu_cores: p0:0.297/0.111(166.83%)
+  memory_gb: p0:1.477/0.140(953.41%)
+  network_mbps: p0:107.004/3.000(3467.20%)
+N014:
+  cpu_cores: p0:0.187/0.102(83.66%)
+  memory_gb: p0:2.635/0.176(1397.70%)
+  network_mbps: p0:37.892/0.961(3842.55%)
+N015:
+  cpu_cores: p0:0.542/0.101(434.10%)
+  memory_gb: p0:0.933/0.154(505.78%)
+  network_mbps: p0:35.578/1.030(3355.20%)
+N016:
+  cpu_cores: p0:0.284/0.112(154.90%)
+  memory_gb: p0:1.172/0.281(316.84%)
+  network_mbps: p0:3.834/3.645(5.19%)
+N017:
+  cpu_cores: p0:0.211/0.115(84.35%)
+  memory_gb: p0:1.290/0.113(1044.18%)
+  network_mbps: p0:29.123/0.174(16661.64%)
+N018:
+  cpu_cores: p0:0.149/0.100(48.70%)
+  memory_gb: p0:1.562/0.126(1139.71%)
+  network_mbps: p0:35.782/3.593(896.00%)
+N019:
+  cpu_cores: p0:0.183/0.105(73.79%)
+  memory_gb: p0:1.019/0.123(725.81%)
+  network_mbps: p0:20.192/6.540(208.75%)
+N020:
+  cpu_cores: p0:0.515/0.110(365.97%)
+  memory_gb: p0:1.773/0.100(1666.33%)
+N021:
+  cpu_cores: p0:0.262/0.125(108.81%)
+  memory_gb: p0:0.799/0.124(541.70%)
+  network_mbps: p0:25.073/2.160(1060.93%)
+N022:
+  cpu_cores: p0:0.251/0.132(90.34%)
+  memory_gb: p0:3.214/0.180(1688.08%)
+N023:
+  cpu_cores: p0:0.388/0.132(193.37%)
+  memory_gb: p0:0.163/0.101(61.33%)
+  network_mbps: p0:9.766/2.854(242.22%)
+N024:
+  cpu_cores: p0:0.238/0.131(81.66%)
+  network_mbps: p0:12.983/3.619(258.78%)
+N025:
+  cpu_cores: p0:0.328/0.111(195.20%)
+  memory_gb: p0:1.436/0.115(1149.57%)
+  network_mbps: p0:66.298/1.196(5443.62%)
+N026:
+  cpu_cores: p0:0.551/0.136(306.22%)
+  memory_gb: p0:0.232/0.104(122.85%)
+  network_mbps: p0:62.284/1.125(5435.76%)
+N027:
+  cpu_cores: p0:0.256/0.100(155.35%)
+  memory_gb: p0:0.334/0.164(102.81%)
+  network_mbps: p0:41.736/3.690(1031.01%)
+N028:
+  cpu_cores: p0:0.108/0.101(6.74%)
+  memory_gb: p0:0.431/0.209(106.28%)
+  network_mbps: p0:101.497/1.306(7670.04%)
+N029:
+  memory_gb: p0:0.260/0.226(15.34%)
+  network_mbps: p0:64.428/0.436(14682.23%)
+N030:
+  cpu_cores: p0:0.563/0.111(407.29%)
+  memory_gb: p0:2.171/0.112(1847.13%)
+  network_mbps: p0:26.379/0.206(12674.44%)
+
+=== Sweep rows=190000 ===
+  ingest progress: 19/190 batches (10%)
+  ingest progress: 38/190 batches (20%)
+  ingest progress: 57/190 batches (30%)
+  ingest progress: 76/190 batches (40%)
+  ingest progress: 95/190 batches (50%)
+  ingest progress: 114/190 batches (60%)
+  ingest progress: 133/190 batches (70%)
+  ingest progress: 152/190 batches (80%)
+  ingest progress: 171/190 batches (90%)
+  ingest progress: 190/190 batches (100%)
+server RTT: 9.27 ms | ES RTT: 310.79 ms | max diff >=2%: 51402.55%
+comparisons:
+N001:
+  cpu_cores: p0:0.361/0.102(253.47%)
+  memory_gb: p0:0.360/0.104(245.23%)
+  network_mbps: p0:60.096/1.693(3448.81%)
+N002:
+  cpu_cores: p0:0.218/0.106(105.57%)
+  network_mbps: p0:62.718/0.484(12857.39%)
+N003:
+  cpu_cores: p0:0.181/0.101(80.15%)
+  memory_gb: p0:0.858/0.106(706.55%)
+  network_mbps: p0:62.306/0.134(46553.52%)
+N004:
+  cpu_cores: p0:0.486/0.112(335.33%)
+  memory_gb: p0:0.422/0.162(160.22%)
+  network_mbps: p0:78.683/1.478(5221.80%)
+N005:
+  cpu_cores: p0:0.419/0.105(297.32%)
+  memory_gb: p0:1.064/0.207(414.25%)
+  network_mbps: p0:45.442/1.685(2597.47%)
+N006:
+  cpu_cores: p0:0.245/0.104(135.30%)
+  memory_gb: p0:2.065/0.134(1445.77%)
+  network_mbps: p0:88.962/0.189(46889.51%)
+N007:
+  cpu_cores: p0:0.177/0.103(72.18%)
+  memory_gb: p0:1.395/0.119(1074.95%)
+  network_mbps: p0:48.172/0.573(8309.83%)
+N008:
+  cpu_cores: p0:0.146/0.106(38.00%)
+  memory_gb: p0:1.007/0.141(613.00%)
+  network_mbps: p0:28.549/5.560(413.44%)
+N009:
+  cpu_cores: p0:0.366/0.119(207.25%)
+  memory_gb: p0:0.617/0.173(256.36%)
+  network_mbps: p0:49.438/2.170(2177.96%)
+N010:
+  cpu_cores: p0:0.129/0.105(23.54%)
+  memory_gb: p0:1.310/0.130(910.50%)
+  network_mbps: p0:22.459/2.114(962.57%)
+N011:
+  cpu_cores: p0:0.248/0.117(110.97%)
+  memory_gb: p0:0.156/0.116(33.87%)
+  network_mbps: p0:2.171/1.961(10.72%)
+N012:
+  cpu_cores: p0:0.557/0.101(449.25%)
+  memory_gb: p0:0.785/0.117(572.99%)
+  network_mbps: p0:38.018/0.280(13485.46%)
+N013:
+  cpu_cores: p0:0.162/0.114(42.17%)
+  memory_gb: p0:0.525/0.132(298.33%)
+  network_mbps: p0:33.059/0.567(5728.25%)
+N014:
+  cpu_cores: p0:0.367/0.125(193.58%)
+  memory_gb: p0:0.340/0.162(109.49%)
+  network_mbps: p0:31.490/0.392(7931.78%)
+N015:
+  cpu_cores: p0:0.484/0.123(292.60%)
+  memory_gb: p0:2.090/0.124(1586.98%)
+  network_mbps: p0:58.728/0.114(51402.55%)
+N016:
+  cpu_cores: p0:0.309/0.116(165.64%)
+  memory_gb: p0:2.027/0.110(1741.74%)
+  network_mbps: p0:59.409/1.061(5497.79%)
+N017:
+  cpu_cores: p0:0.115/0.102(12.46%)
+  memory_gb: p0:1.095/0.199(450.14%)
+  network_mbps: p0:12.373/0.678(1726.04%)
+N018:
+  cpu_cores: p50:31.469/32.271(2.49%)
+  memory_gb: p0:0.763/0.142(439.14%)
+  network_mbps: p0:62.813/0.287(21790.51%)
+N019:
+  cpu_cores: p0:0.263/0.102(158.66%)
+  memory_gb: p0:0.708/0.127(458.33%)
+  network_mbps: p0:82.786/1.134(7201.33%)
+N020:
+  cpu_cores: p0:0.162/0.111(45.34%)
+  memory_gb: p0:0.205/0.200(2.53%)
+  network_mbps: p0:44.008/1.559(2723.05%)
+N021:
+  cpu_cores: p0:0.525/0.100(423.74%)
+  memory_gb: p0:0.560/0.167(234.22%)
+  network_mbps: p0:19.632/0.812(2317.33%)
+N022:
+  cpu_cores: p0:0.558/0.104(436.91%)
+  memory_gb: p0:1.723/0.106(1533.18%)
+  network_mbps: p0:67.666/14.491(366.97%)
+N023:
+  cpu_cores: p0:0.441/0.121(262.90%)
+  memory_gb: p0:0.853/0.115(638.99%)
+  network_mbps: p0:1.292/0.924(39.90%)
+N024:
+  cpu_cores: p0:0.163/0.101(61.98%)
+  memory_gb: p0:1.029/0.215(378.72%)
+  network_mbps: p0:9.757/0.234(4078.33%)
+N025:
+  cpu_cores: p0:0.330/0.104(217.15%)
+  memory_gb: p0:1.788/0.190(843.74%)
+  network_mbps: p0:19.574/1.432(1266.42%)
+N026:
+  cpu_cores: p0:0.438/0.123(256.72%)
+  memory_gb: p0:0.778/0.171(355.64%)
+  network_mbps: p0:34.559/2.626(1215.83%)
+N027:
+  cpu_cores: p0:0.391/0.103(280.80%)
+  memory_gb: p0:0.949/0.121(682.56%)
+  network_mbps: p0:19.185/1.859(931.95%)
+N028:
+  cpu_cores: p0:0.298/0.107(179.08%)
+  memory_gb: p0:3.420/0.265(1192.77%)
+  network_mbps: p0:43.704/2.671(1536.36%)
+N029:
+  cpu_cores: p0:0.348/0.101(243.62%)
+  memory_gb: p0:0.247/0.112(120.10%)
+  network_mbps: p0:18.789/2.234(741.06%)
+N030:
+  cpu_cores: p0:0.295/0.108(172.80%)
+  memory_gb: p0:0.148/0.112(31.66%)
+  network_mbps: p0:20.598/0.816(2425.68%)
+
+=== Sweep rows=200000 ===
+  ingest progress: 20/200 batches (10%)
+  ingest progress: 40/200 batches (20%)
+  ingest progress: 60/200 batches (30%)
+  ingest progress: 80/200 batches (40%)
+  ingest progress: 100/200 batches (50%)
+  ingest progress: 120/200 batches (60%)
+  ingest progress: 140/200 batches (70%)
+  ingest progress: 160/200 batches (80%)
+  ingest progress: 180/200 batches (90%)
+  ingest progress: 200/200 batches (100%)
+server RTT: 15.34 ms | ES RTT: 272.46 ms | max diff >=2%: 51711.93%
+comparisons:
+N001:
+  cpu_cores: p0:0.293/0.106(177.57%)
+  memory_gb: p0:0.411/0.122(237.22%)
+  network_mbps: p0:12.140/2.957(310.60%)
+N002:
+  cpu_cores: p0:0.216/0.107(102.46%)
+  memory_gb: p0:1.065/0.139(663.52%)
+N003:
+  cpu_cores: p0:0.151/0.103(46.68%)
+  memory_gb: p0:0.203/0.105(93.34%) p50:126.209/129.244(2.35%)
+  network_mbps: p0:41.266/1.473(2700.94%)
+N004:
+  cpu_cores: p0:0.415/0.100(313.78%)
+  memory_gb: p0:1.440/0.147(878.61%)
+  network_mbps: p0:32.370/1.906(1598.64%)
+N005:
+  cpu_cores: p0:0.522/0.107(388.90%)
+  memory_gb: p0:2.274/0.151(1406.16%)
+  network_mbps: p0:48.414/1.471(3191.87%)
+N006:
+  cpu_cores: p50:30.961/31.747(2.48%)
+  memory_gb: p0:0.640/0.219(192.04%)
+  network_mbps: p0:33.784/1.373(2360.23%)
+N007:
+  cpu_cores: p0:0.288/0.116(147.30%)
+  memory_gb: p0:0.151/0.110(36.51%)
+  network_mbps: p0:24.401/6.284(288.30%)
+N008:
+  cpu_cores: p0:0.342/0.134(155.11%)
+  memory_gb: p0:0.826/0.163(406.59%)
+  network_mbps: p0:8.938/0.913(879.08%)
+N009:
+  cpu_cores: p0:0.272/0.110(147.66%)
+  memory_gb: p0:1.827/0.235(678.46%)
+  network_mbps: p0:55.884/0.108(51711.93%)
+N010:
+  cpu_cores: p0:0.121/0.101(19.34%)
+  memory_gb: p0:0.532/0.161(230.59%)
+  network_mbps: p0:58.526/1.737(3270.31%)
+N011:
+  cpu_cores: p0:0.215/0.114(89.32%)
+  memory_gb: p0:0.398/0.187(113.34%)
+  network_mbps: p0:21.723/2.441(790.08%)
+N012:
+  cpu_cores: p0:0.314/0.120(162.60%)
+  memory_gb: p0:1.574/0.150(952.59%)
+  network_mbps: p0:86.823/0.732(11762.68%)
+N013:
+  cpu_cores: p0:0.445/0.119(274.04%)
+  memory_gb: p0:0.641/0.237(170.66%)
+  network_mbps: p0:66.377/2.602(2450.94%)
+N014:
+  cpu_cores: p0:0.221/0.133(65.50%)
+  memory_gb: p0:1.901/0.128(1379.42%)
+  network_mbps: p0:38.850/2.016(1826.69%)
+N015:
+  cpu_cores: p0:0.331/0.107(208.57%)
+  network_mbps: p0:68.176/0.973(6903.25%)
+N016:
+  cpu_cores: p0:0.122/0.110(11.11%)
+  memory_gb: p0:0.677/0.129(423.97%)
+  network_mbps: p0:9.262/0.946(878.74%)
+N017:
+  cpu_cores: p0:0.418/0.101(313.97%)
+  memory_gb: p0:1.170/0.146(699.13%)
+  network_mbps: p0:1.090/0.790(37.92%)
+N018:
+  cpu_cores: p0:0.397/0.115(246.22%)
+  memory_gb: p0:0.246/0.158(55.42%)
+  network_mbps: p0:9.496/0.925(927.10%)
+N019:
+  cpu_cores: p0:0.280/0.102(173.09%)
+  memory_gb: p0:0.586/0.125(368.73%)
+  network_mbps: p0:12.058/0.908(1227.78%)
+N020:
+  cpu_cores: p0:0.205/0.109(88.50%)
+  memory_gb: p0:0.274/0.168(62.97%)
+  network_mbps: p0:0.836/0.101(724.81%)
+N021:
+  cpu_cores: p0:0.181/0.168(7.66%)
+  memory_gb: p0:0.438/0.200(119.03%) p50:129.987/127.254(2.15%)
+  network_mbps: p0:13.103/0.734(1684.69%)
+N022:
+  cpu_cores: p0:0.190/0.130(46.71%)
+  memory_gb: p0:0.611/0.109(460.79%)
+  network_mbps: p0:35.634/2.986(1093.38%)
+N023:
+  cpu_cores: p0:0.364/0.104(249.62%)
+  memory_gb: p0:0.931/0.266(249.33%)
+  network_mbps: p0:27.002/2.500(980.02%)
+N024:
+  cpu_cores: p0:0.156/0.111(40.92%)
+  memory_gb: p0:1.029/0.224(358.90%)
+  network_mbps: p0:10.005/1.103(806.73%)
+N025:
+  cpu_cores: p0:0.292/0.101(187.86%)
+  memory_gb: p0:2.285/0.102(2134.50%)
+  network_mbps: p0:2.652/0.579(358.01%)
+N026:
+  cpu_cores: p0:0.172/0.123(40.40%)
+  memory_gb: p0:0.293/0.113(158.83%)
+  network_mbps: p0:39.065/0.799(4787.50%)
+N027:
+  cpu_cores: p0:0.473/0.106(346.83%)
+  memory_gb: p0:1.819/0.164(1006.18%)
+  network_mbps: p0:25.354/0.226(11137.25%)
+N028:
+  cpu_cores: p0:0.349/0.112(212.47%)
+  memory_gb: p0:0.131/0.111(18.46%)
+  network_mbps: p0:30.778/2.518(1122.35%)
+N029:
+  cpu_cores: p0:0.158/0.108(45.62%)
+  memory_gb: p0:0.887/0.103(759.74%)
+  network_mbps: p0:3.837/0.147(2517.11%)
+N030:
+  cpu_cores: p0:0.316/0.103(207.89%)
+  memory_gb: p0:1.715/0.207(727.92%)
+  network_mbps: p0:6.365/1.391(357.55%)
+
+=== Sweep rows=210000 ===
+  ingest progress: 21/210 batches (10%)
+  ingest progress: 42/210 batches (20%)
+  ingest progress: 63/210 batches (30%)
+  ingest progress: 84/210 batches (40%)
+  ingest progress: 105/210 batches (50%)
+  ingest progress: 126/210 batches (60%)
+  ingest progress: 147/210 batches (70%)
+  ingest progress: 168/210 batches (80%)
+  ingest progress: 189/210 batches (90%)
+  ingest progress: 210/210 batches (100%)
+server RTT: 13.25 ms | ES RTT: 304.81 ms | max diff >=2%: 27867.55%
+comparisons:
+N001:
+  memory_gb: p0:0.718/0.153(370.86%)
+  network_mbps: p0:49.801/2.152(2214.27%)
+N002:
+  cpu_cores: p0:0.384/0.115(234.50%)
+  memory_gb: p0:1.168/0.109(972.17%)
+  network_mbps: p0:17.245/1.424(1111.16%)
+N003:
+  cpu_cores: p0:0.304/0.101(201.75%)
+  memory_gb: p0:0.732/0.101(622.15%)
+  network_mbps: p0:33.054/2.768(1093.98%)
+N004:
+  cpu_cores: p0:0.124/0.102(21.51%)
+  memory_gb: p0:0.590/0.159(271.44%)
+  network_mbps: p0:10.874/0.383(2738.96%)
+N005:
+  cpu_cores: p0:0.114/0.107(6.29%)
+  memory_gb: p0:0.575/0.101(471.98%)
+  network_mbps: p0:52.134/1.196(4259.06%)
+N006:
+  cpu_cores: p0:0.115/0.103(11.53%)
+  memory_gb: p0:1.115/0.106(947.51%)
+  network_mbps: p0:44.384/1.942(2184.96%)
+N007:
+  cpu_cores: p0:0.205/0.112(82.45%)
+  memory_gb: p0:0.429/0.111(288.37%)
+  network_mbps: p0:13.472/3.430(292.78%)
+N008:
+  cpu_cores: p0:0.173/0.110(57.03%)
+  memory_gb: p0:0.414/0.154(169.54%)
+  network_mbps: p0:13.460/2.710(396.67%)
+N009:
+  cpu_cores: p0:0.288/0.112(156.50%)
+  memory_gb: p0:0.602/0.104(476.56%)
+  network_mbps: p0:12.035/1.864(545.62%)
+N010:
+  cpu_cores: p0:0.677/0.113(496.79%)
+  memory_gb: p0:1.296/0.288(350.57%)
+  network_mbps: p0:26.149/2.569(917.83%) p50:5148.008/5039.534(2.15%)
+N011:
+  cpu_cores: p0:0.251/0.102(146.17%)
+  memory_gb: p0:0.382/0.141(170.71%)
+  network_mbps: p0:17.073/1.556(997.25%)
+N012:
+  cpu_cores: p0:0.139/0.105(32.67%)
+  memory_gb: p0:0.134/0.112(19.82%)
+  network_mbps: p0:22.498/0.102(21911.19%)
+N013:
+  cpu_cores: p0:0.480/0.101(375.31%)
+  memory_gb: p0:0.145/0.119(21.37%)
+  network_mbps: p0:123.535/0.891(13765.84%)
+N014:
+  cpu_cores: p0:0.393/0.115(242.81%)
+  memory_gb: p0:1.108/0.232(377.79%)
+  network_mbps: p0:47.713/1.075(4337.74%)
+N015:
+  memory_gb: p0:0.719/0.143(401.96%)
+  network_mbps: p0:22.144/1.737(1174.73%)
+N016:
+  memory_gb: p0:0.914/0.109(738.45%)
+  network_mbps: p0:41.380/0.263(15645.76%)
+N017:
+  cpu_cores: p0:0.215/0.116(85.98%)
+  memory_gb: p0:0.188/0.105(78.99%)
+  network_mbps: p0:5.378/1.775(202.96%)
+N018:
+  cpu_cores: p0:0.875/0.103(751.01%)
+  memory_gb: p0:0.376/0.158(138.06%)
+  network_mbps: p0:8.621/1.286(570.46%)
+N019:
+  cpu_cores: p0:0.364/0.110(230.14%)
+  memory_gb: p0:0.896/0.110(717.29%)
+  network_mbps: p0:19.156/1.575(1116.41%)
+N020:
+  cpu_cores: p0:0.312/0.123(154.32%)
+  memory_gb: p0:1.007/0.125(707.64%)
+  network_mbps: p0:13.238/1.705(676.29%)
+N021:
+  memory_gb: p0:0.701/0.115(508.70%)
+  network_mbps: p0:33.827/2.496(1255.06%)
+N022:
+  cpu_cores: p0:0.142/0.101(40.82%)
+  memory_gb: p0:0.391/0.118(232.45%)
+  network_mbps: p0:60.718/1.782(3306.50%)
+N023:
+  cpu_cores: p0:0.141/0.116(21.48%)
+  memory_gb: p0:0.309/0.100(208.42%)
+  network_mbps: p0:17.623/1.283(1273.57%)
+N024:
+  cpu_cores: p0:0.256/0.128(100.74%)
+  memory_gb: p0:0.521/0.145(259.92%)
+  network_mbps: p0:15.466/0.193(7906.74%)
+N025:
+  cpu_cores: p0:0.397/0.115(244.58%)
+  memory_gb: p0:0.834/0.130(541.10%)
+  network_mbps: p0:17.982/1.791(904.12%)
+N026:
+  cpu_cores: p0:0.451/0.125(261.59%)
+  memory_gb: p0:0.395/0.176(124.39%)
+  network_mbps: p0:40.807/3.443(1085.16%)
+N027:
+  cpu_cores: p0:0.136/0.111(22.86%)
+  memory_gb: p0:0.617/0.115(437.04%)
+  network_mbps: p0:5.709/2.757(107.06%)
+N028:
+  cpu_cores: p0:0.227/0.100(126.64%)
+  memory_gb: p0:0.602/0.121(397.59%)
+  network_mbps: p0:26.527/0.794(3239.26%)
+N029:
+  cpu_cores: p0:0.521/0.103(406.52%)
+  memory_gb: p0:0.163/0.117(38.82%) p50:130.541/127.874(2.09%)
+  network_mbps: p0:28.170/1.102(2457.28%)
+N030:
+  cpu_cores: p0:0.580/0.108(438.62%)
+  memory_gb: p0:0.600/0.111(439.04%)
+  network_mbps: p0:79.950/0.286(27867.55%)
+
+=== Sweep rows=220000 ===
+  ingest progress: 22/220 batches (10%)
+  ingest progress: 44/220 batches (20%)
+  ingest progress: 66/220 batches (30%)
+  ingest progress: 88/220 batches (40%)
+  ingest progress: 110/220 batches (50%)
+  ingest progress: 132/220 batches (60%)
+  ingest progress: 154/220 batches (70%)
+  ingest progress: 176/220 batches (80%)
+  ingest progress: 198/220 batches (90%)
+  ingest progress: 220/220 batches (100%)
+server RTT: 12.44 ms | ES RTT: 239.82 ms | max diff >=2%: 34201.89%
+comparisons:
+N001:
+  cpu_cores: p0:0.285/0.104(174.04%)
+  memory_gb: p0:0.235/0.104(124.72%)
+  network_mbps: p0:9.851/2.191(349.65%)
+N002:
+  cpu_cores: p0:0.359/0.106(236.97%)
+  memory_gb: p0:0.259/0.167(55.13%)
+  network_mbps: p0:91.118/3.134(2807.70%) p50:5111.076/4995.210(2.32%)
+N003:
+  cpu_cores: p0:0.165/0.109(50.91%)
+  memory_gb: p0:0.757/0.112(574.72%)
+  network_mbps: p0:49.330/2.298(2046.53%)
+N004:
+  cpu_cores: p0:0.126/0.101(25.04%)
+  memory_gb: p0:0.825/0.148(455.56%)
+  network_mbps: p0:6.619/0.929(612.13%)
+N005:
+  cpu_cores: p0:0.325/0.122(165.73%)
+  memory_gb: p0:1.002/0.106(841.88%)
+  network_mbps: p0:35.427/2.620(1251.97%)
+N006:
+  memory_gb: p0:0.223/0.156(43.30%)
+  network_mbps: p0:11.499/0.679(1592.95%)
+N007:
+  cpu_cores: p0:0.261/0.102(154.90%)
+  memory_gb: p0:0.169/0.126(33.99%)
+  network_mbps: p0:18.151/0.855(2022.87%)
+N008:
+  memory_gb: p0:0.478/0.132(262.02%)
+  network_mbps: p0:30.912/2.634(1073.58%)
+N009:
+  cpu_cores: p0:0.414/0.103(303.74%)
+  memory_gb: p0:1.137/0.132(761.22%)
+  network_mbps: p0:20.852/4.013(419.62%)
+N010:
+  cpu_cores: p0:0.416/0.103(304.17%)
+  memory_gb: p0:0.213/0.137(55.45%)
+  network_mbps: p0:50.864/1.218(4075.19%)
+N011:
+  cpu_cores: p0:0.233/0.101(130.98%)
+  memory_gb: p0:0.619/0.153(305.33%)
+  network_mbps: p0:6.360/3.339(90.46%) p50:5071.968/4964.507(2.16%)
+N012:
+  cpu_cores: p0:0.123/0.112(9.83%)
+  memory_gb: p0:0.617/0.115(435.89%)
+  network_mbps: p0:47.362/1.852(2457.43%)
+N013:
+  cpu_cores: p0:0.201/0.114(76.69%)
+  memory_gb: p0:0.701/0.139(404.70%)
+  network_mbps: p0:1.917/0.964(98.94%)
+N014:
+  cpu_cores: p0:0.574/0.113(405.47%)
+  memory_gb: p0:0.347/0.122(184.23%)
+  network_mbps: p0:3.855/0.417(825.20%)
+N015:
+  cpu_cores: p0:0.270/0.102(164.44%)
+  memory_gb: p0:1.689/0.117(1349.35%)
+  network_mbps: p0:7.804/1.501(419.90%)
+N016:
+  cpu_cores: p0:0.314/0.120(162.22%)
+  memory_gb: p0:0.451/0.102(342.52%)
+  network_mbps: p0:27.385/3.115(779.01%)
+N017:
+  cpu_cores: p0:0.142/0.113(25.31%)
+  memory_gb: p0:0.317/0.121(162.88%)
+  network_mbps: p0:29.987/0.467(6315.41%)
+N018:
+  cpu_cores: p0:0.174/0.117(49.00%)
+  memory_gb: p0:0.504/0.131(285.02%)
+  network_mbps: p0:28.241/0.322(8679.16%)
+N019:
+  cpu_cores: p0:0.222/0.105(111.82%)
+  memory_gb: p0:0.510/0.138(270.65%)
+  network_mbps: p0:38.727/1.628(2279.38%)
+N020:
+  cpu_cores: p0:0.698/0.123(466.57%)
+  memory_gb: p0:0.983/0.108(808.47%)
+  network_mbps: p0:14.140/0.735(1823.09%)
+N021:
+  cpu_cores: p0:0.263/0.121(117.89%)
+  memory_gb: p0:0.997/0.132(656.08%)
+  network_mbps: p0:3.642/0.846(330.42%)
+N022:
+  cpu_cores: p0:0.572/0.105(446.63%)
+  memory_gb: p0:0.998/0.104(859.56%)
+  network_mbps: p0:46.498/0.654(7014.95%)
+N023:
+  cpu_cores: p0:0.362/0.128(183.62%)
+  memory_gb: p0:0.863/0.106(717.79%)
+  network_mbps: p0:40.949/0.919(4357.38%)
+N024:
+  cpu_cores: p0:0.161/0.102(57.40%)
+  memory_gb: p0:0.176/0.114(53.50%)
+  network_mbps: p0:53.305/1.159(4500.79%)
+N025:
+  cpu_cores: p0:0.183/0.114(60.51%)
+  memory_gb: p0:0.283/0.152(86.43%)
+  network_mbps: p0:72.083/0.281(25554.88%)
+N026:
+  cpu_cores: p0:0.231/0.107(115.07%)
+  memory_gb: p0:2.539/0.127(1895.18%)
+  network_mbps: p0:63.964/1.030(6112.18%)
+N027:
+  cpu_cores: p0:0.396/0.102(289.67%)
+  memory_gb: p0:0.524/0.133(294.87%)
+  network_mbps: p0:36.600/0.417(8682.06%)
+N028:
+  cpu_cores: p0:0.293/0.101(191.71%)
+  memory_gb: p0:1.452/0.122(1091.92%)
+  network_mbps: p0:92.952/0.271(34201.89%)
+N029:
+  cpu_cores: p0:0.183/0.101(81.75%)
+  memory_gb: p0:0.671/0.129(421.20%)
+  network_mbps: p0:3.394/0.590(474.84%)
+N030:
+  cpu_cores: p0:0.492/0.113(336.37%)
+  memory_gb: p0:0.461/0.103(347.45%)
+  network_mbps: p0:2.529/1.841(37.41%)
+
+=== Sweep rows=230000 ===
+  ingest progress: 23/230 batches (10%)
+  ingest progress: 46/230 batches (20%)
+  ingest progress: 69/230 batches (30%)
+  ingest progress: 92/230 batches (40%)
+  ingest progress: 115/230 batches (50%)
+  ingest progress: 138/230 batches (60%)
+  ingest progress: 161/230 batches (70%)
+  ingest progress: 184/230 batches (80%)
+  ingest progress: 207/230 batches (90%)
+  ingest progress: 230/230 batches (100%)
+server RTT: 15.22 ms | ES RTT: 262.07 ms | max diff >=2%: 27201.02%
+comparisons:
+N001:
+  cpu_cores: p0:0.153/0.102(48.84%)
+  memory_gb: p0:0.462/0.109(323.25%)
+N002:
+  cpu_cores: p0:0.427/0.107(300.16%)
+  memory_gb: p0:1.742/0.113(1445.86%)
+  network_mbps: p0:84.683/2.450(3356.78%)
+N003:
+  cpu_cores: p0:0.244/0.109(123.94%)
+  memory_gb: p0:0.363/0.143(153.46%)
+  network_mbps: p0:36.708/0.480(7548.08%)
+N004:
+  cpu_cores: p0:0.527/0.102(416.74%)
+  memory_gb: p0:0.385/0.159(141.77%)
+  network_mbps: p0:15.560/0.873(1682.45%)
+N005:
+  cpu_cores: p0:0.224/0.100(123.48%)
+  network_mbps: p0:34.298/2.137(1504.64%)
+N006:
+  cpu_cores: p0:0.510/0.112(353.46%)
+  memory_gb: p0:0.275/0.117(134.84%)
+N007:
+  cpu_cores: p0:0.512/0.103(397.07%)
+  memory_gb: p0:0.564/0.117(383.33%)
+  network_mbps: p0:1.753/0.108(1528.14%)
+N008:
+  cpu_cores: p0:0.225/0.115(95.65%)
+  memory_gb: p0:0.343/0.135(154.80%)
+  network_mbps: p0:37.444/1.460(2464.52%)
+N009:
+  cpu_cores: p0:0.348/0.141(147.02%)
+  memory_gb: p0:2.132/0.107(1896.43%)
+  network_mbps: p0:25.356/1.451(1647.30%)
+N010:
+  cpu_cores: p0:0.805/0.106(656.37%)
+  memory_gb: p0:0.564/0.150(276.67%)
+  network_mbps: p0:4.680/0.756(518.95%)
+N011:
+  cpu_cores: p0:0.168/0.114(47.50%)
+  memory_gb: p0:1.020/0.124(722.31%)
+  network_mbps: p0:32.400/1.437(2153.96%)
+N012:
+  cpu_cores: p0:0.192/0.117(64.39%)
+  memory_gb: p0:0.324/0.130(149.44%)
+  network_mbps: p0:34.738/0.728(4671.52%)
+N013:
+  cpu_cores: p0:0.193/0.116(66.50%)
+  memory_gb: p0:0.617/0.136(354.10%)
+  network_mbps: p0:13.096/0.214(6007.48%)
+N014:
+  cpu_cores: p0:0.304/0.110(175.27%)
+  memory_gb: p0:0.674/0.173(289.21%)
+  network_mbps: p0:32.714/1.238(2543.41%)
+N015:
+  cpu_cores: p0:0.152/0.103(47.80%)
+  memory_gb: p0:1.308/0.101(1200.04%)
+  network_mbps: p0:13.530/1.007(1243.69%)
+N016:
+  cpu_cores: p0:0.491/0.106(361.00%)
+  memory_gb: p0:2.089/0.145(1339.41%)
+N017:
+  cpu_cores: p0:0.245/0.101(141.50%)
+  memory_gb: p0:0.775/0.116(568.56%)
+  network_mbps: p0:25.374/5.085(398.97%)
+N018:
+  cpu_cores: p0:0.489/0.108(351.29%)
+  memory_gb: p0:0.655/0.178(267.98%)
+  network_mbps: p0:2.647/2.009(31.74%)
+N019:
+  cpu_cores: p0:0.182/0.102(77.89%)
+  memory_gb: p0:0.352/0.102(246.71%)
+  network_mbps: p0:42.260/0.155(27201.02%)
+N020:
+  cpu_cores: p0:0.141/0.120(17.44%)
+  memory_gb: p0:0.388/0.134(189.60%)
+  network_mbps: p0:9.256/2.291(303.96%)
+N021:
+  cpu_cores: p0:0.165/0.106(56.43%)
+  memory_gb: p0:1.154/0.134(761.43%)
+  network_mbps: p0:8.964/2.629(241.04%)
+N022:
+  cpu_cores: p0:0.178/0.116(54.13%)
+  memory_gb: p0:1.020/0.103(889.12%)
+  network_mbps: p0:8.851/0.550(1509.87%)
+N023:
+  cpu_cores: p0:0.434/0.111(290.54%)
+  memory_gb: p0:0.725/0.105(593.54%)
+  network_mbps: p0:21.309/0.138(15299.58%)
+N024:
+  cpu_cores: p0:0.225/0.110(104.01%)
+  memory_gb: p0:0.364/0.109(232.87%)
+  network_mbps: p0:69.403/1.323(5147.32%)
+N025:
+  cpu_cores: p0:0.428/0.116(268.22%)
+  memory_gb: p0:0.331/0.170(94.68%)
+  network_mbps: p0:21.504/0.622(3355.60%)
+N026:
+  cpu_cores: p0:0.419/0.111(277.21%)
+  memory_gb: p0:0.783/0.149(425.65%)
+N027:
+  cpu_cores: p0:0.202/0.108(86.90%)
+  memory_gb: p0:0.538/0.131(309.95%)
+  network_mbps: p0:25.870/4.324(498.34%)
+N028:
+  cpu_cores: p0:0.191/0.109(74.94%)
+  memory_gb: p0:0.786/0.141(456.89%)
+  network_mbps: p0:9.332/1.908(389.01%)
+N029:
+  cpu_cores: p0:0.132/0.119(11.10%)
+  memory_gb: p0:3.337/0.116(2776.86%) p50:129.998/127.427(2.02%)
+  network_mbps: p0:40.915/3.544(1054.45%)
+N030:
+  cpu_cores: p0:0.333/0.112(198.72%)
+  memory_gb: p0:0.511/0.138(269.90%)
+  network_mbps: p0:53.926/1.090(4845.36%)
+
+=== Sweep rows=240000 ===
+  ingest progress: 24/240 batches (10%)
+  ingest progress: 48/240 batches (20%)
+  ingest progress: 72/240 batches (30%)
+  ingest progress: 96/240 batches (40%)
+  ingest progress: 120/240 batches (50%)
+  ingest progress: 144/240 batches (60%)
+  ingest progress: 168/240 batches (70%)
+  ingest progress: 192/240 batches (80%)
+  ingest progress: 216/240 batches (90%)
+  ingest progress: 240/240 batches (100%)
+server RTT: 8.02 ms | ES RTT: 275.22 ms | max diff >=2%: 84473.72%
+comparisons:
+N001:
+  cpu_cores: p0:0.423/0.100(323.05%)
+  memory_gb: p0:1.996/0.123(1520.19%)
+  network_mbps: p0:34.404/1.447(2278.24%)
+N002:
+  cpu_cores: p0:0.423/0.105(304.75%)
+  memory_gb: p0:1.144/0.103(1006.71%)
+  network_mbps: p0:27.671/1.602(1626.90%)
+N003:
+  cpu_cores: p0:0.159/0.105(51.09%)
+  memory_gb: p0:0.336/0.111(201.13%) p50:124.688/127.475(2.19%)
+  network_mbps: p0:30.714/1.180(2501.94%)
+N004:
+  cpu_cores: p0:0.322/0.104(210.51%)
+  memory_gb: p0:1.681/0.110(1431.95%)
+  network_mbps: p0:23.650/1.103(2044.58%)
+N005:
+  cpu_cores: p0:0.259/0.102(152.78%)
+  memory_gb: p0:0.848/0.175(383.09%)
+  network_mbps: p0:48.606/1.628(2885.21%) p50:5103.855/5000.095(2.08%)
+N006:
+  cpu_cores: p0:0.433/0.104(316.56%)
+  memory_gb: p0:1.995/0.108(1748.50%)
+  network_mbps: p0:12.828/2.091(513.38%) p50:5037.746/4930.995(2.16%)
+N007:
+  cpu_cores: p0:0.651/0.105(521.94%)
+  memory_gb: p0:1.061/0.119(795.03%)
+  network_mbps: p0:12.221/0.909(1244.52%)
+N008:
+  cpu_cores: p0:0.389/0.104(274.85%)
+  memory_gb: p0:1.062/0.102(943.66%)
+  network_mbps: p0:30.285/0.841(3500.38%)
+N009:
+  cpu_cores: p0:0.243/0.111(118.38%)
+  memory_gb: p0:1.866/0.103(1710.29%)
+N010:
+  cpu_cores: p0:0.125/0.103(21.67%)
+  memory_gb: p0:1.188/0.110(978.41%)
+  network_mbps: p0:17.022/1.085(1468.92%)
+N011:
+  cpu_cores: p0:0.561/0.103(443.70%)
+  memory_gb: p0:2.550/0.135(1792.55%)
+  network_mbps: p0:18.829/2.398(685.28%)
+N012:
+  cpu_cores: p0:0.266/0.104(155.35%)
+  memory_gb: p0:0.668/0.147(354.64%)
+  network_mbps: p0:2.132/0.889(139.87%)
+N013:
+  cpu_cores: p0:0.381/0.104(266.89%)
+  memory_gb: p0:0.336/0.187(79.55%)
+  network_mbps: p0:8.809/1.155(662.42%)
+N014:
+  cpu_cores: p0:0.123/0.111(10.86%)
+  memory_gb: p0:1.701/0.132(1189.11%)
+  network_mbps: p0:40.931/0.420(9645.19%)
+N015:
+  cpu_cores: p0:0.189/0.101(87.63%)
+  memory_gb: p0:2.065/0.143(1340.18%)
+  network_mbps: p0:138.219/1.401(9763.45%)
+N016:
+  cpu_cores: p0:0.176/0.106(65.73%)
+  memory_gb: p0:0.508/0.147(245.24%)
+  network_mbps: p0:24.984/1.216(1954.14%)
+N017:
+  cpu_cores: p0:0.343/0.101(240.30%)
+  memory_gb: p0:0.333/0.105(215.52%)
+  network_mbps: p0:47.418/1.193(3874.91%)
+N018:
+  memory_gb: p0:0.269/0.111(143.10%)
+  network_mbps: p0:53.502/0.619(8537.20%)
+N019:
+  cpu_cores: p0:0.160/0.100(59.51%)
+  memory_gb: p0:1.513/0.120(1158.69%)
+  network_mbps: p0:104.069/0.123(84473.72%)
+N020:
+  cpu_cores: p0:0.698/0.106(558.67%) p50:32.089/31.400(2.20%)
+  memory_gb: p0:2.110/0.122(1632.51%)
+  network_mbps: p0:18.881/1.514(1146.98%) p50:4953.412/5057.767(2.06%)
+N021:
+  cpu_cores: p0:0.584/0.114(411.58%)
+  memory_gb: p0:2.085/0.122(1602.43%)
+  network_mbps: p0:40.522/0.656(6080.18%)
+N022:
+  cpu_cores: p0:0.119/0.101(17.27%)
+  memory_gb: p0:0.768/0.127(503.25%)
+  network_mbps: p0:1.189/0.864(37.61%)
+N023:
+  cpu_cores: p0:0.354/0.101(250.87%)
+  memory_gb: p0:0.455/0.112(307.28%)
+  network_mbps: p0:2.170/0.947(129.10%)
+N024:
+  cpu_cores: p0:0.724/0.108(572.89%)
+  memory_gb: p0:1.082/0.118(814.14%)
+  network_mbps: p0:59.907/0.193(31017.90%)
+N025:
+  cpu_cores: p0:0.399/0.104(282.45%) p50:31.406/32.051(2.01%)
+  memory_gb: p0:1.003/0.110(812.59%)
+  network_mbps: p0:51.190/0.911(5517.22%)
+N026:
+  cpu_cores: p0:0.210/0.103(103.94%)
+  memory_gb: p0:1.176/0.118(898.16%)
+  network_mbps: p0:10.527/0.478(2103.77%)
+N027:
+  cpu_cores: p0:0.285/0.114(149.78%)
+  memory_gb: p0:0.203/0.147(38.06%)
+  network_mbps: p0:51.810/0.415(12383.62%)
+N028:
+  cpu_cores: p0:0.249/0.101(145.60%)
+  memory_gb: p0:1.061/0.109(870.33%)
+  network_mbps: p0:28.479/0.507(5516.18%)
+N029:
+  memory_gb: p0:0.986/0.106(832.25%)
+  network_mbps: p0:83.962/1.220(6781.84%)
+N030:
+  cpu_cores: p0:0.110/0.100(9.27%)
+  memory_gb: p0:1.634/0.125(1205.24%)
+  network_mbps: p0:8.472/0.622(1261.56%)
+
+=== Sweep rows=250000 ===
+  ingest progress: 25/250 batches (10%)
+  ingest progress: 50/250 batches (20%)
+  ingest progress: 75/250 batches (30%)
+  ingest progress: 100/250 batches (40%)
+  ingest progress: 125/250 batches (50%)
+  ingest progress: 150/250 batches (60%)
+  ingest progress: 175/250 batches (70%)
+  ingest progress: 200/250 batches (80%)
+  ingest progress: 225/250 batches (90%)
+  ingest progress: 250/250 batches (100%)
+server RTT: 10.91 ms | ES RTT: 265.58 ms | max diff >=2%: 44754.63%
+comparisons:
+N001:
+  cpu_cores: p0:0.219/0.102(115.12%)
+  memory_gb: p0:0.262/0.113(132.24%)
+  network_mbps: p0:65.044/0.500(12916.59%)
+N002:
+  cpu_cores: p0:0.453/0.110(310.70%)
+  memory_gb: p0:0.584/0.128(357.47%)
+  network_mbps: p0:14.318/0.727(1870.87%)
+N003:
+  cpu_cores: p0:0.462/0.102(353.27%)
+  memory_gb: p0:1.369/0.124(1007.47%)
+  network_mbps: p0:6.373/2.558(149.20%)
+N004:
+  cpu_cores: p0:0.139/0.120(16.07%)
+  network_mbps: p0:2.806/0.615(355.93%) p50:4874.523/5009.290(2.69%)
+N005:
+  cpu_cores: p0:0.551/0.116(374.70%)
+  memory_gb: p0:0.428/0.128(234.45%)
+  network_mbps: p0:54.137/0.422(12724.55%)
+N006:
+  cpu_cores: p0:0.135/0.129(4.48%)
+  memory_gb: p0:0.836/0.102(720.87%)
+  network_mbps: p0:48.544/3.143(1444.52%)
+N007:
+  cpu_cores: p0:0.157/0.107(47.68%)
+  memory_gb: p0:1.827/0.105(1644.66%)
+  network_mbps: p0:63.614/0.601(10492.04%)
+N008:
+  cpu_cores: p0:0.452/0.102(344.58%)
+  memory_gb: p0:1.849/0.166(1014.89%)
+  network_mbps: p0:36.649/0.264(13797.43%)
+N009:
+  cpu_cores: p0:0.114/0.101(13.44%)
+  memory_gb: p0:0.195/0.106(84.25%)
+  network_mbps: p0:86.365/0.620(13823.49%)
+N010:
+  cpu_cores: p0:0.288/0.101(186.12%)
+  memory_gb: p0:0.358/0.140(155.19%)
+  network_mbps: p0:12.505/1.452(761.45%)
+N011:
+  cpu_cores: p0:0.185/0.102(80.49%)
+  memory_gb: p0:0.220/0.102(115.73%)
+  network_mbps: p0:20.566/1.022(1911.85%) p50:4946.916/5065.597(2.34%)
+N012:
+  cpu_cores: p0:0.424/0.101(321.00%)
+  memory_gb: p0:1.210/0.126(860.28%)
+  network_mbps: p0:12.801/1.746(633.36%)
+N013:
+  cpu_cores: p0:0.433/0.104(315.51%)
+  memory_gb: p0:0.827/0.127(550.27%)
+  network_mbps: p0:47.044/0.567(8204.23%)
+N014:
+  cpu_cores: p0:0.236/0.105(124.89%)
+  memory_gb: p0:1.868/0.143(1207.63%)
+  network_mbps: p0:23.260/4.290(442.17%)
+N015:
+  cpu_cores: p0:0.429/0.108(298.24%)
+  memory_gb: p0:2.410/0.101(2288.70%)
+  network_mbps: p0:68.968/2.729(2427.01%)
+N016:
+  cpu_cores: p0:0.520/0.101(412.74%)
+  memory_gb: p0:0.991/0.101(884.38%)
+  network_mbps: p0:26.357/2.450(975.98%)
+N017:
+  cpu_cores: p0:0.158/0.112(40.49%)
+  memory_gb: p0:0.413/0.121(240.94%)
+  network_mbps: p0:2.182/0.458(375.88%)
+N018:
+  cpu_cores: p0:0.448/0.106(323.23%)
+  memory_gb: p0:1.308/0.107(1127.17%)
+  network_mbps: p0:9.528/0.331(2778.54%)
+N019:
+  cpu_cores: p0:0.198/0.111(77.69%)
+  memory_gb: p0:0.203/0.172(17.85%)
+  network_mbps: p0:13.869/1.396(893.38%)
+N020:
+  cpu_cores: p0:0.318/0.108(195.31%)
+  memory_gb: p0:1.126/0.118(856.85%)
+  network_mbps: p0:16.941/0.934(1713.11%)
+N021:
+  cpu_cores: p0:0.182/0.102(78.68%)
+  memory_gb: p0:1.937/0.103(1782.61%)
+  network_mbps: p0:27.986/0.183(15164.66%)
+N022:
+  cpu_cores: p0:0.337/0.124(172.67%)
+  memory_gb: p0:0.829/0.107(671.60%)
+  network_mbps: p0:50.580/1.329(3707.00%)
+N023:
+  cpu_cores: p0:0.631/0.101(521.78%)
+  memory_gb: p0:0.446/0.102(339.05%)
+  network_mbps: p0:15.538/3.485(345.90%)
+N024:
+  cpu_cores: p0:0.222/0.105(111.18%)
+  memory_gb: p0:1.409/0.110(1174.83%)
+  network_mbps: p0:46.505/0.472(9760.36%)
+N025:
+  cpu_cores: p0:0.575/0.113(408.29%)
+  memory_gb: p0:2.917/0.112(2494.96%)
+  network_mbps: p0:42.283/0.180(23421.41%)
+N026:
+  cpu_cores: p0:0.281/0.114(146.70%)
+  network_mbps: p0:67.736/0.151(44754.63%)
+N027:
+  cpu_cores: p0:0.535/0.108(395.72%)
+  memory_gb: p0:0.682/0.150(353.56%)
+  network_mbps: p0:25.864/5.538(367.00%)
+N028:
+  cpu_cores: p0:0.232/0.102(127.35%)
+  memory_gb: p0:0.703/0.117(502.50%)
+  network_mbps: p0:73.330/1.610(4453.50%)
+N029:
+  cpu_cores: p0:0.466/0.101(360.28%)
+  memory_gb: p0:0.607/0.114(432.51%)
+  network_mbps: p0:16.165/5.736(181.81%)
+N030:
+  cpu_cores: p0:0.419/0.102(310.36%)
+  memory_gb: p0:2.159/0.120(1701.67%)
+  network_mbps: p0:42.966/1.724(2391.80%)
+
+=== Sweep rows=260000 ===
+  ingest progress: 26/260 batches (10%)
+  ingest progress: 52/260 batches (20%)
+  ingest progress: 78/260 batches (30%)
+  ingest progress: 104/260 batches (40%)
+  ingest progress: 130/260 batches (50%)
+  ingest progress: 156/260 batches (60%)
+  ingest progress: 182/260 batches (70%)
+  ingest progress: 208/260 batches (80%)
+  ingest progress: 234/260 batches (90%)
+  ingest progress: 260/260 batches (100%)
+server RTT: 9.90 ms | ES RTT: 374.84 ms | max diff >=2%: 33462.10%
+comparisons:
+N001:
+  cpu_cores: p0:0.205/0.119(72.60%)
+  memory_gb: p0:0.419/0.132(217.68%)
+  network_mbps: p0:70.683/0.401(17524.69%)
+N002:
+  cpu_cores: p0:0.581/0.102(472.34%)
+  memory_gb: p0:1.131/0.100(1025.91%)
+  network_mbps: p0:21.163/1.168(1712.15%)
+N003:
+  cpu_cores: p0:0.125/0.106(18.28%)
+  memory_gb: p0:1.343/0.125(978.21%)
+  network_mbps: p0:99.998/0.298(33462.10%)
+N004:
+  cpu_cores: p0:0.607/0.104(482.05%)
+  memory_gb: p0:1.505/0.154(876.77%)
+  network_mbps: p0:36.028/0.413(8612.90%)
+N005:
+  cpu_cores: p0:0.637/0.103(517.15%) p50:31.285/31.948(2.08%)
+  memory_gb: p0:0.506/0.100(406.27%)
+  network_mbps: p0:5.314/0.196(2607.18%)
+N006:
+  cpu_cores: p0:0.325/0.131(148.15%)
+  memory_gb: p0:0.270/0.108(151.00%)
+  network_mbps: p0:17.945/1.168(1436.28%)
+N007:
+  cpu_cores: p0:0.376/0.128(193.47%)
+  memory_gb: p0:1.325/0.135(884.99%)
+  network_mbps: p0:33.881/0.801(4130.27%)
+N008:
+  cpu_cores: p0:0.303/0.106(185.49%) p50:32.442/31.625(2.58%)
+  memory_gb: p0:1.071/0.132(711.92%)
+  network_mbps: p0:10.038/0.652(1439.95%)
+N009:
+  cpu_cores: p0:0.326/0.125(160.62%)
+  memory_gb: p0:0.277/0.107(158.92%)
+  network_mbps: p0:79.202/0.287(27513.87%)
+N010:
+  cpu_cores: p0:0.144/0.121(18.17%)
+  memory_gb: p0:0.860/0.100(758.40%)
+  network_mbps: p0:42.336/0.480(8711.38%)
+N011:
+  cpu_cores: p0:0.445/0.104(327.13%)
+  memory_gb: p0:0.160/0.149(7.49%) p50:125.683/128.388(2.11%)
+  network_mbps: p0:41.069/0.413(9836.10%)
+N012:
+  cpu_cores: p0:0.130/0.106(21.78%)
+  memory_gb: p0:1.300/0.112(1056.77%)
+  network_mbps: p0:62.242/0.461(13393.32%)
+N013:
+  memory_gb: p0:0.686/0.119(475.71%)
+  network_mbps: p0:51.856/0.573(8946.07%)
+N014:
+  cpu_cores: p0:0.127/0.104(22.50%)
+  memory_gb: p0:2.112/0.113(1769.97%)
+  network_mbps: p0:34.129/2.288(1391.76%)
+N015:
+  cpu_cores: p0:0.283/0.100(181.76%)
+  memory_gb: p0:1.657/0.111(1392.61%)
+  network_mbps: p0:63.546/2.250(2723.71%)
+N016:
+  cpu_cores: p0:0.166/0.103(61.45%)
+  memory_gb: p0:0.967/0.118(721.43%)
+  network_mbps: p0:51.133/0.831(6049.89%)
+N017:
+  cpu_cores: p0:0.709/0.106(569.53%)
+  memory_gb: p0:1.937/0.173(1020.88%)
+  network_mbps: p0:9.944/2.038(387.84%)
+N018:
+  cpu_cores: p0:0.143/0.115(24.71%)
+  memory_gb: p0:0.164/0.110(49.45%)
+  network_mbps: p0:29.673/0.208(14184.69%)
+N019:
+  cpu_cores: p0:0.287/0.100(185.59%)
+  memory_gb: p0:0.583/0.196(196.86%)
+  network_mbps: p0:27.797/0.399(6859.30%)
+N020:
+  cpu_cores: p0:0.797/0.111(621.06%)
+  memory_gb: p0:1.728/0.145(1093.23%)
+  network_mbps: p0:126.823/1.203(10444.34%)
+N021:
+  cpu_cores: p0:0.455/0.112(306.77%)
+  memory_gb: p0:0.204/0.153(33.14%)
+  network_mbps: p0:8.490/0.345(2362.96%)
+N022:
+  cpu_cores: p0:0.285/0.101(183.23%)
+  memory_gb: p0:1.696/0.137(1134.88%)
+  network_mbps: p0:117.383/0.530(22055.11%)
+N023:
+  cpu_cores: p0:0.329/0.101(225.93%)
+  memory_gb: p0:0.560/0.130(330.55%)
+  network_mbps: p0:34.424/0.855(3927.94%)
+N024:
+  cpu_cores: p0:0.135/0.101(33.94%)
+  memory_gb: p0:0.438/0.153(185.59%)
+  network_mbps: p0:40.318/0.916(4302.43%)
+N025:
+  cpu_cores: p0:0.127/0.117(8.35%)
+  memory_gb: p0:0.867/0.140(521.32%)
+  network_mbps: p0:44.651/2.184(1944.01%)
+N026:
+  cpu_cores: p0:0.738/0.103(619.62%)
+  memory_gb: p0:0.379/0.131(190.22%) p50:125.933/129.047(2.41%)
+  network_mbps: p0:9.078/2.157(320.90%)
+N027:
+  cpu_cores: p0:0.424/0.103(312.02%)
+  memory_gb: p0:0.608/0.101(499.55%)
+  network_mbps: p0:76.042/0.324(23382.06%)
+N028:
+  cpu_cores: p0:0.151/0.110(37.54%)
+  memory_gb: p0:1.526/0.146(948.67%)
+  network_mbps: p0:60.731/0.624(9627.35%)
+N029:
+  cpu_cores: p0:0.174/0.109(59.53%)
+  memory_gb: p0:0.264/0.104(153.53%)
+  network_mbps: p0:30.563/1.155(2547.23%)
+N030:
+  cpu_cores: p0:0.113/0.103(9.69%)
+  memory_gb: p0:1.430/0.128(1018.38%)
+  network_mbps: p0:61.012/0.568(10649.69%)
+
+=== Sweep rows=270000 ===
+  ingest progress: 27/270 batches (10%)
+  ingest progress: 54/270 batches (20%)
+  ingest progress: 81/270 batches (30%)
+  ingest progress: 108/270 batches (40%)
+  ingest progress: 135/270 batches (50%)
+  ingest progress: 162/270 batches (60%)
+  ingest progress: 189/270 batches (70%)
+  ingest progress: 216/270 batches (80%)
+  ingest progress: 243/270 batches (90%)
+  ingest progress: 270/270 batches (100%)
+server RTT: 9.61 ms | ES RTT: 322.92 ms | max diff >=2%: 28698.22%
+comparisons:
+N001:
+  memory_gb: p0:1.593/0.114(1292.14%) p50:132.505/129.559(2.27%)
+  network_mbps: p0:3.387/3.136(8.02%)
+N002:
+  cpu_cores: p0:0.156/0.101(54.74%)
+  memory_gb: p0:0.893/0.167(433.33%)
+  network_mbps: p0:37.554/1.085(3360.02%)
+N003:
+  cpu_cores: p0:0.194/0.104(86.15%)
+  memory_gb: p0:0.754/0.108(599.19%)
+  network_mbps: p0:79.386/4.610(1622.22%)
+N004:
+  cpu_cores: p0:0.279/0.105(164.56%)
+  memory_gb: p0:1.020/0.128(695.99%)
+  network_mbps: p0:52.004/0.181(28698.22%) p50:5140.187/5027.693(2.24%)
+N005:
+  cpu_cores: p0:0.137/0.106(29.14%)
+  memory_gb: p0:0.696/0.106(555.51%)
+  network_mbps: p0:23.364/0.139(16724.43%)
+N006:
+  cpu_cores: p0:0.179/0.123(45.24%) p50:31.594/32.245(2.02%)
+  memory_gb: p0:0.636/0.141(350.44%)
+  network_mbps: p0:10.371/1.721(502.59%)
+N007:
+  cpu_cores: p0:0.223/0.103(116.11%)
+  memory_gb: p0:1.835/0.117(1461.60%)
+N008:
+  cpu_cores: p0:0.186/0.111(67.27%)
+  memory_gb: p0:0.693/0.101(587.53%)
+  network_mbps: p0:8.522/0.135(6221.19%)
+N009:
+  cpu_cores: p0:0.150/0.103(45.13%)
+  memory_gb: p0:1.721/0.120(1335.81%)
+  network_mbps: p0:32.012/0.722(4332.42%)
+N010:
+  cpu_cores: p0:0.182/0.102(77.88%)
+  memory_gb: p0:1.625/0.111(1363.45%)
+  network_mbps: p0:99.180/1.259(7779.52%)
+N011:
+  cpu_cores: p0:0.140/0.113(24.51%)
+  memory_gb: p0:0.466/0.227(104.80%)
+  network_mbps: p0:32.102/1.432(2142.43%)
+N012:
+  cpu_cores: p0:0.163/0.101(61.92%)
+  memory_gb: p0:1.618/0.112(1346.60%)
+  network_mbps: p0:3.693/0.985(274.94%)
+N013:
+  cpu_cores: p0:0.209/0.107(94.94%)
+  memory_gb: p0:0.544/0.112(383.63%)
+  network_mbps: p0:39.661/0.506(7737.30%)
+N014:
+  cpu_cores: p0:0.540/0.109(395.51%)
+  memory_gb: p0:0.553/0.118(367.95%)
+  network_mbps: p0:60.302/0.268(22435.27%)
+N015:
+  cpu_cores: p0:0.170/0.103(65.31%)
+  memory_gb: p0:2.931/0.122(2300.77%)
+  network_mbps: p0:9.515/3.435(176.99%)
+N016:
+  cpu_cores: p0:0.744/0.100(642.80%)
+  memory_gb: p0:0.973/0.109(791.03%)
+  network_mbps: p0:19.632/0.604(3150.83%)
+N017:
+  cpu_cores: p0:0.326/0.131(147.90%)
+  memory_gb: p0:0.187/0.114(64.11%)
+  network_mbps: p0:41.285/3.026(1264.51%)
+N018:
+  cpu_cores: p0:0.640/0.113(464.72%)
+  memory_gb: p0:0.337/0.116(189.26%)
+  network_mbps: p0:11.457/0.151(7471.54%)
+N019:
+  cpu_cores: p0:0.112/0.101(10.80%)
+  memory_gb: p0:1.281/0.107(1099.94%)
+  network_mbps: p0:13.970/2.944(374.50%)
+N020:
+  cpu_cores: p0:0.159/0.118(34.52%)
+  memory_gb: p0:0.563/0.107(424.59%)
+  network_mbps: p0:19.114/2.253(748.48%)
+N021:
+  cpu_cores: p0:0.459/0.109(319.60%)
+  memory_gb: p0:0.355/0.141(151.88%)
+  network_mbps: p0:39.953/1.372(2811.40%)
+N022:
+  cpu_cores: p0:0.455/0.101(348.85%)
+  memory_gb: p0:1.619/0.162(897.24%)
+  network_mbps: p0:4.864/1.491(226.17%)
+N023:
+  cpu_cores: p0:0.424/0.117(262.56%)
+  memory_gb: p0:0.136/0.116(17.02%)
+  network_mbps: p0:16.030/0.183(8663.30%)
+N024:
+  cpu_cores: p0:0.178/0.106(67.29%)
+  memory_gb: p0:0.493/0.180(174.26%)
+  network_mbps: p0:16.013/3.186(402.60%)
+N025:
+  cpu_cores: p0:0.116/0.107(8.64%)
+  memory_gb: p0:0.315/0.104(202.49%)
+  network_mbps: p0:5.164/1.691(205.41%)
+N026:
+  cpu_cores: p0:0.162/0.109(49.05%)
+  memory_gb: p0:0.560/0.116(383.82%)
+  network_mbps: p0:101.957/2.218(4496.45%)
+N027:
+  cpu_cores: p0:0.159/0.115(38.21%)
+  memory_gb: p0:0.189/0.125(51.89%)
+  network_mbps: p0:62.398/0.393(15758.70%)
+N028:
+  cpu_cores: p0:0.231/0.110(110.16%)
+  memory_gb: p0:1.288/0.137(839.55%)
+  network_mbps: p0:3.547/1.442(145.97%)
+N029:
+  cpu_cores: p0:0.146/0.111(31.92%)
+  memory_gb: p0:0.565/0.124(354.60%)
+  network_mbps: p0:19.550/0.406(4716.36%)
+N030:
+  cpu_cores: p0:0.695/0.107(547.60%)
+  memory_gb: p0:1.373/0.104(1223.03%)
+  network_mbps: p0:27.621/0.406(6698.84%)
+
+=== Sweep rows=280000 ===
+  ingest progress: 28/280 batches (10%)
+  ingest progress: 56/280 batches (20%)
+  ingest progress: 84/280 batches (30%)
+  ingest progress: 112/280 batches (40%)
+  ingest progress: 140/280 batches (50%)
+  ingest progress: 168/280 batches (60%)
+  ingest progress: 196/280 batches (70%)
+  ingest progress: 224/280 batches (80%)
+  ingest progress: 252/280 batches (90%)
+  ingest progress: 280/280 batches (100%)
+server RTT: 13.12 ms | ES RTT: 328.08 ms | max diff >=2%: 41176.95%
+comparisons:
+N001:
+  cpu_cores: p0:0.153/0.117(30.55%)
+  memory_gb: p0:0.314/0.115(172.47%)
+  network_mbps: p0:49.674/2.254(2104.07%)
+N002:
+  cpu_cores: p0:0.237/0.100(136.32%)
+  memory_gb: p0:2.132/0.108(1870.64%)
+  network_mbps: p0:11.513/8.004(43.85%)
+N003:
+  cpu_cores: p0:0.513/0.107(378.84%)
+  memory_gb: p0:1.203/0.117(925.12%)
+  network_mbps: p0:10.553/0.808(1205.95%)
+N004:
+  cpu_cores: p0:0.594/0.107(455.48%)
+  memory_gb: p0:0.971/0.126(667.71%)
+  network_mbps: p0:90.451/0.219(41176.95%)
+N005:
+  cpu_cores: p0:0.210/0.111(88.91%)
+  memory_gb: p0:1.447/0.121(1092.06%)
+  network_mbps: p0:41.120/0.419(9724.09%) p50:5032.121/5138.107(2.06%)
+N006:
+  cpu_cores: p0:0.385/0.110(249.38%)
+  memory_gb: p0:0.840/0.216(287.86%)
+  network_mbps: p0:35.564/0.451(7781.69%)
+N007:
+  cpu_cores: p0:0.230/0.112(105.29%)
+  memory_gb: p0:0.231/0.120(91.83%)
+  network_mbps: p0:28.323/0.382(7322.55%)
+N008:
+  cpu_cores: p0:0.445/0.103(333.75%)
+  memory_gb: p0:0.460/0.110(317.90%)
+  network_mbps: p0:16.643/1.960(749.12%)
+N009:
+  cpu_cores: p0:0.264/0.105(151.56%)
+  memory_gb: p0:1.105/0.112(888.66%)
+  network_mbps: p0:12.988/0.476(2628.86%)
+N010:
+  cpu_cores: p0:0.129/0.106(21.32%)
+  memory_gb: p0:0.987/0.112(781.14%)
+  network_mbps: p0:19.661/0.706(2684.24%)
+N011:
+  cpu_cores: p0:0.234/0.107(118.03%)
+  memory_gb: p0:0.987/0.122(706.78%)
+  network_mbps: p0:25.955/0.255(10081.98%)
+N012:
+  cpu_cores: p0:0.353/0.103(243.32%)
+  memory_gb: p0:0.901/0.197(357.76%)
+  network_mbps: p0:61.488/0.215(28477.23%)
+N013:
+  cpu_cores: p0:0.239/0.105(128.20%)
+  memory_gb: p0:1.669/0.117(1326.94%)
+  network_mbps: p0:97.401/1.549(6189.52%)
+N014:
+  cpu_cores: p0:0.343/0.102(236.79%)
+  memory_gb: p0:0.346/0.107(223.28%)
+  network_mbps: p0:3.046/0.551(453.30%)
+N015:
+  cpu_cores: p0:0.451/0.108(317.38%)
+  memory_gb: p0:0.594/0.106(458.47%)
+  network_mbps: p0:52.181/0.916(5598.30%)
+N016:
+  cpu_cores: p0:0.484/0.104(365.97%)
+  memory_gb: p0:0.811/0.108(649.41%)
+  network_mbps: p0:21.366/0.385(5444.07%)
+N017:
+  cpu_cores: p0:0.187/0.100(86.08%)
+  memory_gb: p0:0.456/0.114(301.64%)
+  network_mbps: p0:12.329/3.195(285.92%)
+N018:
+  cpu_cores: p0:0.204/0.105(94.87%)
+  memory_gb: p0:2.306/0.110(2003.22%)
+  network_mbps: p0:118.252/2.035(5712.00%)
+N019:
+  cpu_cores: p0:0.502/0.121(316.34%)
+  memory_gb: p0:1.741/0.132(1216.01%)
+  network_mbps: p0:46.546/0.432(10670.57%)
+N020:
+  cpu_cores: p0:0.527/0.107(391.65%)
+  memory_gb: p0:2.994/0.102(2843.80%)
+  network_mbps: p0:32.752/1.752(1768.94%)
+N021:
+  cpu_cores: p0:0.271/0.110(145.38%)
+  memory_gb: p0:0.968/0.128(654.61%)
+  network_mbps: p0:48.517/0.686(6973.59%)
+N022:
+  cpu_cores: p0:0.540/0.114(374.57%)
+  memory_gb: p0:0.781/0.172(353.13%)
+  network_mbps: p0:23.751/0.463(5025.31%)
+N023:
+  cpu_cores: p0:0.204/0.119(70.77%)
+  memory_gb: p0:0.815/0.198(310.88%)
+  network_mbps: p0:31.467/0.301(10365.58%)
+N024:
+  cpu_cores: p0:0.661/0.103(541.26%)
+  memory_gb: p0:0.417/0.126(231.85%)
+  network_mbps: p0:10.763/2.361(355.91%)
+N025:
+  cpu_cores: p0:0.305/0.105(189.13%)
+  memory_gb: p0:0.223/0.128(73.83%)
+  network_mbps: p0:32.070/0.902(3456.44%)
+N026:
+  cpu_cores: p0:0.173/0.110(57.24%)
+  memory_gb: p0:2.644/0.118(2146.71%)
+  network_mbps: p0:54.930/0.253(21627.39%)
+N027:
+  cpu_cores: p0:0.500/0.108(361.08%)
+  memory_gb: p0:1.317/0.151(774.68%)
+  network_mbps: p0:18.440/0.613(2909.39%)
+N028:
+  cpu_cores: p0:0.177/0.113(56.53%)
+  memory_gb: p0:0.575/0.135(326.36%)
+  network_mbps: p0:19.697/2.181(803.22%)
+N029:
+  cpu_cores: p0:0.231/0.101(129.26%)
+  memory_gb: p0:1.325/0.113(1074.86%)
+  network_mbps: p0:36.090/1.770(1939.26%)
+N030:
+  cpu_cores: p0:0.344/0.101(240.44%)
+  memory_gb: p0:0.305/0.122(150.86%)
+  network_mbps: p0:2.089/1.508(38.50%)
+
+=== Sweep rows=290000 ===
+  ingest progress: 29/290 batches (10%)
+  ingest progress: 58/290 batches (20%)
+  ingest progress: 87/290 batches (30%)
+  ingest progress: 116/290 batches (40%)
+  ingest progress: 145/290 batches (50%)
+  ingest progress: 174/290 batches (60%)
+  ingest progress: 203/290 batches (70%)
+  ingest progress: 232/290 batches (80%)
+  ingest progress: 261/290 batches (90%)
+  ingest progress: 290/290 batches (100%)
+server RTT: 10.39 ms | ES RTT: 284.76 ms | max diff >=2%: 78711.30%
+comparisons:
+N001:
+  cpu_cores: p0:0.215/0.102(111.69%)
+  memory_gb: p0:1.387/0.149(833.96%)
+  network_mbps: p0:33.311/1.603(1977.77%)
+N002:
+  cpu_cores: p0:0.140/0.102(37.04%)
+  memory_gb: p0:2.119/0.126(1588.42%)
+  network_mbps: p0:23.355/0.814(2769.20%) p50:4863.066/4964.996(2.05%)
+N003:
+  cpu_cores: p0:0.226/0.107(110.92%)
+  memory_gb: p0:2.404/0.126(1806.98%)
+  network_mbps: p0:11.868/0.127(9280.11%)
+N004:
+  cpu_cores: p0:0.296/0.103(186.72%)
+  memory_gb: p0:0.528/0.102(419.34%)
+  network_mbps: p0:20.529/0.418(4816.37%)
+N005:
+  cpu_cores: p0:0.141/0.103(36.45%)
+  memory_gb: p0:0.159/0.113(40.40%)
+  network_mbps: p0:23.916/0.653(3560.96%)
+N006:
+  cpu_cores: p0:0.228/0.101(125.05%)
+  memory_gb: p0:0.610/0.182(235.18%)
+  network_mbps: p0:33.127/0.277(11852.75%)
+N007:
+  cpu_cores: p0:0.281/0.108(160.84%)
+  memory_gb: p0:1.194/0.116(930.97%)
+  network_mbps: p0:3.261/1.647(97.96%)
+N008:
+  cpu_cores: p0:0.247/0.101(145.51%)
+  memory_gb: p0:0.401/0.102(293.77%) p50:130.068/127.506(2.01%)
+  network_mbps: p0:82.326/0.555(14734.83%)
+N009:
+  cpu_cores: p0:0.158/0.105(50.20%)
+  memory_gb: p0:0.624/0.113(449.82%)
+  network_mbps: p0:10.428/1.332(682.91%)
+N010:
+  cpu_cores: p0:0.405/0.107(279.40%)
+  memory_gb: p0:1.200/0.132(810.57%) p50:130.874/128.037(2.22%)
+  network_mbps: p0:25.079/0.374(6608.81%)
+N011:
+  cpu_cores: p0:0.269/0.105(155.41%)
+  memory_gb: p0:0.181/0.100(81.03%)
+  network_mbps: p0:7.980/1.258(534.13%)
+N012:
+  cpu_cores: p0:0.296/0.109(172.13%)
+  memory_gb: p0:0.165/0.104(58.54%)
+  network_mbps: p0:21.303/4.193(408.03%)
+N013:
+  cpu_cores: p0:0.193/0.120(61.10%)
+  memory_gb: p0:1.475/0.107(1278.90%)
+  network_mbps: p0:34.428/0.160(21426.90%)
+N014:
+  cpu_cores: p0:0.502/0.101(396.22%)
+  memory_gb: p0:0.623/0.101(519.23%)
+  network_mbps: p0:78.311/0.370(21040.31%)
+N015:
+  cpu_cores: p0:0.124/0.105(18.30%)
+  memory_gb: p0:0.943/0.125(654.16%)
+  network_mbps: p0:41.642/0.926(4395.27%)
+N016:
+  memory_gb: p0:1.174/0.121(868.01%)
+  network_mbps: p0:36.640/0.662(5435.41%)
+N017:
+  cpu_cores: p0:0.120/0.111(8.11%)
+  memory_gb: p0:0.513/0.121(325.30%)
+  network_mbps: p0:72.155/0.679(10520.73%)
+N018:
+  cpu_cores: p0:0.112/0.104(8.50%)
+  memory_gb: p0:2.111/0.218(870.47%)
+  network_mbps: p0:42.148/3.155(1236.05%)
+N019:
+  cpu_cores: p0:0.129/0.105(22.92%)
+  memory_gb: p0:0.407/0.144(182.99%)
+  network_mbps: p0:20.526/0.369(5458.97%)
+N020:
+  cpu_cores: p0:0.226/0.112(102.20%)
+  memory_gb: p0:1.027/0.129(696.37%)
+  network_mbps: p0:25.770/1.386(1759.68%)
+N021:
+  cpu_cores: p0:0.320/0.107(199.29%)
+  memory_gb: p0:1.636/0.168(871.95%)
+  network_mbps: p0:73.659/1.737(4139.66%)
+N022:
+  cpu_cores: p0:0.489/0.104(370.13%)
+  memory_gb: p0:0.945/0.127(642.51%)
+  network_mbps: p0:75.111/0.398(18779.32%)
+N023:
+  cpu_cores: p0:0.128/0.109(16.85%)
+  memory_gb: p0:0.625/0.102(515.60%)
+  network_mbps: p0:114.333/0.145(78711.30%)
+N024:
+  cpu_cores: p0:0.660/0.119(456.45%)
+  memory_gb: p0:0.536/0.102(424.35%)
+  network_mbps: p0:48.696/1.978(2361.27%)
+N025:
+  cpu_cores: p0:0.340/0.104(228.47%)
+  memory_gb: p0:1.610/0.215(649.85%)
+  network_mbps: p0:3.833/0.984(289.34%)
+N026:
+  cpu_cores: p0:0.407/0.112(265.08%)
+  memory_gb: p0:0.387/0.119(224.92%)
+  network_mbps: p0:58.868/1.286(4478.17%)
+N027:
+  cpu_cores: p0:0.384/0.100(282.04%)
+  memory_gb: p0:0.602/0.116(417.44%)
+  network_mbps: p0:20.411/1.502(1259.19%)
+N028:
+  cpu_cores: p0:0.234/0.101(131.23%)
+  memory_gb: p0:0.339/0.171(98.78%)
+  network_mbps: p0:48.088/1.224(3830.12%)
+N029:
+  cpu_cores: p0:0.413/0.105(292.20%)
+  memory_gb: p0:1.285/0.117(1001.58%)
+  network_mbps: p0:71.047/1.010(6931.33%)
+N030:
+  cpu_cores: p0:0.298/0.103(190.53%)
+  memory_gb: p0:1.194/0.133(795.03%)
+  network_mbps: p0:34.170/0.156(21796.07%)
+
+=== Sweep rows=300000 ===
+  ingest progress: 30/300 batches (10%)
+  ingest progress: 60/300 batches (20%)
+  ingest progress: 90/300 batches (30%)
+  ingest progress: 120/300 batches (40%)
+  ingest progress: 150/300 batches (50%)
+  ingest progress: 180/300 batches (60%)
+  ingest progress: 210/300 batches (70%)
+  ingest progress: 240/300 batches (80%)
+  ingest progress: 270/300 batches (90%)
+  ingest progress: 300/300 batches (100%)
+server RTT: 10.53 ms | ES RTT: 307.00 ms | max diff >=2%: 22412.63%
+comparisons:
+N001:
+  cpu_cores: p0:0.431/0.103(316.89%)
+  memory_gb: p0:0.392/0.175(124.12%)
+  network_mbps: p0:3.018/1.800(67.68%)
+N002:
+  cpu_cores: p0:0.640/0.101(532.03%)
+  memory_gb: p0:0.319/0.108(195.78%)
+  network_mbps: p0:36.780/0.643(5621.78%)
+N003:
+  cpu_cores: p0:0.854/0.114(649.30%)
+  memory_gb: p0:0.494/0.143(245.96%)
+  network_mbps: p0:40.383/2.603(1451.60%)
+N004:
+  cpu_cores: p0:0.347/0.102(240.22%) p50:33.137/32.469(2.06%)
+  memory_gb: p0:0.601/0.102(491.71%)
+  network_mbps: p0:48.924/1.221(3906.55%)
+N005:
+  cpu_cores: p0:0.207/0.112(84.47%)
+  memory_gb: p0:1.590/0.101(1468.99%)
+  network_mbps: p0:45.340/0.338(13296.92%)
+N006:
+  cpu_cores: p0:0.207/0.102(103.56%)
+  network_mbps: p0:27.083/2.606(939.35%)
+N007:
+  cpu_cores: p0:0.542/0.103(424.53%)
+  memory_gb: p0:0.205/0.188(8.92%)
+  network_mbps: p0:38.399/0.275(13837.79%)
+N008:
+  cpu_cores: p0:0.379/0.106(257.99%)
+  memory_gb: p0:0.141/0.128(10.42%)
+  network_mbps: p0:77.861/2.578(2920.17%)
+N009:
+  cpu_cores: p0:0.651/0.104(527.33%)
+  memory_gb: p0:0.165/0.103(59.92%)
+  network_mbps: p0:58.125/0.665(8646.62%)
+N010:
+  cpu_cores: p0:0.166/0.110(50.18%)
+  memory_gb: p0:1.009/0.196(413.91%)
+  network_mbps: p0:36.014/0.406(8777.62%)
+N011:
+  cpu_cores: p0:0.155/0.103(50.84%)
+  memory_gb: p0:1.975/0.114(1638.05%)
+  network_mbps: p0:16.567/0.444(3629.78%)
+N012:
+  cpu_cores: p0:0.260/0.106(144.35%)
+  network_mbps: p0:37.974/1.123(3280.22%)
+N013:
+  cpu_cores: p0:0.144/0.110(30.15%)
+  memory_gb: p0:2.549/0.122(1984.25%)
+  network_mbps: p0:18.813/0.208(8946.98%) p50:4932.017/5038.592(2.12%)
+N014:
+  cpu_cores: p0:0.164/0.100(63.92%)
+  memory_gb: p0:0.319/0.114(181.03%)
+  network_mbps: p0:30.810/2.182(1311.90%)
+N015:
+  cpu_cores: p0:0.366/0.106(244.51%)
+  memory_gb: p0:0.516/0.144(257.76%)
+  network_mbps: p0:58.298/0.266(21817.43%)
+N016:
+  cpu_cores: p0:0.160/0.107(48.87%)
+  memory_gb: p0:0.520/0.207(150.44%)
+  network_mbps: p0:12.994/1.899(584.26%)
+N017:
+  cpu_cores: p0:0.462/0.100(361.08%)
+  memory_gb: p0:1.148/0.108(963.09%)
+  network_mbps: p0:22.968/2.693(752.94%)
+N018:
+  cpu_cores: p0:0.289/0.107(170.31%)
+  memory_gb: p0:0.830/0.160(418.34%)
+  network_mbps: p0:104.431/1.901(5393.77%)
+N019:
+  cpu_cores: p0:0.359/0.104(244.08%)
+  memory_gb: p0:0.796/0.120(564.72%)
+  network_mbps: p0:10.085/0.684(1375.14%)
+N020:
+  cpu_cores: p0:0.120/0.101(18.36%)
+  memory_gb: p0:3.139/0.113(2686.93%)
+  network_mbps: p0:41.953/1.917(2088.66%)
+N021:
+  cpu_cores: p0:0.383/0.107(257.39%)
+  memory_gb: p0:2.538/0.141(1695.66%)
+  network_mbps: p0:18.163/0.890(1940.32%)
+N022:
+  cpu_cores: p0:0.641/0.119(440.57%)
+  memory_gb: p0:0.159/0.127(25.08%)
+  network_mbps: p0:47.080/0.604(7700.89%)
+N023:
+  cpu_cores: p0:0.124/0.109(13.64%)
+  memory_gb: p0:0.344/0.122(181.49%)
+  network_mbps: p0:76.961/1.149(6598.97%)
+N024:
+  cpu_cores: p0:0.327/0.100(225.42%)
+  network_mbps: p0:26.789/0.910(2843.91%)
+N025:
+  cpu_cores: p0:0.963/0.105(820.52%)
+  memory_gb: p0:0.499/0.107(366.81%)
+  network_mbps: p0:105.809/0.470(22412.63%)
+N026:
+  cpu_cores: p0:0.236/0.104(126.18%)
+  memory_gb: p0:1.396/0.123(1039.35%)
+  network_mbps: p0:21.251/0.583(3543.51%)
+N027:
+  cpu_cores: p0:0.469/0.102(361.02%)
+  memory_gb: p0:3.235/0.114(2735.68%)
+  network_mbps: p0:3.226/0.635(407.92%)
+N028:
+  cpu_cores: p0:0.509/0.100(406.98%)
+  memory_gb: p0:1.505/0.104(1343.73%)
+  network_mbps: p0:8.959/1.891(373.89%)
+N029:
+  cpu_cores: p0:0.333/0.102(225.90%)
+  memory_gb: p0:1.366/0.105(1206.27%)
+  network_mbps: p0:17.135/0.929(1744.72%)
+N030:
+  cpu_cores: p0:0.834/0.105(690.51%)
+  memory_gb: p0:1.170/0.106(1004.40%)
+  network_mbps: p0:60.538/3.106(1849.13%)
+
+=== Sweep rows=310000 ===
+  ingest progress: 31/310 batches (10%)
+  ingest progress: 62/310 batches (20%)
+  ingest progress: 93/310 batches (30%)
+  ingest progress: 124/310 batches (40%)
+  ingest progress: 155/310 batches (50%)
+  ingest progress: 186/310 batches (60%)
+  ingest progress: 217/310 batches (70%)
+  ingest progress: 248/310 batches (80%)
+  ingest progress: 279/310 batches (90%)
+  ingest progress: 310/310 batches (100%)
+server RTT: 12.08 ms | ES RTT: 318.51 ms | max diff >=2%: 25235.06%
+comparisons:
+N001:
+  cpu_cores: p0:0.294/0.108(171.44%)
+  memory_gb: p0:0.194/0.143(35.61%)
+N002:
+  memory_gb: p0:0.207/0.145(43.29%)
+  network_mbps: p0:44.974/3.562(1162.73%)
+N003:
+  cpu_cores: p0:0.136/0.118(15.01%)
+  memory_gb: p0:0.283/0.104(171.77%)
+  network_mbps: p0:5.815/0.135(4214.35%)
+N004:
+  cpu_cores: p0:0.147/0.120(22.64%)
+  memory_gb: p0:0.154/0.113(36.23%)
+  network_mbps: p0:28.515/0.227(12476.62%)
+N005:
+  cpu_cores: p0:0.300/0.105(184.50%)
+  memory_gb: p0:0.378/0.161(134.93%)
+  network_mbps: p0:38.476/0.792(4757.28%)
+N006:
+  cpu_cores: p0:0.127/0.100(26.41%)
+  memory_gb: p0:0.516/0.101(413.05%)
+N007:
+  cpu_cores: p0:0.175/0.100(75.36%)
+  memory_gb: p0:0.898/0.101(792.65%)
+  network_mbps: p0:25.272/0.198(12649.72%)
+N008:
+  cpu_cores: p0:0.187/0.126(48.20%)
+  memory_gb: p0:0.783/0.114(584.21%)
+  network_mbps: p0:20.615/0.352(5755.65%)
+N009:
+  cpu_cores: p0:0.703/0.107(555.70%)
+  memory_gb: p0:0.947/0.110(762.19%)
+  network_mbps: p0:8.185/2.986(174.16%)
+N010:
+  cpu_cores: p0:0.180/0.101(78.87%)
+  memory_gb: p0:0.154/0.137(12.63%)
+  network_mbps: p0:25.358/2.756(820.21%)
+N011:
+  cpu_cores: p0:0.246/0.106(132.34%)
+  memory_gb: p0:0.289/0.114(152.82%)
+  network_mbps: p0:59.073/0.913(6370.57%)
+N012:
+  cpu_cores: p0:0.154/0.113(36.22%)
+  memory_gb: p0:0.190/0.102(85.64%)
+  network_mbps: p0:21.472/2.560(738.91%)
+N013:
+  cpu_cores: p0:0.213/0.100(112.47%)
+  memory_gb: p0:1.148/0.154(645.03%)
+N014:
+  cpu_cores: p0:0.218/0.122(78.56%)
+  memory_gb: p0:0.111/0.102(9.44%)
+  network_mbps: p0:54.046/0.213(25235.06%)
+N015:
+  cpu_cores: p0:0.768/0.108(611.94%)
+  memory_gb: p0:0.709/0.108(557.65%)
+  network_mbps: p0:57.517/1.089(5180.63%)
+N016:
+  cpu_cores: p0:0.243/0.101(140.97%)
+  memory_gb: p0:0.805/0.161(400.11%)
+  network_mbps: p0:9.610/4.130(132.68%)
+N017:
+  cpu_cores: p0:0.322/0.109(195.57%)
+  memory_gb: p0:0.888/0.131(579.43%) p50:131.270/127.938(2.60%)
+  network_mbps: p0:10.286/0.534(1827.45%)
+N018:
+  cpu_cores: p0:0.322/0.103(212.05%)
+  memory_gb: p0:1.132/0.138(717.62%)
+  network_mbps: p0:9.570/0.509(1781.39%)
+N019:
+  cpu_cores: p0:0.407/0.127(220.64%)
+  memory_gb: p0:0.338/0.163(107.79%)
+  network_mbps: p0:37.106/1.603(2215.09%)
+N020:
+  cpu_cores: p0:0.586/0.105(456.01%)
+  memory_gb: p0:0.377/0.123(206.18%)
+  network_mbps: p0:11.705/1.189(884.77%)
+N021:
+  cpu_cores: p0:0.137/0.110(24.28%)
+  network_mbps: p0:0.736/0.146(405.56%)
+N022:
+  cpu_cores: p0:0.418/0.106(293.64%)
+  memory_gb: p0:0.373/0.123(203.97%)
+  network_mbps: p0:30.934/0.378(8086.29%)
+N023:
+  memory_gb: p0:1.086/0.106(926.41%)
+  network_mbps: p0:5.825/0.903(545.01%)
+N024:
+  cpu_cores: p0:0.153/0.117(30.56%)
+  memory_gb: p0:0.295/0.112(164.75%)
+  network_mbps: p0:36.488/3.098(1077.97%)
+N025:
+  cpu_cores: p0:0.204/0.103(97.56%)
+  memory_gb: p0:1.582/0.138(1045.90%)
+  network_mbps: p0:13.274/0.797(1566.37%)
+N026:
+  cpu_cores: p0:0.201/0.107(88.02%)
+  memory_gb: p0:0.687/0.108(536.29%)
+  network_mbps: p0:4.485/0.942(375.94%)
+N027:
+  cpu_cores: p0:0.132/0.121(8.55%)
+  memory_gb: p0:0.103/0.101(2.07%)
+  network_mbps: p0:13.865/1.042(1230.25%)
+N028:
+  cpu_cores: p0:0.425/0.104(308.97%)
+  memory_gb: p0:1.938/0.104(1764.16%)
+  network_mbps: p0:50.134/1.708(2835.29%)
+N029:
+  cpu_cores: p0:0.369/0.106(247.57%)
+  memory_gb: p0:1.550/0.120(1195.03%)
+  network_mbps: p0:9.135/0.147(6112.82%)
+N030:
+  cpu_cores: p0:0.134/0.103(30.23%)
+  memory_gb: p0:1.338/0.100(1234.30%)
+  network_mbps: p0:0.623/0.117(430.88%)
+
+=== Sweep rows=320000 ===
+  ingest progress: 32/320 batches (10%)
+  ingest progress: 64/320 batches (20%)
+  ingest progress: 96/320 batches (30%)
+  ingest progress: 128/320 batches (40%)
+  ingest progress: 160/320 batches (50%)
+  ingest progress: 192/320 batches (60%)
+  ingest progress: 224/320 batches (70%)
+  ingest progress: 256/320 batches (80%)
+  ingest progress: 288/320 batches (90%)
+  ingest progress: 320/320 batches (100%)
+server RTT: 14.36 ms | ES RTT: 363.75 ms | max diff >=2%: 26603.98%
+comparisons:
+N001:
+  cpu_cores: p0:0.260/0.103(150.89%)
+  memory_gb: p0:1.003/0.149(574.90%)
+  network_mbps: p0:22.866/0.454(4939.51%)
+N002:
+  cpu_cores: p0:0.318/0.117(172.94%)
+  memory_gb: p0:2.295/0.100(2192.03%)
+  network_mbps: p0:81.176/0.437(18475.89%)
+N003:
+  cpu_cores: p0:0.144/0.109(32.48%)
+  memory_gb: p0:0.190/0.122(56.08%)
+  network_mbps: p0:44.458/1.424(3022.16%)
+N004:
+  cpu_cores: p0:0.187/0.110(68.96%)
+  memory_gb: p0:0.473/0.114(314.33%)
+  network_mbps: p0:16.978/0.347(4796.08%)
+N005:
+  cpu_cores: p0:0.328/0.100(226.73%)
+  memory_gb: p0:2.896/0.136(2031.70%)
+  network_mbps: p0:2.239/0.247(807.14%)
+N006:
+  cpu_cores: p0:0.251/0.100(150.09%)
+  memory_gb: p0:0.765/0.120(540.16%)
+  network_mbps: p0:4.307/0.106(3957.29%)
+N007:
+  cpu_cores: p0:0.500/0.125(300.91%)
+  memory_gb: p0:0.883/0.124(611.98%)
+  network_mbps: p0:12.770/1.468(769.73%)
+N008:
+  cpu_cores: p0:0.482/0.109(341.38%)
+  memory_gb: p0:0.971/0.143(577.28%)
+  network_mbps: p0:38.116/0.263(14394.90%)
+N009:
+  cpu_cores: p0:0.278/0.100(176.80%)
+  memory_gb: p0:0.492/0.133(270.35%)
+  network_mbps: p0:66.824/0.250(26603.98%)
+N010:
+  cpu_cores: p0:0.449/0.114(294.08%)
+  memory_gb: p0:0.706/0.107(558.92%)
+  network_mbps: p0:36.187/0.536(6652.06%)
+N011:
+  cpu_cores: p0:0.195/0.100(95.04%)
+  memory_gb: p0:0.263/0.103(154.35%)
+  network_mbps: p0:50.455/0.504(9911.45%)
+N012:
+  cpu_cores: p0:0.108/0.100(7.36%)
+  memory_gb: p0:0.297/0.173(71.40%)
+  network_mbps: p0:78.898/0.380(20660.80%)
+N013:
+  cpu_cores: p0:0.189/0.104(82.13%)
+  memory_gb: p0:0.785/0.126(520.99%)
+  network_mbps: p0:8.502/1.020(733.22%)
+N014:
+  cpu_cores: p0:0.572/0.110(420.85%)
+  memory_gb: p0:0.280/0.110(154.00%)
+  network_mbps: p0:11.587/1.276(808.21%)
+N015:
+  cpu_cores: p0:0.293/0.105(179.87%)
+  network_mbps: p0:52.676/1.178(4370.75%)
+N016:
+  cpu_cores: p0:0.563/0.100(460.58%)
+  memory_gb: p0:0.399/0.132(201.74%)
+  network_mbps: p0:40.451/0.924(4276.65%)
+N017:
+  cpu_cores: p0:0.615/0.108(471.89%)
+  memory_gb: p0:0.496/0.117(322.33%)
+  network_mbps: p0:40.303/1.718(2245.66%)
+N018:
+  cpu_cores: p0:0.789/0.103(667.17%)
+  memory_gb: p0:0.307/0.124(148.19%)
+  network_mbps: p0:53.356/0.972(5387.35%)
+N019:
+  cpu_cores: p0:0.271/0.101(168.94%)
+  memory_gb: p0:1.701/0.140(1114.61%)
+  network_mbps: p0:6.535/2.028(222.20%)
+N020:
+  cpu_cores: p0:0.185/0.111(67.19%)
+  memory_gb: p0:0.603/0.156(286.01%)
+  network_mbps: p0:30.452/0.211(14350.91%)
+N021:
+  cpu_cores: p0:0.286/0.120(137.85%)
+  memory_gb: p0:0.210/0.109(93.00%)
+  network_mbps: p0:6.181/1.527(304.71%)
+N022:
+  cpu_cores: p0:0.198/0.113(74.89%)
+  memory_gb: p0:0.203/0.128(59.27%)
+N023:
+  cpu_cores: p0:0.220/0.105(110.51%)
+  memory_gb: p0:0.215/0.137(57.31%)
+  network_mbps: p0:4.276/0.281(1420.24%)
+N024:
+  cpu_cores: p0:0.252/0.101(150.92%)
+  memory_gb: p0:0.814/0.106(664.57%)
+  network_mbps: p0:31.188/0.896(3379.66%)
+N025:
+  cpu_cores: p0:0.113/0.106(6.96%)
+  memory_gb: p0:0.138/0.126(9.81%)
+  network_mbps: p0:22.803/0.307(7334.24%)
+N026:
+  cpu_cores: p0:0.220/0.103(114.43%)
+  memory_gb: p0:0.218/0.111(96.71%)
+  network_mbps: p0:5.674/0.820(592.22%)
+N027:
+  cpu_cores: p0:0.230/0.102(126.65%)
+  memory_gb: p0:0.298/0.164(81.70%) p50:125.010/128.041(2.37%)
+  network_mbps: p0:32.555/0.466(6890.01%)
+N028:
+  cpu_cores: p0:0.118/0.106(11.51%)
+  memory_gb: p0:0.183/0.124(47.56%)
+  network_mbps: p0:37.728/0.482(7719.34%)
+N029:
+  cpu_cores: p0:0.103/0.100(2.29%)
+  memory_gb: p0:0.668/0.107(523.12%)
+  network_mbps: p0:40.939/0.540(7483.99%)
+N030:
+  cpu_cores: p0:0.240/0.102(135.04%)
+  memory_gb: p0:1.292/0.110(1076.22%)
+  network_mbps: p0:35.203/1.204(2823.01%)
+
+=== Sweep rows=330000 ===
+  ingest progress: 33/330 batches (10%)
+  ingest progress: 66/330 batches (20%)
+  ingest progress: 99/330 batches (30%)
+  ingest progress: 132/330 batches (40%)
+  ingest progress: 165/330 batches (50%)
+  ingest progress: 198/330 batches (60%)
+  ingest progress: 231/330 batches (70%)
+  ingest progress: 264/330 batches (80%)
+  ingest progress: 297/330 batches (90%)
+  ingest progress: 330/330 batches (100%)
+server RTT: 12.36 ms | ES RTT: 404.77 ms | max diff >=2%: 15578.51%
+comparisons:
+N001:
+  cpu_cores: p0:0.212/0.118(79.07%)
+  memory_gb: p0:0.939/0.101(832.91%)
+  network_mbps: p0:15.464/1.201(1187.50%)
+N002:
+  cpu_cores: p0:0.682/0.102(567.63%)
+  memory_gb: p0:2.582/0.115(2137.17%)
+  network_mbps: p0:27.315/1.094(2396.91%)
+N003:
+  cpu_cores: p0:0.214/0.101(112.35%)
+  memory_gb: p0:1.672/0.149(1025.51%)
+  network_mbps: p0:25.755/0.175(14637.57%)
+N004:
+  cpu_cores: p0:0.364/0.103(252.95%)
+  memory_gb: p0:0.963/0.129(649.01%)
+  network_mbps: p0:18.329/0.141(12908.46%)
+N005:
+  cpu_cores: p0:0.236/0.100(135.69%)
+  memory_gb: p0:2.331/0.113(1961.94%)
+  network_mbps: p0:3.199/0.527(507.12%)
+N006:
+  memory_gb: p0:0.196/0.101(94.49%)
+  network_mbps: p0:9.122/0.891(924.27%)
+N007:
+  cpu_cores: p0:0.137/0.106(29.53%)
+  memory_gb: p0:0.947/0.130(631.05%)
+  network_mbps: p0:17.995/3.161(469.26%)
+N008:
+  cpu_cores: p0:0.377/0.104(264.17%)
+  memory_gb: p0:0.406/0.131(209.94%)
+  network_mbps: p0:75.849/0.557(13510.89%)
+N009:
+  cpu_cores: p0:0.599/0.103(482.75%)
+  memory_gb: p0:0.305/0.121(152.54%)
+  network_mbps: p0:3.034/1.007(201.35%)
+N010:
+  cpu_cores: p0:0.138/0.101(37.03%)
+  memory_gb: p0:0.267/0.117(129.11%)
+  network_mbps: p0:43.956/0.623(6951.26%)
+N011:
+  cpu_cores: p0:0.577/0.102(467.13%)
+  memory_gb: p0:0.450/0.131(244.55%)
+  network_mbps: p0:43.778/1.781(2358.01%)
+N012:
+  cpu_cores: p0:0.265/0.106(150.74%)
+  memory_gb: p0:0.567/0.110(413.98%)
+  network_mbps: p0:13.388/0.725(1747.91%)
+N013:
+  cpu_cores: p0:0.202/0.102(98.39%)
+  memory_gb: p0:0.889/0.102(767.22%)
+  network_mbps: p0:51.731/0.593(8625.59%)
+N014:
+  cpu_cores: p0:0.139/0.101(36.82%)
+  memory_gb: p0:0.474/0.120(293.44%)
+  network_mbps: p0:15.181/0.973(1460.23%)
+N015:
+  cpu_cores: p0:0.144/0.102(41.31%)
+  memory_gb: p0:1.988/0.105(1786.60%)
+  network_mbps: p0:20.308/3.369(502.80%)
+N016:
+  cpu_cores: p0:0.121/0.102(18.92%)
+  memory_gb: p0:0.666/0.127(423.84%)
+  network_mbps: p0:29.499/0.709(4061.63%) p50:5048.536/4945.379(2.09%)
+N017:
+  cpu_cores: p0:0.157/0.102(53.48%)
+  memory_gb: p0:2.359/0.105(2142.78%)
+  network_mbps: p0:36.197/0.231(15578.51%)
+N018:
+  cpu_cores: p0:0.223/0.111(101.36%)
+  memory_gb: p0:0.294/0.121(142.79%)
+  network_mbps: p0:53.943/0.794(6689.60%)
+N019:
+  cpu_cores: p0:0.251/0.103(143.57%)
+  memory_gb: p0:1.141/0.113(910.38%)
+  network_mbps: p0:25.392/0.756(3260.05%)
+N020:
+  cpu_cores: p0:0.159/0.107(48.46%)
+  memory_gb: p0:0.450/0.112(300.31%)
+  network_mbps: p0:16.119/1.501(973.71%)
+N021:
+  cpu_cores: p0:0.223/0.110(102.32%)
+  memory_gb: p0:1.105/0.104(958.41%)
+  network_mbps: p0:26.633/1.427(1765.93%)
+N022:
+  cpu_cores: p0:0.149/0.100(48.27%)
+  memory_gb: p0:1.882/0.130(1352.17%)
+  network_mbps: p0:17.872/0.574(3012.00%)
+N023:
+  cpu_cores: p0:0.464/0.109(324.03%)
+  memory_gb: p0:0.587/0.137(328.62%)
+  network_mbps: p0:1.766/0.275(542.67%)
+N024:
+  cpu_cores: p0:0.114/0.109(4.62%)
+  memory_gb: p0:0.322/0.117(174.93%)
+  network_mbps: p0:11.036/0.153(7097.60%)
+N025:
+  cpu_cores: p0:0.144/0.101(42.84%)
+  memory_gb: p0:2.012/0.132(1422.82%)
+  network_mbps: p0:14.031/0.551(2445.00%)
+N026:
+  cpu_cores: p0:0.330/0.103(221.63%)
+  memory_gb: p0:0.624/0.123(405.90%)
+  network_mbps: p0:8.668/0.222(3811.72%)
+N027:
+  cpu_cores: p0:0.142/0.106(33.72%)
+  memory_gb: p0:0.553/0.109(405.53%)
+  network_mbps: p0:24.037/0.518(4544.02%)
+N028:
+  cpu_cores: p0:0.432/0.103(320.99%)
+  memory_gb: p0:1.026/0.111(825.85%)
+  network_mbps: p0:62.279/2.035(2960.69%)
+N029:
+  cpu_cores: p0:0.140/0.102(38.07%) p50:31.376/32.101(2.26%)
+  memory_gb: p0:1.143/0.172(566.38%)
+  network_mbps: p0:3.116/0.191(1529.27%)
+N030:
+  cpu_cores: p0:0.265/0.108(146.03%)
+  memory_gb: p0:0.191/0.133(43.38%)
+  network_mbps: p0:18.454/0.731(2424.43%)
+
+=== Sweep rows=340000 ===
+  ingest progress: 34/340 batches (10%)
+  ingest progress: 68/340 batches (20%)
+  ingest progress: 102/340 batches (30%)
+  ingest progress: 136/340 batches (40%)
+  ingest progress: 170/340 batches (50%)
+  ingest progress: 204/340 batches (60%)
+  ingest progress: 238/340 batches (70%)
+  ingest progress: 272/340 batches (80%)
+  ingest progress: 306/340 batches (90%)
+  ingest progress: 340/340 batches (100%)
+server RTT: 12.27 ms | ES RTT: 378.37 ms | max diff >=2%: 39379.83%
+comparisons:
+N001:
+  cpu_cores: p0:0.451/0.102(343.95%)
+  memory_gb: p0:1.347/0.129(941.67%)
+  network_mbps: p0:4.226/1.397(202.51%)
+N002:
+  cpu_cores: p0:0.109/0.102(6.07%)
+  memory_gb: p0:0.428/0.149(188.20%)
+  network_mbps: p0:7.467/0.270(2666.96%)
+N003:
+  cpu_cores: p0:0.281/0.103(172.56%)
+  memory_gb: p0:0.713/0.102(601.35%)
+  network_mbps: p0:19.577/1.499(1206.11%)
+N004:
+  cpu_cores: p0:0.168/0.103(63.35%) p50:31.469/32.152(2.12%)
+  memory_gb: p0:0.257/0.104(146.52%)
+  network_mbps: p0:33.006/1.391(2272.83%)
+N005:
+  cpu_cores: p0:0.182/0.104(76.10%) p50:32.250/31.541(2.25%)
+  memory_gb: p0:0.305/0.186(64.19%)
+  network_mbps: p0:53.759/1.661(3135.95%)
+N006:
+  cpu_cores: p0:0.131/0.101(30.14%)
+  network_mbps: p0:56.436/0.941(5900.57%)
+N007:
+  cpu_cores: p0:0.299/0.101(194.69%)
+  memory_gb: p0:1.567/0.105(1388.28%)
+  network_mbps: p0:75.461/0.423(17759.11%)
+N008:
+  cpu_cores: p0:0.181/0.126(43.02%)
+  memory_gb: p0:0.379/0.137(176.90%) p50:132.402/129.432(2.29%)
+  network_mbps: p0:19.772/1.788(1005.85%)
+N009:
+  cpu_cores: p0:0.366/0.100(265.33%)
+  memory_gb: p0:0.501/0.112(346.29%)
+  network_mbps: p0:11.428/1.263(804.55%)
+N010:
+  cpu_cores: p0:0.222/0.101(119.62%)
+  memory_gb: p0:1.284/0.128(899.58%)
+  network_mbps: p0:10.553/0.451(2241.72%)
+N011:
+  memory_gb: p0:0.792/0.134(491.61%)
+  network_mbps: p0:18.407/1.523(1108.43%)
+N012:
+  cpu_cores: p0:0.132/0.113(16.12%)
+  memory_gb: p0:0.815/0.114(612.36%)
+  network_mbps: p0:29.890/0.105(28303.65%)
+N013:
+  cpu_cores: p0:0.122/0.104(17.50%)
+  memory_gb: p0:0.717/0.136(425.51%)
+  network_mbps: p0:55.037/0.521(10469.36%)
+N014:
+  cpu_cores: p0:0.241/0.102(134.97%)
+  memory_gb: p0:0.472/0.101(368.01%)
+  network_mbps: p0:18.612/2.458(657.25%)
+N015:
+  cpu_cores: p0:0.157/0.108(45.70%)
+  memory_gb: p0:1.123/0.119(840.83%)
+  network_mbps: p0:47.370/0.120(39379.83%)
+N016:
+  cpu_cores: p0:0.313/0.109(186.11%)
+  network_mbps: p0:8.074/0.579(1293.39%)
+N017:
+  cpu_cores: p0:0.435/0.107(305.41%)
+  memory_gb: p0:0.672/0.108(522.59%)
+  network_mbps: p0:52.928/0.519(10090.83%)
+N018:
+  cpu_cores: p0:0.518/0.101(410.85%)
+  memory_gb: p0:1.808/0.126(1334.91%)
+  network_mbps: p0:26.341/0.154(16973.16%)
+N019:
+  cpu_cores: p0:0.312/0.110(184.44%)
+  memory_gb: p0:0.710/0.122(479.91%)
+  network_mbps: p0:30.453/1.066(2755.75%)
+N020:
+  cpu_cores: p0:0.531/0.105(406.04%)
+  memory_gb: p0:1.795/0.134(1239.74%)
+  network_mbps: p0:31.231/0.298(10364.79%)
+N021:
+  cpu_cores: p0:0.211/0.102(106.84%)
+  memory_gb: p0:0.128/0.117(9.75%)
+  network_mbps: p0:2.941/0.169(1635.57%)
+N022:
+  cpu_cores: p0:0.153/0.103(48.15%)
+  memory_gb: p0:1.100/0.114(868.83%)
+  network_mbps: p0:10.539/0.809(1202.26%)
+N023:
+  cpu_cores: p0:0.285/0.100(183.36%)
+  memory_gb: p0:0.773/0.105(637.27%)
+  network_mbps: p0:43.527/0.373(11571.04%)
+N024:
+  cpu_cores: p0:0.151/0.101(49.67%)
+  memory_gb: p0:0.684/0.166(311.88%)
+  network_mbps: p0:18.144/0.781(2223.20%)
+N025:
+  cpu_cores: p0:0.226/0.100(125.80%)
+  memory_gb: p0:0.597/0.111(439.80%)
+  network_mbps: p0:32.306/0.480(6634.06%)
+N026:
+  cpu_cores: p0:0.146/0.102(44.17%)
+  memory_gb: p0:0.758/0.102(640.45%)
+  network_mbps: p0:10.111/1.305(674.85%)
+N027:
+  cpu_cores: p0:0.625/0.103(504.01%)
+  memory_gb: p0:0.397/0.101(292.73%)
+  network_mbps: p0:25.263/1.255(1912.96%)
+N028:
+  cpu_cores: p0:0.426/0.101(323.54%)
+  memory_gb: p0:1.762/0.109(1509.37%)
+  network_mbps: p0:37.344/0.207(17923.12%)
+N029:
+  cpu_cores: p0:0.393/0.103(281.44%)
+  network_mbps: p0:6.352/1.217(421.95%)
+N030:
+  cpu_cores: p0:0.357/0.103(247.00%)
+  memory_gb: p0:0.381/0.101(276.39%)
+  network_mbps: p0:37.025/0.494(7390.55%)
+
+=== Sweep rows=350000 ===
+  ingest progress: 35/350 batches (10%)
+  ingest progress: 70/350 batches (20%)
+  ingest progress: 105/350 batches (30%)
+  ingest progress: 140/350 batches (40%)
+  ingest progress: 175/350 batches (50%)
+  ingest progress: 210/350 batches (60%)
+  ingest progress: 245/350 batches (70%)
+  ingest progress: 280/350 batches (80%)
+  ingest progress: 315/350 batches (90%)
+  ingest progress: 350/350 batches (100%)
+server RTT: 11.65 ms | ES RTT: 366.49 ms | max diff >=2%: 56167.51%
+comparisons:
+N001:
+  cpu_cores: p0:0.439/0.106(315.13%)
+  memory_gb: p0:1.302/0.104(1148.99%)
+  network_mbps: p0:5.952/0.815(629.98%)
+N002:
+  cpu_cores: p0:0.189/0.102(85.90%)
+  memory_gb: p0:1.301/0.139(834.39%)
+  network_mbps: p0:52.366/1.297(3937.43%)
+N003:
+  cpu_cores: p0:0.378/0.100(276.24%)
+  memory_gb: p0:0.657/0.106(517.06%)
+  network_mbps: p0:8.553/0.720(1087.93%)
+N004:
+  cpu_cores: p0:0.396/0.106(272.60%)
+  memory_gb: p0:0.722/0.102(607.43%)
+  network_mbps: p0:69.927/4.962(1309.31%)
+N005:
+  cpu_cores: p0:0.244/0.103(137.51%)
+  memory_gb: p0:1.397/0.135(936.73%)
+  network_mbps: p0:1.543/1.033(49.32%)
+N006:
+  cpu_cores: p0:0.254/0.107(136.98%)
+  memory_gb: p0:0.351/0.138(154.09%)
+  network_mbps: p0:47.435/1.176(3934.28%)
+N007:
+  cpu_cores: p0:0.419/0.106(295.32%)
+  memory_gb: p0:0.909/0.107(750.76%)
+  network_mbps: p0:55.678/0.388(14259.28%)
+N008:
+  cpu_cores: p0:0.264/0.101(162.21%)
+  memory_gb: p0:1.014/0.104(873.70%)
+  network_mbps: p0:39.000/1.641(2275.90%)
+N009:
+  cpu_cores: p0:0.419/0.102(309.67%)
+  memory_gb: p0:0.781/0.109(614.36%)
+  network_mbps: p0:52.847/0.745(6989.90%)
+N010:
+  cpu_cores: p0:0.597/0.101(492.84%)
+  memory_gb: p0:0.303/0.129(135.91%)
+  network_mbps: p0:25.333/1.169(2067.19%)
+N011:
+  cpu_cores: p0:0.181/0.102(77.53%)
+  memory_gb: p0:0.139/0.131(6.28%)
+  network_mbps: p0:3.899/0.128(2951.52%)
+N012:
+  cpu_cores: p0:0.128/0.110(15.87%)
+  memory_gb: p0:0.431/0.139(209.95%)
+  network_mbps: p0:10.348/1.011(923.51%)
+N013:
+  cpu_cores: p0:0.452/0.100(350.73%)
+  memory_gb: p0:0.509/0.103(394.32%)
+  network_mbps: p0:16.568/1.345(1131.87%)
+N014:
+  cpu_cores: p0:0.150/0.102(46.68%)
+  memory_gb: p0:1.101/0.116(849.09%)
+N015:
+  cpu_cores: p0:0.370/0.102(264.44%)
+  memory_gb: p0:0.850/0.141(503.00%)
+  network_mbps: p0:46.156/2.526(1727.30%)
+N016:
+  cpu_cores: p0:0.186/0.102(81.88%)
+  memory_gb: p0:1.420/0.112(1171.75%)
+  network_mbps: p0:13.897/0.461(2917.14%)
+N017:
+  cpu_cores: p0:0.146/0.112(31.23%)
+  memory_gb: p0:0.839/0.150(458.67%)
+  network_mbps: p0:25.546/0.977(2516.10%)
+N018:
+  cpu_cores: p0:0.130/0.100(29.93%)
+  memory_gb: p0:0.687/0.102(573.35%)
+  network_mbps: p0:49.354/1.963(2413.93%)
+N019:
+  cpu_cores: p0:0.224/0.100(123.19%)
+  memory_gb: p0:1.737/0.109(1487.30%)
+  network_mbps: p0:12.559/2.752(356.43%)
+N020:
+  cpu_cores: p0:0.309/0.107(188.27%)
+  memory_gb: p0:0.168/0.109(54.48%)
+  network_mbps: p0:34.895/1.754(1888.94%)
+N021:
+  memory_gb: p0:0.963/0.200(381.97%)
+  network_mbps: p0:29.920/1.104(2609.20%)
+N022:
+  cpu_cores: p0:0.443/0.112(296.00%)
+  memory_gb: p0:0.280/0.105(167.55%)
+  network_mbps: p0:78.377/0.488(15967.49%)
+N023:
+  cpu_cores: p0:0.261/0.103(153.14%)
+  memory_gb: p0:1.440/0.106(1259.97%)
+  network_mbps: p0:0.842/0.399(110.98%)
+N024:
+  cpu_cores: p0:0.140/0.109(28.52%)
+  memory_gb: p0:0.521/0.114(356.90%)
+  network_mbps: p0:6.374/0.225(2737.01%)
+N025:
+  cpu_cores: p0:0.494/0.102(382.77%)
+  memory_gb: p0:1.580/0.134(1076.37%)
+  network_mbps: p0:30.538/2.719(1023.04%)
+N026:
+  cpu_cores: p0:0.111/0.100(11.11%)
+  memory_gb: p0:0.144/0.111(30.42%)
+  network_mbps: p0:11.851/0.826(1334.27%)
+N027:
+  cpu_cores: p0:0.448/0.104(331.87%)
+  memory_gb: p0:0.589/0.123(377.05%)
+  network_mbps: p0:31.852/0.372(8471.95%)
+N028:
+  cpu_cores: p0:0.364/0.106(244.62%)
+  memory_gb: p0:0.997/0.116(759.49%)
+  network_mbps: p0:59.784/0.106(56167.51%)
+N029:
+  cpu_cores: p0:0.440/0.106(315.56%)
+  memory_gb: p0:0.320/0.110(189.87%)
+  network_mbps: p0:25.461/0.231(10939.33%)
+N030:
+  cpu_cores: p0:0.360/0.101(255.15%)
+  memory_gb: p0:3.138/0.102(2966.26%) p50:131.779/128.338(2.68%)
+  network_mbps: p0:50.145/2.028(2372.06%)
+
+=== Sweep rows=360000 ===
+  ingest progress: 36/360 batches (10%)
+  ingest progress: 72/360 batches (20%)
+  ingest progress: 108/360 batches (30%)
+  ingest progress: 144/360 batches (40%)
+  ingest progress: 180/360 batches (50%)
+  ingest progress: 216/360 batches (60%)
+  ingest progress: 252/360 batches (70%)
+  ingest progress: 288/360 batches (80%)
+  ingest progress: 324/360 batches (90%)
+  ingest progress: 360/360 batches (100%)
+server RTT: 13.21 ms | ES RTT: 381.54 ms | max diff >=2%: 59194.76%
+comparisons:
+N001:
+  cpu_cores: p0:0.222/0.100(121.90%)
+  memory_gb: p0:1.114/0.155(617.26%)
+  network_mbps: p0:5.056/0.403(1155.99%)
+N002:
+  cpu_cores: p0:0.165/0.106(55.23%)
+  memory_gb: p0:1.117/0.120(827.63%)
+  network_mbps: p0:32.092/0.776(4034.07%)
+N003:
+  cpu_cores: p0:0.310/0.111(178.20%)
+  memory_gb: p0:1.022/0.104(884.03%)
+N004:
+  cpu_cores: p0:0.206/0.108(89.67%)
+  memory_gb: p0:0.790/0.106(641.97%)
+  network_mbps: p0:16.751/0.615(2623.15%)
+N005:
+  cpu_cores: p0:0.213/0.106(101.77%)
+  memory_gb: p0:0.178/0.100(77.13%)
+  network_mbps: p0:24.402/0.949(2471.85%)
+N006:
+  cpu_cores: p0:0.293/0.106(177.23%)
+  memory_gb: p0:1.442/0.108(1231.29%)
+  network_mbps: p0:28.744/4.830(495.06%)
+N007:
+  cpu_cores: p0:0.121/0.110(10.59%)
+  memory_gb: p0:0.348/0.122(185.34%)
+  network_mbps: p0:7.051/0.155(4449.26%)
+N008:
+  cpu_cores: p0:0.123/0.113(8.55%)
+  memory_gb: p0:1.180/0.103(1049.87%)
+  network_mbps: p0:80.176/0.560(14212.73%)
+N009:
+  cpu_cores: p0:0.167/0.113(48.25%)
+  memory_gb: p0:0.533/0.112(374.44%)
+  network_mbps: p0:27.655/0.658(4105.11%)
+N010:
+  cpu_cores: p0:0.284/0.102(178.60%)
+  memory_gb: p0:0.237/0.126(88.73%)
+  network_mbps: p0:41.390/0.820(4947.25%)
+N011:
+  cpu_cores: p0:0.251/0.106(136.09%)
+  memory_gb: p0:0.501/0.111(353.21%)
+  network_mbps: p0:24.609/4.527(443.65%)
+N012:
+  cpu_cores: p0:0.304/0.103(194.87%)
+  memory_gb: p0:1.543/0.221(598.43%)
+  network_mbps: p0:15.972/1.931(727.00%)
+N013:
+  cpu_cores: p0:0.110/0.107(2.61%)
+  memory_gb: p0:0.212/0.101(108.82%)
+  network_mbps: p0:17.708/0.433(3985.34%)
+N014:
+  cpu_cores: p0:0.277/0.102(171.32%)
+  memory_gb: p0:1.064/0.100(962.79%)
+  network_mbps: p0:8.597/1.245(590.56%)
+N015:
+  cpu_cores: p0:0.605/0.105(477.07%)
+  memory_gb: p0:0.354/0.124(184.67%) p50:124.756/127.306(2.00%)
+  network_mbps: p0:16.068/1.243(1192.99%)
+N016:
+  cpu_cores: p0:0.649/0.121(434.58%)
+  memory_gb: p0:0.530/0.142(272.15%)
+  network_mbps: p0:8.683/2.005(333.10%)
+N017:
+  cpu_cores: p0:0.125/0.102(22.79%)
+  memory_gb: p0:0.269/0.130(106.36%)
+  network_mbps: p0:70.532/0.119(59194.76%)
+N018:
+  cpu_cores: p0:0.152/0.100(51.69%)
+  memory_gb: p0:1.324/0.126(947.41%)
+  network_mbps: p0:4.951/0.103(4686.03%)
+N019:
+  cpu_cores: p0:0.126/0.111(12.87%)
+  memory_gb: p0:0.869/0.109(697.67%)
+  network_mbps: p0:50.564/0.180(27935.72%)
+N020:
+  cpu_cores: p0:0.144/0.105(37.71%)
+  memory_gb: p0:0.260/0.110(136.42%)
+  network_mbps: p0:15.498/0.636(2337.69%)
+N021:
+  cpu_cores: p0:0.270/0.105(157.22%)
+  memory_gb: p0:0.781/0.171(356.56%)
+  network_mbps: p0:47.590/0.111(42874.14%) p50:4880.365/4994.415(2.28%)
+N022:
+  cpu_cores: p0:0.258/0.108(138.82%)
+  memory_gb: p0:0.727/0.111(554.83%)
+  network_mbps: p0:42.611/0.642(6539.65%)
+N023:
+  cpu_cores: p0:0.137/0.102(34.72%)
+  memory_gb: p0:0.735/0.108(581.20%)
+  network_mbps: p0:3.684/0.507(627.30%)
+N024:
+  cpu_cores: p0:0.374/0.108(246.87%)
+  memory_gb: p0:0.192/0.152(26.60%)
+  network_mbps: p0:63.228/0.532(11785.59%)
+N025:
+  cpu_cores: p0:0.175/0.101(72.65%)
+  memory_gb: p0:0.333/0.118(181.59%)
+  network_mbps: p0:94.022/0.879(10601.86%)
+N026:
+  cpu_cores: p0:0.308/0.103(199.41%)
+  memory_gb: p0:2.119/0.120(1669.54%)
+  network_mbps: p0:3.196/2.925(9.27%)
+N027:
+  cpu_cores: p0:0.229/0.104(119.25%)
+  network_mbps: p0:0.616/0.197(212.68%)
+N028:
+  cpu_cores: p0:0.392/0.102(284.92%)
+  memory_gb: p0:2.130/0.125(1603.89%)
+N029:
+  cpu_cores: p0:0.305/0.104(191.77%)
+  memory_gb: p0:0.354/0.103(241.88%)
+  network_mbps: p0:48.704/0.116(41851.34%)
+N030:
+  cpu_cores: p0:0.110/0.102(7.03%)
+  memory_gb: p0:0.550/0.129(325.55%)
+  network_mbps: p0:12.326/0.228(5308.41%)
+
+=== Sweep rows=370000 ===
+  ingest progress: 37/370 batches (10%)
+  ingest progress: 74/370 batches (20%)
+  ingest progress: 111/370 batches (30%)
+  ingest progress: 148/370 batches (40%)
+  ingest progress: 185/370 batches (50%)
+  ingest progress: 222/370 batches (60%)
+  ingest progress: 259/370 batches (70%)
+  ingest progress: 296/370 batches (80%)
+  ingest progress: 333/370 batches (90%)
+  ingest progress: 370/370 batches (100%)
+server RTT: 16.05 ms | ES RTT: 532.69 ms | max diff >=2%: 28524.39%
+comparisons:
+N001:
+  cpu_cores: p0:0.374/0.103(262.72%)
+  memory_gb: p0:1.686/0.181(830.17%)
+  network_mbps: p0:7.313/0.993(636.53%)
+N002:
+  cpu_cores: p0:0.500/0.113(341.56%)
+  memory_gb: p0:0.192/0.121(58.77%)
+  network_mbps: p0:23.246/1.769(1213.80%)
+N003:
+  cpu_cores: p0:0.146/0.103(41.75%)
+  network_mbps: p0:46.064/0.865(5226.95%)
+N004:
+  cpu_cores: p0:0.269/0.100(167.94%)
+  memory_gb: p0:0.690/0.117(488.66%)
+N005:
+  cpu_cores: p0:0.135/0.104(29.91%)
+  memory_gb: p0:1.869/0.125(1394.89%)
+  network_mbps: p0:45.528/1.000(4451.14%)
+N006:
+  cpu_cores: p0:0.194/0.101(92.08%)
+  memory_gb: p0:0.694/0.100(593.01%)
+  network_mbps: p0:7.497/0.749(900.28%)
+N007:
+  memory_gb: p0:0.253/0.103(146.40%)
+  network_mbps: p0:5.284/0.342(1442.75%)
+N008:
+  cpu_cores: p0:0.394/0.101(290.95%)
+  memory_gb: p0:1.701/0.108(1478.95%)
+  network_mbps: p0:44.599/0.575(7662.24%)
+N009:
+  cpu_cores: p0:0.301/0.100(200.38%)
+  memory_gb: p0:1.898/0.104(1727.90%)
+  network_mbps: p0:20.151/1.435(1304.13%)
+N010:
+  cpu_cores: p0:0.402/0.102(295.84%)
+  memory_gb: p0:0.381/0.125(205.32%)
+  network_mbps: p0:77.480/0.977(7828.37%)
+N011:
+  cpu_cores: p0:0.137/0.101(35.73%)
+  network_mbps: p0:30.910/0.345(8847.33%)
+N012:
+  cpu_cores: p0:0.161/0.111(45.11%)
+  memory_gb: p0:1.735/0.100(1629.85%)
+N013:
+  cpu_cores: p0:0.271/0.104(161.39%)
+  memory_gb: p0:0.473/0.106(346.15%)
+  network_mbps: p0:53.727/0.278(19222.83%)
+N014:
+  cpu_cores: p0:0.107/0.103(4.04%)
+  memory_gb: p0:1.717/0.136(1161.04%)
+  network_mbps: p0:14.606/0.589(2380.80%)
+N015:
+  cpu_cores: p0:0.147/0.104(41.82%) p50:31.552/32.308(2.34%)
+  memory_gb: p0:0.813/0.122(563.79%)
+  network_mbps: p0:34.950/1.029(3297.66%)
+N016:
+  cpu_cores: p0:0.285/0.115(147.92%)
+  memory_gb: p0:0.297/0.116(156.06%)
+N017:
+  cpu_cores: p0:0.123/0.104(18.37%)
+  memory_gb: p0:1.586/0.106(1397.25%)
+  network_mbps: p0:3.648/0.680(436.15%)
+N018:
+  cpu_cores: p0:0.341/0.100(240.76%)
+  memory_gb: p0:0.330/0.127(160.64%)
+  network_mbps: p0:14.165/1.838(670.71%)
+N019:
+  cpu_cores: p0:0.139/0.101(38.08%)
+  memory_gb: p0:0.366/0.135(170.00%)
+  network_mbps: p0:13.165/0.452(2812.84%)
+N020:
+  cpu_cores: p0:0.475/0.109(337.36%)
+  memory_gb: p0:0.161/0.116(39.04%)
+  network_mbps: p0:3.074/0.731(320.57%)
+N021:
+  cpu_cores: p0:0.158/0.101(56.70%)
+  memory_gb: p0:0.350/0.108(224.21%)
+  network_mbps: p0:3.910/0.942(315.03%)
+N022:
+  cpu_cores: p0:0.226/0.105(116.48%)
+  memory_gb: p0:1.123/0.110(919.08%)
+  network_mbps: p0:14.344/1.155(1141.75%)
+N023:
+  cpu_cores: p0:0.139/0.100(38.46%)
+  memory_gb: p0:0.433/0.132(227.97%)
+  network_mbps: p0:23.087/3.616(538.48%)
+N024:
+  cpu_cores: p0:0.362/0.100(260.97%)
+  memory_gb: p0:0.531/0.139(280.48%)
+  network_mbps: p0:7.289/0.541(1248.25%)
+N025:
+  cpu_cores: p0:0.701/0.101(592.42%)
+  memory_gb: p0:0.283/0.111(155.43%)
+  network_mbps: p0:26.002/2.036(1177.13%)
+N026:
+  cpu_cores: p0:0.259/0.103(152.22%)
+  memory_gb: p0:0.851/0.106(702.44%)
+  network_mbps: p0:41.446/0.145(28524.39%)
+N027:
+  cpu_cores: p0:0.211/0.101(108.02%)
+  memory_gb: p0:0.447/0.102(336.94%)
+  network_mbps: p0:50.579/0.492(10186.85%)
+N028:
+  cpu_cores: p0:0.180/0.111(62.02%)
+  memory_gb: p0:0.332/0.106(213.19%)
+  network_mbps: p0:13.933/1.028(1255.06%)
+N029:
+  cpu_cores: p0:0.164/0.115(43.08%)
+  memory_gb: p0:0.330/0.104(216.21%)
+  network_mbps: p0:10.087/0.114(8718.10%)
+N030:
+  cpu_cores: p0:0.192/0.101(90.96%)
+  network_mbps: p0:65.356/0.813(7941.76%)
+
+=== Sweep rows=380000 ===
+  ingest progress: 38/380 batches (10%)
+  ingest progress: 76/380 batches (20%)
+  ingest progress: 114/380 batches (30%)
+  ingest progress: 152/380 batches (40%)
+  ingest progress: 190/380 batches (50%)
+  ingest progress: 228/380 batches (60%)
+  ingest progress: 266/380 batches (70%)
+  ingest progress: 304/380 batches (80%)
+  ingest progress: 342/380 batches (90%)
+  ingest progress: 380/380 batches (100%)
+server RTT: 10.32 ms | ES RTT: 449.61 ms | max diff >=2%: 23657.01%
+comparisons:
+N001:
+  cpu_cores: p0:0.209/0.102(104.62%)
+  memory_gb: p0:0.769/0.137(459.96%)
+  network_mbps: p0:39.526/0.196(20024.16%)
+N002:
+  cpu_cores: p0:0.241/0.114(111.89%)
+  memory_gb: p0:0.480/0.104(363.21%)
+  network_mbps: p0:29.735/0.767(3775.42%)
+N003:
+  cpu_cores: p0:0.336/0.114(195.60%)
+  memory_gb: p0:1.102/0.144(663.92%)
+  network_mbps: p0:1.867/0.872(114.06%)
+N004:
+  cpu_cores: p0:0.702/0.102(587.81%)
+  memory_gb: p0:0.599/0.111(439.84%)
+  network_mbps: p0:4.746/0.894(430.74%)
+N005:
+  cpu_cores: p0:0.202/0.100(101.85%)
+  memory_gb: p0:0.160/0.117(36.89%)
+  network_mbps: p0:24.696/0.226(10846.67%)
+N006:
+  cpu_cores: p0:0.179/0.100(77.78%)
+  memory_gb: p0:0.356/0.114(211.44%)
+  network_mbps: p0:4.737/0.341(1290.25%)
+N007:
+  cpu_cores: p0:0.459/0.106(331.99%)
+  memory_gb: p0:1.084/0.149(625.09%)
+  network_mbps: p0:31.785/0.198(15950.16%)
+N008:
+  cpu_cores: p0:0.185/0.100(84.27%)
+  memory_gb: p0:0.840/0.103(712.69%)
+  network_mbps: p0:10.035/0.603(1563.72%)
+N009:
+  cpu_cores: p0:0.569/0.107(430.08%)
+  memory_gb: p0:1.448/0.112(1188.89%)
+  network_mbps: p0:26.627/0.565(4613.45%)
+N010:
+  cpu_cores: p0:0.477/0.100(375.04%)
+  memory_gb: p0:0.954/0.107(790.03%)
+  network_mbps: p0:13.687/2.272(502.47%)
+N011:
+  cpu_cores: p0:0.671/0.101(567.13%)
+  memory_gb: p0:0.345/0.124(177.03%)
+  network_mbps: p0:41.111/1.287(3094.45%)
+N012:
+  cpu_cores: p0:0.337/0.107(214.42%)
+  memory_gb: p0:1.369/0.114(1104.92%)
+  network_mbps: p0:68.738/0.686(9917.70%)
+N013:
+  cpu_cores: p0:0.579/0.105(452.24%)
+  memory_gb: p0:1.500/0.111(1255.86%)
+  network_mbps: p0:14.352/0.343(4084.05%)
+N014:
+  cpu_cores: p0:0.229/0.104(119.70%)
+  memory_gb: p0:0.324/0.165(96.34%)
+  network_mbps: p0:15.913/1.395(1040.49%)
+N015:
+  cpu_cores: p0:0.453/0.100(352.27%)
+  memory_gb: p0:0.179/0.114(56.80%)
+  network_mbps: p0:19.591/1.616(1112.62%)
+N016:
+  cpu_cores: p0:0.117/0.101(16.21%)
+  memory_gb: p0:0.167/0.109(53.47%)
+  network_mbps: p0:29.684/2.702(998.67%)
+N017:
+  cpu_cores: p0:0.500/0.104(380.42%)
+  memory_gb: p0:0.443/0.119(271.41%)
+  network_mbps: p0:49.411/5.004(887.48%)
+N018:
+  cpu_cores: p0:0.507/0.110(360.49%)
+  memory_gb: p0:0.118/0.104(14.03%)
+  network_mbps: p0:17.409/1.176(1380.70%)
+N019:
+  cpu_cores: p0:0.126/0.108(16.66%)
+  memory_gb: p0:1.533/0.148(935.86%)
+  network_mbps: p0:63.712/0.367(17275.24%)
+N020:
+  cpu_cores: p0:0.135/0.105(28.63%)
+  memory_gb: p0:0.990/0.102(872.64%)
+  network_mbps: p0:23.348/4.887(377.75%)
+N021:
+  cpu_cores: p0:0.232/0.119(95.21%)
+  memory_gb: p0:0.904/0.106(753.82%)
+  network_mbps: p0:7.868/0.216(3542.96%)
+N022:
+  cpu_cores: p0:0.244/0.110(121.35%)
+  memory_gb: p0:0.549/0.127(334.23%) p50:125.789/128.466(2.08%)
+  network_mbps: p0:10.291/1.254(720.49%)
+N023:
+  cpu_cores: p0:0.195/0.111(76.20%)
+  memory_gb: p0:3.540/0.126(2707.78%)
+  network_mbps: p0:15.940/0.558(2755.98%)
+N024:
+  cpu_cores: p0:0.393/0.101(289.10%)
+  memory_gb: p0:0.370/0.109(240.71%)
+  network_mbps: p0:52.764/0.310(16904.98%)
+N025:
+  cpu_cores: p0:0.108/0.103(5.24%)
+  memory_gb: p0:0.357/0.117(205.07%)
+  network_mbps: p0:40.679/1.075(3683.82%)
+N026:
+  cpu_cores: p0:0.662/0.112(491.11%)
+  memory_gb: p0:0.176/0.105(68.21%)
+  network_mbps: p0:13.803/0.924(1394.58%)
+N027:
+  cpu_cores: p0:0.729/0.101(621.15%)
+  memory_gb: p0:1.193/0.133(794.49%)
+  network_mbps: p0:84.202/0.612(13653.96%)
+N028:
+  cpu_cores: p0:0.360/0.109(231.87%)
+  memory_gb: p0:0.742/0.110(578.01%)
+  network_mbps: p0:60.868/0.256(23657.01%)
+N029:
+  cpu_cores: p0:0.335/0.102(229.30%)
+  memory_gb: p0:0.446/0.115(286.24%)
+  network_mbps: p0:5.774/0.654(783.11%)
+N030:
+  cpu_cores: p0:0.446/0.102(337.31%)
+  memory_gb: p0:0.261/0.117(122.13%)
+  network_mbps: p0:9.187/1.376(567.44%)
+
+=== Sweep rows=390000 ===
+  ingest progress: 39/390 batches (10%)
+  ingest progress: 78/390 batches (20%)
+  ingest progress: 117/390 batches (30%)
+  ingest progress: 156/390 batches (40%)
+  ingest progress: 195/390 batches (50%)
+  ingest progress: 234/390 batches (60%)
+  ingest progress: 273/390 batches (70%)
+  ingest progress: 312/390 batches (80%)
+  ingest progress: 351/390 batches (90%)
+  ingest progress: 390/390 batches (100%)
+server RTT: 10.61 ms | ES RTT: 513.05 ms | max diff >=2%: 38953.68%
+comparisons:
+N001:
+  cpu_cores: p0:0.587/0.101(481.20%)
+  memory_gb: p0:0.356/0.105(237.54%)
+  network_mbps: p0:5.629/1.228(358.30%)
+N002:
+  cpu_cores: p0:0.386/0.109(254.27%)
+  memory_gb: p0:0.451/0.106(324.26%)
+  network_mbps: p0:19.568/0.430(4454.33%)
+N003:
+  cpu_cores: p0:0.385/0.106(262.90%)
+  memory_gb: p0:0.137/0.103(32.56%)
+  network_mbps: p0:18.133/0.591(2967.08%)
+N004:
+  cpu_cores: p0:0.145/0.100(44.46%)
+  memory_gb: p0:0.180/0.124(45.39%)
+  network_mbps: p0:10.381/1.431(625.37%)
+N005:
+  cpu_cores: p0:0.174/0.110(57.73%)
+  memory_gb: p0:0.974/0.118(725.64%)
+N006:
+  cpu_cores: p0:0.151/0.105(43.70%)
+  memory_gb: p0:0.350/0.104(234.96%)
+  network_mbps: p0:67.887/0.268(25255.48%)
+N007:
+  cpu_cores: p0:0.666/0.121(452.25%)
+  memory_gb: p0:1.194/0.117(921.30%)
+  network_mbps: p0:19.159/0.144(13236.81%)
+N008:
+  cpu_cores: p0:0.268/0.102(163.79%)
+  memory_gb: p0:1.101/0.104(962.01%)
+  network_mbps: p0:55.333/1.216(4450.59%)
+N009:
+  cpu_cores: p0:0.122/0.102(19.81%)
+  memory_gb: p0:1.260/0.103(1120.42%)
+  network_mbps: p0:73.103/0.963(7490.14%)
+N010:
+  cpu_cores: p0:0.213/0.105(102.82%)
+  memory_gb: p0:0.232/0.107(115.55%)
+  network_mbps: p0:47.549/0.644(7286.20%) p50:5076.735/4951.704(2.53%)
+N011:
+  cpu_cores: p0:0.186/0.104(78.55%)
+  memory_gb: p0:0.858/0.130(560.89%)
+  network_mbps: p0:41.950/2.159(1843.22%)
+N012:
+  cpu_cores: p0:0.139/0.103(35.03%)
+  memory_gb: p0:1.767/0.153(1058.05%) p50:130.598/127.661(2.30%)
+  network_mbps: p0:53.944/0.788(6742.88%)
+N013:
+  cpu_cores: p0:0.229/0.102(124.96%)
+  memory_gb: p0:1.225/0.100(1124.10%)
+  network_mbps: p0:77.626/0.399(19371.89%)
+N014:
+  cpu_cores: p0:0.268/0.103(161.39%)
+  memory_gb: p0:0.634/0.103(512.99%)
+  network_mbps: p0:84.076/1.208(6862.06%)
+N015:
+  cpu_cores: p0:0.223/0.103(116.43%)
+  memory_gb: p0:1.122/0.128(776.41%)
+  network_mbps: p0:32.333/1.991(1524.24%)
+N016:
+  cpu_cores: p0:0.521/0.101(416.23%)
+  memory_gb: p0:1.850/0.117(1483.90%)
+  network_mbps: p0:42.438/2.709(1466.57%)
+N017:
+  cpu_cores: p0:0.446/0.104(327.53%)
+  memory_gb: p0:0.196/0.103(90.30%)
+  network_mbps: p0:7.297/1.555(369.14%)
+N018:
+  cpu_cores: p0:0.145/0.100(44.22%)
+  memory_gb: p0:0.188/0.136(37.96%)
+  network_mbps: p0:59.274/0.152(38953.68%)
+N019:
+  cpu_cores: p0:0.293/0.101(189.07%)
+  memory_gb: p0:1.105/0.126(778.17%)
+  network_mbps: p0:53.942/0.171(31364.79%)
+N020:
+  cpu_cores: p0:0.113/0.103(10.06%)
+  memory_gb: p0:2.836/0.106(2571.27%)
+  network_mbps: p0:6.215/0.602(931.89%)
+N021:
+  cpu_cores: p0:0.427/0.101(323.06%)
+  memory_gb: p0:1.508/0.115(1206.32%)
+  network_mbps: p0:26.321/0.387(6705.09%)
+N022:
+  cpu_cores: p0:0.216/0.103(109.26%)
+  memory_gb: p0:1.010/0.130(674.38%)
+  network_mbps: p0:4.225/0.880(380.11%)
+N023:
+  cpu_cores: p0:0.312/0.101(207.62%)
+  memory_gb: p0:0.391/0.163(139.50%)
+  network_mbps: p0:10.134/0.370(2641.27%)
+N024:
+  cpu_cores: p0:0.123/0.105(17.02%)
+  memory_gb: p0:1.242/0.108(1046.59%)
+  network_mbps: p0:13.589/0.220(6065.48%)
+N025:
+  cpu_cores: p0:0.398/0.105(278.11%)
+  memory_gb: p0:0.874/0.129(576.77%)
+  network_mbps: p0:45.445/0.417(10792.91%)
+N026:
+  cpu_cores: p0:0.210/0.107(96.82%)
+  memory_gb: p0:0.625/0.108(477.03%)
+  network_mbps: p0:39.925/1.459(2636.77%)
+N027:
+  cpu_cores: p0:0.554/0.102(443.07%)
+  memory_gb: p0:0.899/0.123(631.75%)
+  network_mbps: p0:1.934/1.050(84.10%)
+N028:
+  cpu_cores: p0:0.127/0.104(22.66%)
+  memory_gb: p0:0.230/0.130(76.92%)
+  network_mbps: p0:37.127/0.174(21269.50%)
+N029:
+  cpu_cores: p0:0.254/0.105(142.69%)
+  memory_gb: p0:0.286/0.139(105.35%)
+  network_mbps: p0:31.997/1.755(1723.15%)
+N030:
+  cpu_cores: p0:0.440/0.104(322.07%)
+  memory_gb: p0:0.397/0.110(260.13%)
+  network_mbps: p0:8.411/0.641(1213.02%)
+
+=== Sweep rows=400000 ===
+  ingest progress: 40/400 batches (10%)
+  ingest progress: 80/400 batches (20%)
+  ingest progress: 120/400 batches (30%)
+  ingest progress: 160/400 batches (40%)
+  ingest progress: 200/400 batches (50%)
+  ingest progress: 240/400 batches (60%)
+  ingest progress: 280/400 batches (70%)
+  ingest progress: 320/400 batches (80%)
+  ingest progress: 360/400 batches (90%)
+  ingest progress: 400/400 batches (100%)
+server RTT: 10.84 ms | ES RTT: 449.63 ms | max diff >=2%: 94582.44%
+comparisons:
+N001:
+  memory_gb: p0:0.178/0.107(65.28%)
+  network_mbps: p0:6.814/0.532(1181.69%)
+N002:
+  cpu_cores: p0:0.411/0.109(275.25%)
+  memory_gb: p0:0.404/0.120(236.44%)
+  network_mbps: p0:18.007/0.362(4873.43%)
+N003:
+  cpu_cores: p0:0.296/0.102(189.48%)
+  memory_gb: p0:0.386/0.111(247.94%)
+  network_mbps: p0:67.386/0.486(13767.97%)
+N004:
+  cpu_cores: p0:0.297/0.103(189.16%)
+  memory_gb: p0:0.115/0.101(13.73%)
+  network_mbps: p0:5.990/0.671(792.60%)
+N005:
+  cpu_cores: p0:0.157/0.103(52.69%)
+  memory_gb: p0:0.426/0.128(233.62%)
+  network_mbps: p0:2.076/0.598(246.94%)
+N006:
+  cpu_cores: p0:0.297/0.102(189.92%)
+  memory_gb: p0:0.306/0.103(197.52%)
+  network_mbps: p0:32.868/0.158(20766.01%)
+N007:
+  cpu_cores: p0:0.171/0.105(63.29%)
+  memory_gb: p0:1.000/0.177(464.21%)
+  network_mbps: p0:3.810/0.849(348.87%)
+N008:
+  cpu_cores: p0:0.359/0.106(237.48%)
+  network_mbps: p0:37.495/0.140(26775.73%)
+N009:
+  cpu_cores: p0:1.195/0.102(1069.00%)
+  memory_gb: p0:1.259/0.109(1050.99%)
+  network_mbps: p0:9.072/1.181(668.21%)
+N010:
+  cpu_cores: p0:0.144/0.103(40.22%)
+  memory_gb: p0:1.249/0.100(1144.13%)
+  network_mbps: p0:21.904/3.370(549.88%)
+N011:
+  cpu_cores: p0:0.191/0.100(90.53%)
+  memory_gb: p0:0.829/0.157(426.91%)
+  network_mbps: p0:20.535/0.231(8782.32%)
+N012:
+  cpu_cores: p0:0.179/0.107(67.51%)
+  memory_gb: p0:0.834/0.101(727.60%)
+  network_mbps: p0:83.961/0.491(16991.12%)
+N013:
+  cpu_cores: p0:0.369/0.101(264.23%)
+  memory_gb: p0:0.263/0.108(144.41%)
+  network_mbps: p0:72.317/0.257(28029.50%) p50:5067.552/4934.947(2.69%)
+N014:
+  cpu_cores: p0:0.174/0.107(63.33%)
+  memory_gb: p0:1.517/0.121(1157.28%)
+  network_mbps: p0:26.217/0.334(7759.86%)
+N015:
+  cpu_cores: p0:0.122/0.107(14.29%)
+  memory_gb: p0:0.771/0.104(640.29%)
+  network_mbps: p0:2.178/0.328(564.02%)
+N016:
+  cpu_cores: p0:0.368/0.105(250.13%)
+  memory_gb: p0:0.194/0.117(66.00%)
+  network_mbps: p0:71.320/0.211(33731.03%)
+N017:
+  cpu_cores: p0:0.232/0.101(130.12%)
+  memory_gb: p0:0.224/0.191(17.21%)
+  network_mbps: p0:6.570/0.425(1444.36%)
+N018:
+  cpu_cores: p0:0.180/0.105(71.22%)
+  memory_gb: p0:2.102/0.113(1766.58%)
+  network_mbps: p0:1.168/0.246(375.76%)
+N019:
+  cpu_cores: p0:0.588/0.105(462.44%)
+  memory_gb: p0:1.125/0.119(849.11%)
+  network_mbps: p0:32.574/1.372(2274.56%)
+N020:
+  cpu_cores: p0:0.126/0.113(11.62%)
+  memory_gb: p0:0.586/0.108(442.82%)
+  network_mbps: p0:13.546/0.195(6850.83%)
+N021:
+  cpu_cores: p0:0.324/0.107(204.01%)
+  memory_gb: p0:2.020/0.119(1600.37%)
+  network_mbps: p0:19.989/1.778(1024.26%)
+N022:
+  cpu_cores: p0:0.208/0.106(96.97%)
+  memory_gb: p0:0.311/0.105(196.71%)
+  network_mbps: p0:50.515/1.515(3234.75%)
+N023:
+  cpu_cores: p0:0.251/0.103(143.69%)
+  memory_gb: p0:2.342/0.175(1241.27%)
+  network_mbps: p0:24.071/3.481(591.48%)
+N024:
+  cpu_cores: p0:0.560/0.105(435.17%)
+  memory_gb: p0:0.484/0.120(304.17%)
+  network_mbps: p0:7.422/0.492(1407.53%)
+N025:
+  cpu_cores: p0:0.530/0.100(428.17%)
+  memory_gb: p0:0.401/0.109(266.34%)
+  network_mbps: p0:96.784/0.102(94582.44%)
+N026:
+  cpu_cores: p0:0.292/0.101(187.44%)
+  memory_gb: p0:0.342/0.152(124.69%)
+  network_mbps: p0:28.050/2.293(1123.13%)
+N027:
+  cpu_cores: p0:0.148/0.100(47.83%)
+  memory_gb: p0:0.159/0.111(43.53%)
+  network_mbps: p0:5.452/0.543(904.29%)
+N028:
+  cpu_cores: p0:0.208/0.106(96.44%)
+  memory_gb: p0:0.227/0.108(110.52%)
+  network_mbps: p0:29.473/1.189(2379.38%)
+N029:
+  cpu_cores: p0:0.249/0.104(139.70%)
+  memory_gb: p0:0.691/0.118(486.18%)
+  network_mbps: p0:41.591/0.638(6418.11%)
+N030:
+  memory_gb: p0:0.769/0.102(655.01%)
+  network_mbps: p0:42.686/2.860(1392.63%)
+
+=== Sweep rows=410000 ===
+  ingest progress: 41/410 batches (10%)
+  ingest progress: 82/410 batches (20%)
+  ingest progress: 123/410 batches (30%)
+  ingest progress: 164/410 batches (40%)
+  ingest progress: 205/410 batches (50%)
+  ingest progress: 246/410 batches (60%)
+  ingest progress: 287/410 batches (70%)
+  ingest progress: 328/410 batches (80%)
+  ingest progress: 369/410 batches (90%)
+  ingest progress: 410/410 batches (100%)
+server RTT: 12.21 ms | ES RTT: 552.32 ms | max diff >=2%: 55126.96%
+comparisons:
+N001:
+  cpu_cores: p0:0.252/0.103(146.12%)
+  memory_gb: p0:2.351/0.153(1441.80%)
+  network_mbps: p0:6.014/0.192(3035.55%)
+N002:
+  cpu_cores: p0:0.605/0.103(487.30%)
+  memory_gb: p0:0.360/0.139(158.43%)
+  network_mbps: p0:23.881/1.360(1656.32%)
+N003:
+  cpu_cores: p0:0.205/0.108(90.43%)
+  memory_gb: p0:0.742/0.101(632.21%)
+  network_mbps: p0:36.570/0.375(9645.20%)
+N004:
+  cpu_cores: p0:0.331/0.111(196.74%)
+  memory_gb: p0:1.066/0.121(779.68%)
+  network_mbps: p0:113.094/0.379(29756.56%)
+N005:
+  cpu_cores: p0:0.143/0.102(39.32%)
+  network_mbps: p0:13.713/0.463(2864.87%)
+N006:
+  cpu_cores: p0:0.233/0.101(130.10%)
+  memory_gb: p0:0.679/0.105(543.85%)
+  network_mbps: p0:36.409/0.329(10980.28%)
+N007:
+  cpu_cores: p0:0.165/0.108(53.67%)
+  memory_gb: p0:0.969/0.109(790.61%) p50:133.500/129.982(2.71%)
+  network_mbps: p0:8.837/0.920(860.67%)
+N008:
+  cpu_cores: p0:0.540/0.104(419.27%)
+N009:
+  cpu_cores: p0:0.433/0.100(332.19%)
+  memory_gb: p0:0.703/0.105(566.38%)
+  network_mbps: p0:7.679/1.046(634.34%)
+N010:
+  cpu_cores: p0:0.238/0.107(123.02%)
+  memory_gb: p0:1.074/0.102(955.47%)
+  network_mbps: p0:20.222/1.008(1906.46%)
+N011:
+  cpu_cores: p0:0.138/0.111(25.21%)
+  memory_gb: p0:0.522/0.157(231.98%)
+  network_mbps: p0:9.403/2.451(283.63%)
+N012:
+  cpu_cores: p0:0.221/0.105(110.39%)
+  memory_gb: p0:0.371/0.102(264.12%)
+  network_mbps: p0:59.465/1.779(3242.15%)
+N013:
+  cpu_cores: p0:0.223/0.102(118.45%)
+  memory_gb: p0:0.534/0.101(429.81%)
+  network_mbps: p0:12.468/1.019(1123.46%)
+N014:
+  cpu_cores: p0:0.192/0.103(87.23%)
+  memory_gb: p0:0.905/0.116(679.94%)
+  network_mbps: p0:1.887/0.517(265.29%)
+N015:
+  cpu_cores: p0:0.461/0.109(321.64%)
+  memory_gb: p0:0.242/0.108(124.16%)
+  network_mbps: p0:103.989/0.926(11131.88%)
+N016:
+  cpu_cores: p0:0.105/0.101(4.17%)
+  network_mbps: p0:43.834/0.254(17138.38%)
+N017:
+  cpu_cores: p0:0.200/0.105(89.26%)
+  memory_gb: p0:0.979/0.108(810.03%)
+  network_mbps: p0:25.762/0.313(8128.02%)
+N018:
+  cpu_cores: p0:0.263/0.104(153.35%)
+  memory_gb: p0:1.029/0.139(642.43%)
+  network_mbps: p0:48.933/0.434(11184.73%)
+N019:
+  cpu_cores: p0:0.489/0.106(360.55%)
+  memory_gb: p0:1.173/0.139(741.25%)
+  network_mbps: p0:56.125/0.649(8551.46%)
+N020:
+  cpu_cores: p0:0.333/0.113(194.98%)
+  memory_gb: p0:0.469/0.111(320.67%)
+  network_mbps: p0:8.154/0.626(1203.10%)
+N021:
+  cpu_cores: p0:0.191/0.102(87.66%)
+  memory_gb: p0:0.821/0.120(583.18%)
+  network_mbps: p0:23.680/3.068(671.96%)
+N022:
+  cpu_cores: p0:0.343/0.105(228.59%)
+  memory_gb: p0:0.644/0.130(394.17%)
+  network_mbps: p0:7.368/0.118(6159.04%)
+N023:
+  cpu_cores: p0:0.676/0.103(554.86%)
+  memory_gb: p0:0.351/0.110(219.46%)
+  network_mbps: p0:17.667/2.309(665.08%)
+N024:
+  cpu_cores: p0:0.247/0.102(142.52%)
+  memory_gb: p0:0.277/0.127(118.93%)
+  network_mbps: p0:13.818/1.467(842.24%)
+N025:
+  cpu_cores: p0:0.385/0.103(273.00%)
+  memory_gb: p0:2.673/0.109(2359.50%)
+  network_mbps: p0:73.733/0.134(55126.96%)
+N026:
+  cpu_cores: p0:0.257/0.101(154.01%)
+  memory_gb: p0:1.246/0.154(708.05%)
+  network_mbps: p0:6.148/2.956(107.97%)
+N027:
+  cpu_cores: p0:0.130/0.107(21.62%)
+  memory_gb: p0:0.164/0.132(24.61%)
+  network_mbps: p0:3.445/0.306(1025.26%)
+N028:
+  cpu_cores: p0:0.610/0.103(491.30%)
+  memory_gb: p0:1.178/0.125(843.02%)
+  network_mbps: p0:2.775/1.079(157.11%)
+N029:
+  cpu_cores: p0:0.125/0.105(18.97%)
+  memory_gb: p0:0.632/0.106(497.43%)
+  network_mbps: p0:39.042/0.772(4958.06%)
+N030:
+  memory_gb: p0:1.287/0.127(913.59%)
+  network_mbps: p0:76.702/1.047(7222.53%)
+
+=== Sweep rows=420000 ===
+  ingest progress: 42/420 batches (10%)
+  ingest progress: 84/420 batches (20%)
+  ingest progress: 126/420 batches (30%)
+  ingest progress: 168/420 batches (40%)
+  ingest progress: 210/420 batches (50%)
+  ingest progress: 252/420 batches (60%)
+  ingest progress: 294/420 batches (70%)
+  ingest progress: 336/420 batches (80%)
+  ingest progress: 378/420 batches (90%)
+  ingest progress: 420/420 batches (100%)
+server RTT: 12.79 ms | ES RTT: 565.42 ms | max diff >=2%: 32580.60%
+comparisons:
+N001:
+  cpu_cores: p0:0.203/0.102(98.13%)
+  memory_gb: p0:0.351/0.107(226.52%)
+  network_mbps: p0:68.617/1.429(4700.14%)
+N002:
+  cpu_cores: p0:0.267/0.102(162.23%)
+  memory_gb: p0:1.044/0.105(897.95%)
+  network_mbps: p0:12.133/0.423(2767.79%)
+N003:
+  cpu_cores: p0:0.623/0.101(516.24%)
+  memory_gb: p0:0.922/0.181(410.50%)
+  network_mbps: p0:44.976/1.037(4235.31%)
+N004:
+  cpu_cores: p0:0.379/0.101(273.71%)
+  memory_gb: p0:0.686/0.100(585.33%)
+  network_mbps: p0:30.661/2.413(1170.58%)
+N005:
+  cpu_cores: p0:0.247/0.102(142.32%)
+  memory_gb: p0:0.534/0.102(425.43%)
+  network_mbps: p0:15.347/0.329(4567.54%)
+N006:
+  cpu_cores: p0:0.269/0.100(167.64%)
+  memory_gb: p0:0.490/0.132(272.24%)
+  network_mbps: p0:17.453/0.424(4018.84%)
+N007:
+  cpu_cores: p0:0.234/0.105(121.93%)
+  memory_gb: p0:0.146/0.120(22.35%)
+  network_mbps: p0:37.725/0.592(6276.56%)
+N008:
+  cpu_cores: p0:0.324/0.106(206.05%)
+  memory_gb: p0:0.695/0.114(508.05%)
+  network_mbps: p0:6.707/2.166(209.62%)
+N009:
+  cpu_cores: p0:0.486/0.103(371.55%)
+  memory_gb: p0:1.355/0.110(1132.00%)
+  network_mbps: p0:29.817/1.132(2532.87%)
+N010:
+  cpu_cores: p0:0.190/0.101(88.62%)
+  memory_gb: p0:0.477/0.104(357.44%)
+  network_mbps: p0:10.742/0.102(10405.40%)
+N011:
+  cpu_cores: p0:0.109/0.101(8.80%)
+  memory_gb: p0:0.883/0.109(712.55%)
+  network_mbps: p0:13.731/0.509(2596.05%)
+N012:
+  memory_gb: p0:0.491/0.106(363.98%)
+  network_mbps: p0:6.684/0.298(2140.17%)
+N013:
+  cpu_cores: p0:0.257/0.102(153.01%)
+  memory_gb: p0:2.206/0.103(2051.90%)
+  network_mbps: p0:30.965/0.318(9633.62%)
+N014:
+  cpu_cores: p0:0.164/0.104(58.78%)
+  memory_gb: p0:0.337/0.113(197.73%)
+  network_mbps: p0:62.308/0.589(10479.76%)
+N015:
+  cpu_cores: p0:0.194/0.103(89.24%)
+  memory_gb: p0:2.055/0.104(1879.58%)
+  network_mbps: p0:63.151/0.193(32580.60%)
+N016:
+  cpu_cores: p0:0.484/0.100(383.71%)
+  memory_gb: p0:0.376/0.152(147.06%)
+  network_mbps: p0:7.798/0.382(1940.44%)
+N017:
+  cpu_cores: p0:0.229/0.106(116.84%) p50:32.860/32.101(2.36%)
+  memory_gb: p0:1.717/0.115(1388.36%)
+  network_mbps: p0:44.214/0.206(21350.88%)
+N018:
+  cpu_cores: p0:0.234/0.106(121.33%)
+  memory_gb: p0:0.489/0.104(372.35%)
+  network_mbps: p0:13.928/0.158(8709.08%)
+N019:
+  cpu_cores: p0:0.150/0.100(50.16%)
+  memory_gb: p0:1.802/0.105(1622.18%)
+N020:
+  cpu_cores: p0:0.118/0.104(13.46%)
+  memory_gb: p0:0.540/0.116(363.32%)
+  network_mbps: p0:96.285/0.781(12234.57%)
+N021:
+  cpu_cores: p0:0.178/0.104(71.41%)
+  memory_gb: p0:0.445/0.106(318.02%)
+  network_mbps: p0:24.297/0.803(2927.24%)
+N022:
+  cpu_cores: p0:0.200/0.101(98.03%)
+  memory_gb: p0:2.559/0.117(2095.58%)
+  network_mbps: p0:27.355/1.040(2529.31%)
+N023:
+  cpu_cores: p0:0.408/0.102(298.44%)
+  memory_gb: p0:0.633/0.172(267.39%)
+  network_mbps: p0:30.735/0.214(14269.75%)
+N024:
+  cpu_cores: p0:0.371/0.103(262.04%)
+  network_mbps: p0:2.467/0.601(310.21%)
+N025:
+  cpu_cores: p0:0.134/0.100(32.93%)
+  memory_gb: p0:1.478/0.113(1210.93%)
+  network_mbps: p0:2.294/0.608(277.36%)
+N026:
+  cpu_cores: p0:0.196/0.106(85.87%)
+  memory_gb: p0:1.224/0.123(894.87%)
+  network_mbps: p0:25.477/0.492(5073.45%)
+N027:
+  cpu_cores: p0:0.307/0.102(200.74%)
+  memory_gb: p0:0.188/0.110(70.76%)
+  network_mbps: p0:43.543/0.747(5728.28%)
+N028:
+  cpu_cores: p0:0.128/0.110(15.84%)
+  memory_gb: p0:0.857/0.104(722.89%)
+  network_mbps: p0:33.164/0.831(3892.16%)
+N029:
+  cpu_cores: p0:0.343/0.102(235.18%)
+  memory_gb: p0:0.183/0.114(60.77%) p50:131.620/128.753(2.23%)
+  network_mbps: p0:22.409/1.363(1544.42%)
+N030:
+  memory_gb: p0:0.895/0.124(624.54%)
+  network_mbps: p0:62.882/3.160(1890.00%)
+
+=== Sweep rows=430000 ===
+  ingest progress: 43/430 batches (10%)
+  ingest progress: 86/430 batches (20%)
+  ingest progress: 129/430 batches (30%)
+  ingest progress: 172/430 batches (40%)
+  ingest progress: 215/430 batches (50%)
+  ingest progress: 258/430 batches (60%)
+  ingest progress: 301/430 batches (70%)
+  ingest progress: 344/430 batches (80%)
+  ingest progress: 387/430 batches (90%)
+  ingest progress: 430/430 batches (100%)
+server RTT: 10.89 ms | ES RTT: 579.52 ms | max diff >=2%: 40984.23%
+comparisons:
+N001:
+  cpu_cores: p0:0.169/0.111(52.21%)
+  memory_gb: p0:0.872/0.114(666.01%)
+  network_mbps: p0:17.385/0.702(2375.92%)
+N002:
+  cpu_cores: p0:0.210/0.113(86.31%)
+  memory_gb: p0:2.310/0.110(2002.98%)
+  network_mbps: p0:28.705/0.191(14922.00%)
+N003:
+  cpu_cores: p0:0.287/0.101(184.71%)
+  memory_gb: p0:0.550/0.129(325.56%)
+  network_mbps: p0:5.229/0.204(2464.93%)
+N004:
+  cpu_cores: p0:0.182/0.103(76.48%)
+  memory_gb: p0:0.251/0.129(95.22%)
+  network_mbps: p0:13.314/0.125(10519.04%)
+N005:
+  memory_gb: p0:0.239/0.129(86.06%)
+  network_mbps: p0:21.105/1.681(1155.50%)
+N006:
+  cpu_cores: p0:0.133/0.101(30.97%)
+  memory_gb: p0:0.655/0.108(506.63%)
+  network_mbps: p0:43.053/1.539(2697.92%)
+N007:
+  memory_gb: p0:0.296/0.142(108.83%)
+  network_mbps: p0:23.234/1.174(1879.79%)
+N008:
+  cpu_cores: p0:0.736/0.102(622.34%)
+  memory_gb: p0:0.369/0.109(238.68%)
+  network_mbps: p0:2.864/1.058(170.68%)
+N009:
+  cpu_cores: p0:0.206/0.112(83.92%)
+  memory_gb: p0:0.381/0.109(247.87%)
+  network_mbps: p0:9.583/0.326(2843.09%)
+N010:
+  cpu_cores: p0:0.296/0.102(190.99%)
+  memory_gb: p0:1.171/0.157(647.40%)
+  network_mbps: p0:31.177/0.551(5560.27%)
+N011:
+  cpu_cores: p0:0.194/0.102(90.23%)
+  memory_gb: p0:0.195/0.142(37.59%)
+  network_mbps: p0:12.264/0.793(1446.12%)
+N012:
+  cpu_cores: p0:0.323/0.101(218.50%)
+  memory_gb: p0:1.347/0.123(992.53%)
+  network_mbps: p0:8.987/1.751(413.37%)
+N013:
+  cpu_cores: p0:0.193/0.104(85.13%)
+  memory_gb: p0:0.814/0.104(679.14%)
+  network_mbps: p0:11.020/1.205(814.43%)
+N014:
+  cpu_cores: p0:0.555/0.109(410.08%)
+  memory_gb: p0:0.157/0.113(38.92%)
+  network_mbps: p0:23.665/0.430(5404.76%)
+N015:
+  cpu_cores: p0:0.214/0.106(100.76%)
+  memory_gb: p0:0.311/0.103(202.63%)
+  network_mbps: p0:63.173/0.154(40984.23%)
+N016:
+  cpu_cores: p0:0.105/0.102(2.72%)
+  memory_gb: p0:0.687/0.105(552.54%)
+  network_mbps: p0:22.244/3.594(519.01%) p50:5062.266/4961.345(2.03%)
+N017:
+  cpu_cores: p0:0.213/0.100(112.05%)
+  memory_gb: p0:0.572/0.180(217.61%)
+  network_mbps: p0:0.761/0.670(13.59%)
+N018:
+  cpu_cores: p0:0.231/0.100(130.05%)
+  memory_gb: p0:2.351/0.121(1841.66%)
+  network_mbps: p0:14.403/0.319(4419.88%)
+N019:
+  cpu_cores: p0:0.278/0.104(167.63%)
+  memory_gb: p0:0.365/0.103(254.43%)
+  network_mbps: p0:7.283/0.343(2022.39%)
+N020:
+  cpu_cores: p0:0.589/0.106(454.96%)
+  memory_gb: p0:0.759/0.109(598.49%)
+  network_mbps: p0:5.145/0.165(3023.11%)
+N021:
+  cpu_cores: p0:0.333/0.103(221.67%)
+  memory_gb: p0:0.685/0.101(577.23%)
+  network_mbps: p0:16.728/0.542(2985.00%)
+N022:
+  cpu_cores: p0:0.336/0.105(218.82%)
+  memory_gb: p0:0.424/0.125(240.11%)
+  network_mbps: p0:12.063/0.823(1366.01%)
+N023:
+  cpu_cores: p0:0.133/0.104(28.12%)
+  memory_gb: p0:1.541/0.143(977.89%)
+  network_mbps: p0:75.114/3.159(2277.82%)
+N024:
+  cpu_cores: p0:0.234/0.114(105.93%)
+  memory_gb: p0:2.073/0.102(1941.40%)
+  network_mbps: p0:1.951/0.380(413.89%)
+N025:
+  cpu_cores: p0:0.298/0.128(132.49%)
+  memory_gb: p0:1.202/0.110(994.27%)
+  network_mbps: p0:48.067/0.258(18496.59%)
+N026:
+  memory_gb: p0:0.410/0.101(307.26%)
+  network_mbps: p0:44.601/0.203(21861.39%)
+N027:
+  cpu_cores: p0:0.189/0.103(83.16%)
+  memory_gb: p0:0.135/0.120(12.77%)
+  network_mbps: p0:2.960/2.772(6.78%)
+N028:
+  cpu_cores: p0:0.325/0.109(199.45%)
+  memory_gb: p0:1.447/0.116(1149.07%)
+  network_mbps: p0:13.860/0.577(2303.75%)
+N029:
+  cpu_cores: p0:0.383/0.110(247.51%)
+  memory_gb: p0:1.498/0.107(1301.93%)
+  network_mbps: p0:7.109/0.636(1018.60%)
+N030:
+  cpu_cores: p0:0.399/0.106(276.51%)
+  memory_gb: p0:1.175/0.109(979.89%)
+  network_mbps: p0:58.013/1.335(4244.21%)
+
+=== Sweep rows=440000 ===
+  ingest progress: 44/440 batches (10%)
+  ingest progress: 88/440 batches (20%)
+  ingest progress: 132/440 batches (30%)
+  ingest progress: 176/440 batches (40%)
+  ingest progress: 220/440 batches (50%)
+  ingest progress: 264/440 batches (60%)
+  ingest progress: 308/440 batches (70%)
+  ingest progress: 352/440 batches (80%)
+  ingest progress: 396/440 batches (90%)
+  ingest progress: 440/440 batches (100%)
+server RTT: 14.07 ms | ES RTT: 610.42 ms | max diff >=2%: 42185.27%
+comparisons:
+N001:
+  cpu_cores: p0:0.189/0.108(74.94%)
+  memory_gb: p0:0.127/0.105(20.71%)
+  network_mbps: p0:27.550/0.283(9642.45%)
+N002:
+  cpu_cores: p0:0.583/0.114(412.90%) p50:32.677/31.796(2.77%)
+  memory_gb: p0:0.242/0.107(126.29%)
+  network_mbps: p0:19.337/0.306(6221.15%)
+N003:
+  cpu_cores: p0:0.154/0.101(52.32%)
+  network_mbps: p0:13.102/0.703(1763.36%)
+N004:
+  cpu_cores: p0:0.112/0.103(8.39%)
+  memory_gb: p0:1.449/0.104(1295.76%)
+  network_mbps: p0:40.926/0.360(11259.93%)
+N005:
+  cpu_cores: p0:0.316/0.100(215.92%)
+  memory_gb: p0:0.251/0.139(80.63%)
+  network_mbps: p0:42.414/0.545(7686.83%)
+N006:
+  cpu_cores: p0:0.348/0.108(222.07%)
+  memory_gb: p0:0.324/0.116(180.67%)
+  network_mbps: p0:8.630/0.463(1764.03%)
+N007:
+  cpu_cores: p0:0.181/0.107(69.26%)
+  memory_gb: p0:3.180/0.102(3019.63%) p50:129.254/125.649(2.87%)
+  network_mbps: p0:16.176/0.862(1776.47%)
+N008:
+  cpu_cores: p0:0.284/0.100(183.61%)
+  memory_gb: p0:0.363/0.104(249.21%)
+  network_mbps: p0:8.282/0.155(5258.79%)
+N009:
+  cpu_cores: p0:0.328/0.104(214.30%)
+  network_mbps: p0:1.689/0.367(360.79%)
+N010:
+  cpu_cores: p0:0.246/0.101(143.43%)
+  memory_gb: p0:1.155/0.117(890.57%)
+  network_mbps: p0:3.362/1.230(173.32%)
+N011:
+  cpu_cores: p0:0.224/0.100(123.20%)
+  memory_gb: p0:0.167/0.124(34.09%)
+  network_mbps: p0:2.750/0.179(1435.39%)
+N012:
+  cpu_cores: p0:0.356/0.106(234.26%)
+  memory_gb: p0:0.124/0.102(20.88%)
+  network_mbps: p0:7.714/0.205(3658.28%)
+N013:
+  cpu_cores: p0:0.177/0.110(60.19%)
+  memory_gb: p0:1.315/0.117(1020.65%)
+  network_mbps: p0:39.289/0.587(6588.73%)
+N014:
+  cpu_cores: p0:0.131/0.104(26.79%)
+  memory_gb: p0:0.904/0.101(796.17%)
+  network_mbps: p0:71.763/1.389(5065.82%)
+N015:
+  cpu_cores: p0:0.275/0.107(157.85%)
+  memory_gb: p0:0.556/0.153(262.59%)
+  network_mbps: p0:23.903/1.618(1377.53%)
+N016:
+  cpu_cores: p0:0.190/0.100(89.31%)
+  memory_gb: p0:0.227/0.120(89.51%)
+  network_mbps: p0:48.273/1.467(3190.08%)
+N017:
+  cpu_cores: p0:0.434/0.100(333.78%)
+  memory_gb: p0:0.397/0.134(195.44%)
+  network_mbps: p0:41.973/0.123(34037.21%)
+N018:
+  cpu_cores: p0:0.352/0.105(235.37%)
+  memory_gb: p0:0.138/0.102(34.62%)
+  network_mbps: p0:8.619/1.140(656.12%)
+N019:
+  cpu_cores: p0:0.190/0.109(74.86%)
+  memory_gb: p0:0.283/0.154(84.15%)
+  network_mbps: p0:39.581/0.112(35097.30%)
+N020:
+  cpu_cores: p0:0.388/0.104(274.54%)
+  memory_gb: p0:1.207/0.105(1045.45%)
+  network_mbps: p0:31.058/0.288(10677.41%)
+N021:
+  cpu_cores: p0:0.137/0.100(37.23%)
+  memory_gb: p0:0.210/0.106(98.76%)
+  network_mbps: p0:103.557/0.403(25582.76%)
+N022:
+  cpu_cores: p0:0.484/0.104(366.30%)
+  memory_gb: p0:0.443/0.114(288.63%)
+  network_mbps: p0:28.414/1.874(1416.30%)
+N023:
+  cpu_cores: p0:0.154/0.102(50.83%)
+  memory_gb: p0:2.237/0.125(1685.50%)
+  network_mbps: p0:22.109/0.101(21786.53%)
+N024:
+  cpu_cores: p0:0.333/0.103(224.34%)
+  memory_gb: p0:0.931/0.101(824.88%)
+  network_mbps: p0:65.921/1.166(5554.67%)
+N025:
+  cpu_cores: p0:0.143/0.111(28.91%)
+  memory_gb: p0:0.960/0.110(775.89%)
+  network_mbps: p0:1.345/0.534(151.89%)
+N026:
+  cpu_cores: p0:0.200/0.104(92.93%)
+  memory_gb: p0:1.504/0.103(1357.41%)
+  network_mbps: p0:23.974/0.801(2892.73%)
+N027:
+  cpu_cores: p0:0.241/0.101(137.49%)
+  memory_gb: p0:0.647/0.130(397.19%)
+  network_mbps: p0:8.803/0.306(2781.55%)
+N028:
+  cpu_cores: p0:0.149/0.102(46.51%)
+  memory_gb: p0:0.204/0.100(104.04%)
+  network_mbps: p0:53.233/0.126(42185.27%)
+N029:
+  cpu_cores: p0:0.158/0.105(49.66%)
+  memory_gb: p0:0.167/0.113(48.09%)
+  network_mbps: p0:0.214/0.127(68.50%)
+N030:
+  cpu_cores: p0:0.246/0.101(142.31%)
+  memory_gb: p0:0.272/0.110(146.49%)
+  network_mbps: p0:74.725/0.865(8535.01%)
+
+=== Sweep rows=450000 ===
+  ingest progress: 45/450 batches (10%)
+  ingest progress: 90/450 batches (20%)
+  ingest progress: 135/450 batches (30%)
+  ingest progress: 180/450 batches (40%)
+  ingest progress: 225/450 batches (50%)
+  ingest progress: 270/450 batches (60%)
+  ingest progress: 315/450 batches (70%)
+  ingest progress: 360/450 batches (80%)
+  ingest progress: 405/450 batches (90%)
+  ingest progress: 450/450 batches (100%)
+server RTT: 12.55 ms | ES RTT: 496.35 ms | max diff >=2%: 27977.30%
+comparisons:
+N001:
+  cpu_cores: p0:0.119/0.105(13.97%)
+  memory_gb: p0:1.143/0.146(682.06%)
+  network_mbps: p0:15.482/0.485(3092.92%)
+N002:
+  cpu_cores: p0:0.185/0.101(82.05%)
+  memory_gb: p0:0.381/0.123(209.62%)
+  network_mbps: p0:25.407/0.298(8438.66%)
+N003:
+  cpu_cores: p0:0.164/0.104(58.23%)
+  memory_gb: p0:1.292/0.103(1154.22%)
+  network_mbps: p0:1.063/0.528(101.31%)
+N004:
+  cpu_cores: p0:0.237/0.105(124.79%)
+  memory_gb: p0:0.376/0.110(242.32%)
+  network_mbps: p0:23.513/0.464(4967.07%)
+N005:
+  cpu_cores: p0:0.174/0.101(72.58%)
+  memory_gb: p0:0.433/0.127(240.77%)
+  network_mbps: p0:64.212/1.318(4770.91%)
+N006:
+  cpu_cores: p0:0.112/0.102(10.07%)
+  memory_gb: p0:0.456/0.117(291.36%)
+  network_mbps: p0:23.444/1.253(1771.11%)
+N007:
+  cpu_cores: p0:0.274/0.101(170.36%)
+  memory_gb: p0:0.423/0.112(277.58%)
+  network_mbps: p0:77.007/2.864(2588.62%)
+N008:
+  cpu_cores: p0:0.250/0.103(142.04%)
+  memory_gb: p0:0.362/0.105(245.91%)
+  network_mbps: p0:39.433/0.514(7578.53%)
+N009:
+  cpu_cores: p0:0.467/0.100(367.17%)
+  memory_gb: p0:1.254/0.156(703.39%)
+  network_mbps: p0:23.877/0.260(9073.36%)
+N010:
+  cpu_cores: p0:0.539/0.107(401.81%)
+  memory_gb: p0:0.260/0.133(95.16%)
+  network_mbps: p0:59.581/1.074(5447.52%)
+N011:
+  cpu_cores: p0:0.276/0.103(168.38%)
+  memory_gb: p0:0.122/0.101(20.17%)
+  network_mbps: p0:2.332/0.262(788.81%)
+N012:
+  cpu_cores: p0:0.291/0.106(175.71%)
+  memory_gb: p0:1.205/0.104(1063.61%)
+  network_mbps: p0:9.793/0.707(1285.39%)
+N013:
+  cpu_cores: p0:0.250/0.100(149.47%)
+  memory_gb: p0:0.796/0.128(521.39%)
+  network_mbps: p0:40.369/1.643(2357.02%)
+N014:
+  cpu_cores: p0:0.319/0.106(201.09%)
+  memory_gb: p0:0.246/0.107(129.20%)
+  network_mbps: p0:2.065/1.190(73.55%)
+N015:
+  cpu_cores: p0:0.134/0.102(30.79%)
+  memory_gb: p0:1.601/0.133(1106.05%)
+  network_mbps: p0:44.253/1.129(3821.17%)
+N016:
+  cpu_cores: p0:0.249/0.100(149.20%)
+  memory_gb: p0:1.620/0.105(1449.06%)
+  network_mbps: p0:36.814/0.553(6551.32%)
+N017:
+  memory_gb: p0:0.668/0.109(511.13%)
+  network_mbps: p0:27.746/1.210(2193.69%)
+N018:
+  cpu_cores: p0:0.250/0.105(138.82%)
+  memory_gb: p0:0.279/0.109(156.57%)
+  network_mbps: p0:7.873/0.337(2233.71%)
+N019:
+  cpu_cores: p0:0.335/0.103(225.85%)
+  memory_gb: p0:0.730/0.117(524.86%)
+  network_mbps: p0:34.645/2.285(1415.94%)
+N020:
+  cpu_cores: p0:0.192/0.101(90.09%)
+  memory_gb: p0:0.441/0.113(290.11%)
+  network_mbps: p0:53.459/0.339(15650.37%)
+N021:
+  cpu_cores: p0:0.147/0.102(43.87%)
+  memory_gb: p0:2.809/0.120(2243.58%)
+  network_mbps: p0:2.015/0.161(1152.18%)
+N022:
+  cpu_cores: p0:0.373/0.101(267.85%)
+  memory_gb: p0:0.494/0.103(380.39%)
+  network_mbps: p0:60.957/0.837(7183.94%)
+N023:
+  cpu_cores: p0:0.174/0.104(67.18%)
+  memory_gb: p0:0.251/0.108(132.55%)
+  network_mbps: p0:7.703/2.409(219.76%)
+N024:
+  cpu_cores: p0:0.383/0.101(279.54%)
+  memory_gb: p0:0.613/0.116(428.28%)
+  network_mbps: p0:3.830/0.317(1108.99%)
+N025:
+  cpu_cores: p0:0.324/0.101(219.13%)
+  memory_gb: p0:0.967/0.106(811.05%)
+  network_mbps: p0:4.747/0.718(561.24%)
+N026:
+  cpu_cores: p0:0.263/0.103(154.60%)
+  memory_gb: p0:1.399/0.114(1127.61%)
+  network_mbps: p0:32.760/0.696(4607.92%)
+N027:
+  cpu_cores: p0:0.195/0.101(93.34%)
+  memory_gb: p0:0.719/0.130(452.56%)
+  network_mbps: p0:1.888/1.415(33.49%)
+N028:
+  cpu_cores: p0:0.278/0.129(116.38%)
+  memory_gb: p0:0.255/0.109(133.46%)
+  network_mbps: p0:53.666/0.316(16865.17%)
+N029:
+  cpu_cores: p0:0.218/0.104(110.44%)
+  memory_gb: p0:0.580/0.120(384.34%)
+  network_mbps: p0:32.327/2.581(1152.53%)
+N030:
+  cpu_cores: p0:0.518/0.108(377.27%)
+  memory_gb: p0:1.371/0.107(1185.80%)
+  network_mbps: p0:37.064/0.132(27977.30%)
+
+=== Sweep rows=460000 ===
+  ingest progress: 46/460 batches (10%)
+  ingest progress: 92/460 batches (20%)
+  ingest progress: 138/460 batches (30%)
+  ingest progress: 184/460 batches (40%)
+  ingest progress: 230/460 batches (50%)
+  ingest progress: 276/460 batches (60%)
+  ingest progress: 322/460 batches (70%)
+  ingest progress: 368/460 batches (80%)
+  ingest progress: 414/460 batches (90%)
+  ingest progress: 460/460 batches (100%)
+server RTT: 9.88 ms | ES RTT: 448.70 ms | max diff >=2%: 22556.87%
+comparisons:
+N001:
+  cpu_cores: p0:0.135/0.104(29.10%)
+  memory_gb: p0:0.400/0.109(269.04%)
+  network_mbps: p0:20.288/1.769(1047.16%)
+N002:
+  cpu_cores: p0:0.302/0.101(199.43%)
+  memory_gb: p0:0.362/0.107(237.80%)
+  network_mbps: p0:2.480/1.704(45.51%)
+N003:
+  memory_gb: p0:1.136/0.120(846.58%)
+  network_mbps: p0:10.261/0.926(1008.36%)
+N004:
+  cpu_cores: p0:0.328/0.104(215.63%)
+  memory_gb: p0:0.275/0.114(141.06%)
+  network_mbps: p0:10.572/0.201(5157.41%)
+N005:
+  cpu_cores: p0:0.122/0.100(21.75%)
+  memory_gb: p0:0.962/0.102(845.55%)
+  network_mbps: p0:11.764/0.614(1815.32%)
+N006:
+  cpu_cores: p0:0.569/0.103(454.24%)
+  memory_gb: p0:0.299/0.104(187.86%)
+  network_mbps: p0:40.528/1.457(2681.52%)
+N007:
+  cpu_cores: p0:0.288/0.101(184.29%)
+  memory_gb: p0:1.090/0.102(970.03%)
+N008:
+  cpu_cores: p0:0.363/0.107(240.95%)
+  memory_gb: p0:0.705/0.130(443.41%)
+  network_mbps: p0:3.713/0.893(315.88%)
+N009:
+  cpu_cores: p0:0.321/0.101(217.10%)
+  memory_gb: p0:0.542/0.105(416.29%)
+  network_mbps: p0:20.080/0.560(3484.85%)
+N010:
+  cpu_cores: p0:0.296/0.101(194.41%)
+  memory_gb: p0:1.015/0.217(368.78%)
+  network_mbps: p0:2.463/0.281(775.11%)
+N011:
+  cpu_cores: p0:0.195/0.102(92.36%)
+  memory_gb: p0:0.455/0.110(314.59%)
+  network_mbps: p0:19.216/0.229(8295.54%)
+N012:
+  cpu_cores: p0:0.116/0.104(12.31%)
+  memory_gb: p0:1.251/0.108(1054.15%)
+  network_mbps: p0:21.189/0.355(5867.49%)
+N013:
+  cpu_cores: p0:0.239/0.103(130.83%)
+  memory_gb: p0:1.344/0.110(1123.73%)
+  network_mbps: p0:7.797/0.335(2227.67%)
+N014:
+  cpu_cores: p0:0.551/0.104(432.01%)
+  memory_gb: p0:1.285/0.155(728.65%)
+  network_mbps: p0:8.888/0.296(2906.38%)
+N015:
+  cpu_cores: p0:0.342/0.105(226.21%)
+  memory_gb: p0:0.829/0.124(568.78%)
+  network_mbps: p0:23.968/0.595(3929.25%)
+N016:
+  cpu_cores: p0:0.247/0.119(106.84%)
+  memory_gb: p0:0.549/0.144(280.58%)
+  network_mbps: p0:59.509/0.949(6167.87%)
+N017:
+  cpu_cores: p0:0.251/0.104(141.38%)
+  memory_gb: p0:0.440/0.112(294.29%)
+  network_mbps: p0:12.862/0.288(4373.89%)
+N018:
+  cpu_cores: p0:0.134/0.100(33.15%)
+  memory_gb: p0:0.543/0.103(427.19%)
+  network_mbps: p0:43.901/0.227(19234.42%)
+N019:
+  cpu_cores: p0:0.577/0.102(466.82%)
+  memory_gb: p0:0.964/0.115(741.20%)
+  network_mbps: p0:57.011/0.252(22556.87%)
+N020:
+  cpu_cores: p0:0.402/0.101(297.22%)
+  memory_gb: p0:0.770/0.104(639.89%)
+  network_mbps: p0:5.937/0.871(581.76%)
+N021:
+  cpu_cores: p0:0.461/0.105(340.27%)
+  memory_gb: p0:2.603/0.120(2072.72%)
+  network_mbps: p0:11.912/0.412(2788.50%)
+N022:
+  cpu_cores: p0:0.478/0.109(337.29%)
+  memory_gb: p0:1.451/0.126(1052.95%)
+  network_mbps: p0:6.770/0.945(616.51%)
+N023:
+  cpu_cores: p0:0.245/0.105(132.71%)
+  memory_gb: p0:0.244/0.102(140.47%)
+  network_mbps: p0:42.872/0.490(8651.49%)
+N024:
+  cpu_cores: p0:0.124/0.103(19.64%)
+  memory_gb: p0:0.191/0.102(87.67%)
+  network_mbps: p0:38.422/1.263(2942.81%)
+N025:
+  cpu_cores: p0:0.159/0.103(53.87%)
+  memory_gb: p0:1.406/0.128(996.09%)
+  network_mbps: p0:1.793/1.047(71.19%)
+N026:
+  cpu_cores: p0:0.430/0.104(311.70%)
+  memory_gb: p0:0.452/0.110(311.18%)
+  network_mbps: p0:31.924/1.184(2595.47%)
+N027:
+  cpu_cores: p0:0.149/0.100(48.64%)
+  memory_gb: p0:0.220/0.104(111.95%)
+  network_mbps: p0:15.861/1.137(1295.29%)
+N028:
+  cpu_cores: p0:0.163/0.102(59.97%)
+  memory_gb: p0:0.428/0.101(324.87%)
+  network_mbps: p0:18.278/1.000(1727.62%)
+N029:
+  cpu_cores: p0:0.271/0.110(145.24%)
+  memory_gb: p0:0.436/0.137(218.35%)
+  network_mbps: p0:3.447/1.875(83.86%)
+N030:
+  cpu_cores: p0:0.126/0.104(21.50%)
+  memory_gb: p0:2.328/0.117(1897.57%)
+  network_mbps: p0:2.600/0.329(691.52%)
+
+=== Sweep rows=470000 ===
+  ingest progress: 47/470 batches (10%)
+  ingest progress: 94/470 batches (20%)
+  ingest progress: 141/470 batches (30%)
+  ingest progress: 188/470 batches (40%)
+  ingest progress: 235/470 batches (50%)
+  ingest progress: 282/470 batches (60%)
+  ingest progress: 329/470 batches (70%)
+  ingest progress: 376/470 batches (80%)
+  ingest progress: 423/470 batches (90%)
+  ingest progress: 470/470 batches (100%)
+server RTT: 12.40 ms | ES RTT: 487.23 ms | max diff >=2%: 70764.74%
+comparisons:
+N001:
+  cpu_cores: p0:0.116/0.104(11.83%)
+  memory_gb: p0:0.940/0.100(835.77%)
+  network_mbps: p0:65.114/0.165(39350.36%)
+N002:
+  cpu_cores: p0:0.365/0.100(264.96%)
+  memory_gb: p0:0.944/0.106(787.74%)
+  network_mbps: p0:19.989/1.701(1075.50%)
+N003:
+  cpu_cores: p0:0.171/0.104(64.51%)
+  memory_gb: p0:1.234/0.100(1134.23%)
+  network_mbps: p0:9.345/1.156(708.64%)
+N004:
+  cpu_cores: p0:0.169/0.103(64.53%)
+  memory_gb: p0:0.422/0.115(267.64%)
+  network_mbps: p0:25.013/0.335(7369.95%)
+N005:
+  cpu_cores: p0:0.210/0.101(107.53%)
+  memory_gb: p0:0.139/0.113(23.74%)
+  network_mbps: p0:24.500/0.190(12787.10%)
+N006:
+  cpu_cores: p0:0.111/0.101(10.84%)
+  memory_gb: p0:0.189/0.113(67.31%)
+  network_mbps: p0:7.612/0.143(5217.87%)
+N007:
+  cpu_cores: p0:0.201/0.107(87.65%)
+  memory_gb: p0:0.782/0.106(639.38%)
+  network_mbps: p0:7.153/0.449(1494.71%)
+N008:
+  cpu_cores: p0:0.172/0.106(62.10%)
+  memory_gb: p0:0.204/0.119(71.38%)
+  network_mbps: p0:8.107/0.627(1193.82%)
+N009:
+  cpu_cores: p0:0.139/0.104(33.38%)
+  network_mbps: p0:50.158/0.680(7271.86%)
+N010:
+  cpu_cores: p0:0.211/0.101(108.01%)
+  memory_gb: p0:1.061/0.123(765.44%)
+  network_mbps: p0:105.984/0.431(24466.89%)
+N011:
+  cpu_cores: p0:0.194/0.102(89.44%)
+  memory_gb: p0:0.259/0.106(144.89%)
+  network_mbps: p0:36.181/0.185(19449.39%)
+N012:
+  cpu_cores: p0:0.332/0.111(198.22%) p50:32.922/32.236(2.13%)
+  memory_gb: p0:0.255/0.108(136.10%)
+  network_mbps: p0:7.453/0.979(661.51%)
+N013:
+  cpu_cores: p0:0.157/0.101(55.09%)
+  memory_gb: p0:0.224/0.105(114.14%)
+  network_mbps: p0:2.687/0.446(502.09%)
+N014:
+  cpu_cores: p0:0.515/0.118(334.99%)
+  memory_gb: p0:0.501/0.107(368.53%)
+  network_mbps: p0:8.594/1.637(424.92%)
+N015:
+  cpu_cores: p0:0.388/0.113(244.55%)
+  memory_gb: p0:0.770/0.128(500.88%)
+  network_mbps: p0:7.814/1.283(509.23%)
+N016:
+  cpu_cores: p0:0.579/0.102(467.67%)
+  memory_gb: p0:0.320/0.110(191.31%)
+  network_mbps: p0:68.640/0.469(14531.20%)
+N017:
+  cpu_cores: p0:0.124/0.102(21.68%)
+  memory_gb: p0:0.744/0.115(547.72%)
+  network_mbps: p0:19.081/0.794(2301.93%)
+N018:
+  cpu_cores: p0:0.109/0.103(6.10%)
+  memory_gb: p0:0.363/0.104(248.77%)
+  network_mbps: p0:54.928/0.230(23735.68%)
+N019:
+  cpu_cores: p0:0.214/0.102(110.90%)
+  memory_gb: p0:2.015/0.138(1359.09%)
+  network_mbps: p0:0.746/0.166(349.71%)
+N020:
+  cpu_cores: p0:0.206/0.104(98.64%)
+  memory_gb: p0:0.368/0.125(193.85%)
+  network_mbps: p0:25.904/0.743(3385.49%)
+N021:
+  cpu_cores: p0:0.638/0.101(530.70%)
+  memory_gb: p0:0.671/0.107(523.88%)
+  network_mbps: p0:14.975/0.558(2584.29%)
+N022:
+  cpu_cores: p0:0.586/0.102(472.66%)
+  memory_gb: p0:1.199/0.157(664.09%)
+  network_mbps: p0:10.671/0.367(2805.79%)
+N023:
+  cpu_cores: p0:0.110/0.107(2.07%)
+  memory_gb: p0:0.375/0.114(229.91%)
+  network_mbps: p0:12.964/0.732(1670.66%)
+N024:
+  cpu_cores: p0:0.276/0.101(173.23%)
+  memory_gb: p0:0.457/0.118(288.39%)
+  network_mbps: p0:4.438/0.170(2505.36%)
+N025:
+  cpu_cores: p0:0.197/0.101(95.95%)
+  memory_gb: p0:0.567/0.146(287.31%)
+  network_mbps: p0:93.112/0.131(70764.74%)
+N026:
+  cpu_cores: p0:0.107/0.102(5.00%)
+  memory_gb: p0:0.131/0.104(26.09%)
+  network_mbps: p0:15.359/1.360(1029.68%)
+N027:
+  cpu_cores: p0:0.260/0.104(151.37%)
+  memory_gb: p0:0.302/0.105(188.09%)
+  network_mbps: p0:23.096/0.397(5710.34%) p50:5147.725/5037.366(2.19%)
+N028:
+  cpu_cores: p0:0.140/0.106(31.52%)
+  memory_gb: p0:0.705/0.127(456.63%)
+  network_mbps: p0:26.910/0.517(5106.89%)
+N029:
+  cpu_cores: p0:0.249/0.102(143.85%)
+  memory_gb: p0:0.940/0.106(782.78%)
+  network_mbps: p0:10.221/0.397(2472.34%)
+N030:
+  cpu_cores: p0:0.113/0.101(11.89%)
+  memory_gb: p0:1.023/0.108(848.79%)
+  network_mbps: p0:39.923/0.650(6046.67%)
+
+=== Sweep rows=480000 ===
+  ingest progress: 48/480 batches (10%)
+  ingest progress: 96/480 batches (20%)
+  ingest progress: 144/480 batches (30%)
+  ingest progress: 192/480 batches (40%)
+  ingest progress: 240/480 batches (50%)
+  ingest progress: 288/480 batches (60%)
+  ingest progress: 336/480 batches (70%)
+  ingest progress: 384/480 batches (80%)
+  ingest progress: 432/480 batches (90%)
+  ingest progress: 480/480 batches (100%)
+server RTT: 12.50 ms | ES RTT: 362.89 ms | max diff >=2%: 37128.48%
+comparisons:
+N001:
+  cpu_cores: p0:0.194/0.117(66.06%)
+  memory_gb: p0:1.319/0.115(1048.32%)
+  network_mbps: p0:29.439/1.058(2683.08%)
+N002:
+  cpu_cores: p0:0.143/0.107(33.46%)
+  memory_gb: p0:0.183/0.124(47.13%)
+  network_mbps: p0:11.790/0.104(11203.44%)
+N003:
+  cpu_cores: p0:0.169/0.108(56.23%)
+  memory_gb: p0:0.946/0.137(592.71%)
+N004:
+  cpu_cores: p0:0.123/0.104(18.81%)
+  memory_gb: p0:0.576/0.109(429.09%)
+  network_mbps: p0:20.539/0.640(3109.64%)
+N005:
+  cpu_cores: p0:0.147/0.105(39.61%)
+  memory_gb: p0:0.887/0.102(766.39%)
+  network_mbps: p0:40.097/0.128(31263.62%)
+N006:
+  cpu_cores: p0:0.207/0.105(96.76%)
+  memory_gb: p0:0.234/0.107(118.98%)
+  network_mbps: p0:56.981/0.393(14412.30%)
+N007:
+  cpu_cores: p0:0.106/0.102(4.07%)
+  network_mbps: p0:12.377/0.574(2054.57%)
+N008:
+  cpu_cores: p0:0.520/0.126(311.31%)
+  memory_gb: p0:0.770/0.101(663.30%)
+  network_mbps: p0:34.257/0.881(3790.41%)
+N009:
+  cpu_cores: p0:0.277/0.112(148.29%)
+  memory_gb: p0:0.156/0.141(10.84%)
+  network_mbps: p0:4.121/0.593(594.93%)
+N010:
+  cpu_cores: p0:0.266/0.109(143.82%)
+  memory_gb: p0:2.403/0.125(1829.26%)
+  network_mbps: p0:47.812/2.063(2217.27%)
+N011:
+  cpu_cores: p0:0.142/0.102(39.31%)
+  memory_gb: p0:0.255/0.108(136.88%)
+  network_mbps: p0:12.233/0.177(6805.30%)
+N012:
+  cpu_cores: p0:0.279/0.104(169.03%)
+  memory_gb: p0:0.382/0.101(277.18%)
+  network_mbps: p0:73.023/0.196(37128.48%)
+N013:
+  cpu_cores: p0:0.132/0.103(28.25%)
+  memory_gb: p0:0.117/0.113(3.89%)
+  network_mbps: p0:37.178/0.119(31139.05%)
+N014:
+  cpu_cores: p0:0.266/0.106(150.22%)
+  memory_gb: p0:1.705/0.130(1208.33%)
+  network_mbps: p0:61.893/0.715(8554.12%)
+N015:
+  cpu_cores: p0:0.273/0.107(155.56%)
+  memory_gb: p0:1.155/0.102(1033.91%)
+  network_mbps: p0:3.978/1.919(107.29%)
+N016:
+  cpu_cores: p0:0.211/0.104(103.71%)
+  memory_gb: p0:0.676/0.139(384.39%)
+  network_mbps: p0:19.590/0.285(6764.12%)
+N017:
+  memory_gb: p0:0.666/0.107(521.40%)
+  network_mbps: p0:19.997/0.820(2339.30%)
+N018:
+  cpu_cores: p0:0.486/0.105(364.58%)
+  memory_gb: p0:1.894/0.109(1641.04%)
+  network_mbps: p0:47.346/1.176(3924.49%)
+N019:
+  cpu_cores: p0:0.186/0.103(80.25%)
+  memory_gb: p0:0.900/0.126(616.11%)
+  network_mbps: p0:4.372/0.124(3417.85%)
+N020:
+  memory_gb: p0:0.694/0.114(507.60%)
+  network_mbps: p0:9.897/0.265(3632.86%)
+N021:
+  cpu_cores: p0:0.351/0.103(242.27%)
+  memory_gb: p0:0.811/0.101(703.37%)
+  network_mbps: p0:13.526/1.088(1143.00%)
+N022:
+  cpu_cores: p0:0.158/0.103(52.58%)
+  memory_gb: p0:0.784/0.102(670.74%)
+  network_mbps: p0:8.545/0.337(2432.80%)
+N023:
+  cpu_cores: p0:0.213/0.106(101.37%)
+  memory_gb: p0:0.926/0.120(674.34%)
+  network_mbps: p0:1.403/0.238(490.60%)
+N024:
+  cpu_cores: p0:0.109/0.103(5.87%)
+  memory_gb: p0:0.977/0.114(756.02%)
+  network_mbps: p0:17.618/0.328(5274.95%)
+N025:
+  cpu_cores: p0:0.202/0.102(97.33%)
+  memory_gb: p0:0.574/0.131(338.93%)
+  network_mbps: p0:11.890/1.865(537.45%)
+N026:
+  cpu_cores: p0:0.252/0.103(144.55%)
+  memory_gb: p0:0.112/0.108(3.71%)
+  network_mbps: p0:31.119/0.597(5108.86%)
+N027:
+  cpu_cores: p0:0.332/0.102(224.63%)
+  memory_gb: p0:0.142/0.104(37.61%)
+  network_mbps: p0:51.313/0.493(10299.48%)
+N028:
+  cpu_cores: p0:0.127/0.105(21.38%)
+  memory_gb: p0:1.274/0.101(1162.23%)
+  network_mbps: p0:4.887/0.305(1501.77%)
+N029:
+  cpu_cores: p0:0.141/0.102(37.46%)
+  memory_gb: p0:1.552/0.159(878.80%)
+  network_mbps: p0:17.948/1.034(1636.34%)
+N030:
+  cpu_cores: p0:0.409/0.101(305.89%)
+  memory_gb: p0:0.171/0.112(52.59%)
+  network_mbps: p0:10.417/0.695(1398.71%)
+
+=== Sweep rows=490000 ===
+  ingest progress: 49/490 batches (10%)
+  ingest progress: 98/490 batches (20%)
+  ingest progress: 147/490 batches (30%)
+  ingest progress: 196/490 batches (40%)
+  ingest progress: 245/490 batches (50%)
+  ingest progress: 294/490 batches (60%)
+  ingest progress: 343/490 batches (70%)
+  ingest progress: 392/490 batches (80%)
+  ingest progress: 441/490 batches (90%)

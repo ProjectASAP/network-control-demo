@@ -1,3 +1,0 @@
-chart-repos:
-  - prometheus=https://prometheus-community.github.io/helm-charts
-  - bitnami=https://charts.bitnami.com/bitnami
