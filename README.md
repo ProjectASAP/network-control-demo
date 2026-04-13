@@ -1,6 +1,6 @@
 # network-control-demo
 
-Proof-of-concept network control demo for epoch-based task placement.
+Proof-of-concept network control demo for epoch-based task placement with approximate analytics layer.
 
 ## Problem Specification
 
@@ -10,31 +10,32 @@ Given a set of arriving tasks with specific resource demands (CPU, RAM) and inte
 
 The controller enforces joint optimization over:
 
-- Node Constraints: Total CPU and Memory capacity.
-- Network Constraints: Hierarchical tree topology with finite inter-node link bandwidth.
+- **Node Constraints:** Total CPU and Memory capacity.
+- **Network Constraints:** Hierarchical tree topology with finite inter-node link bandwidth.
+
+To simulate running tasks on a cluster, we run a separate emulator alongside our controller that emits telemetry based on received task placement and resource allocations.
 
 ### Experimental Evaluation
 
 This repository evaluates a telemetry architecture designed to accelerate Elasticsearch analytic queries loop by leveraging sketch techniques. We compare three distinct approaches:
 
-- Exact Retrieval (Baseline): Queries executed over raw telemetry stored in Elasticsearch.
+- **Exact Retrieval (Baseline):** Queries executed over raw telemetry stored in Elasticsearch.
 
-- Approximate Fast Layer: Accelerated telemetry retrieval using a high-performance Rust-based sketch server (utilizing KLL sketches for rank-based statistics and quantile estimation).
+- **Approximate Fast Layer:** Accelerated telemetry retrieval using a high-performance Rust-based sketch server (utilizing KLL sketches for rank-based statistics and quantile estimation).
 
-- Static Baseline: Task placement based on initial capacity without periodic telemetry updates.
+- **Static Baseline:** Task placement based on initial capacity without periodic telemetry updates.
 
 ### Key Metrics:
 
-- End-to-End Control-Loop Latency: Time elapsed from telemetry query initiation to solver completion.
+- **End-to-End Control-Loop Latency:** Time elapsed from telemetry query initiation to solver completion.
 
-- Task Placement Quality: Total tasks successfully assigned per epoch.
+- **Task Placement Quality:** Total tasks successfully assigned per epoch.
 
 ## Repository Components
 
 - `single_node_server/network-control-server`: Rust HTTP server for ingest + sketch queries
-- `solver_experimental`: Python orchestrator, telemetry emulator, benchmark scripts, PuLP solver
+- `solver_experimental/`: Python orchestrator, telemetry emulator, benchmark scripts, PuLP solver
 - `solver_experimental/python_solver`: OR-Tools-based solver package (used by benchmarks)
-- `solver_experimental/convex-optimization-project`: CVXPY prototype solver
 - `visualization`: live terminal dashboard for ingest/query/solve loop
 - root scripts: Elasticsearch reset/ingest helpers and evaluation pipeline
 
@@ -45,7 +46,7 @@ This repository evaluates a telemetry architecture designed to accelerate Elasti
 - Rust toolchain (for sketch server)
 - Python 3.13+ and `uv` (for `solver_experimental`)
 - Elasticsearch running locally or remotely
-- local `sketchlib-rust` dependency available for the Rust server build
+- local `asap_sketchlib` dependency available for the Rust server build
 
 ## 1) Start the sketch server (Rust)
 
@@ -65,20 +66,18 @@ docker run --rm -p 10101:10101 network-control-server:latest
 ## 2) Run solver + telemetry loop
 
 ```bash
+# Starts the telemetry emulator, and then starts the controller/solver.
 cd solver_experimental
 bash run_main.sh
 ```
 
-Or run directly:
+This will produce the following output under `logs/`:
+- `assignments.csv`: Information on tasks attempted/allocated at each epoch.
+- `loop_rtt.csv`: End to end runtime of controller loop and solver runtime.
+- `query_rtt.csv`: Query execution time at each epoch. 
+- `sketch_ingest.csv`: Time to ingest telemetry into server.
 
-```bash
-cd solver_experimental
-uv run main.py \
-	--node-path dummy_data/nodes.jsonl \
-	--edge-path dummy_data/edges.jsonl \
-	--task-path dummy_data/tasks.jsonl \
-	--query-manager-config configs/sample.yml
-```
+By default, the controller queries the sketch server. To make it use Elasticsearch instead, add the `--use-es` flag to the bottom `run_main.sh`. You may also have to remove the `--no-es-ingest` (and replace with `--no-sketch-ingest`) flag from the emulator so that the emulator pushes metrics to Elasticsearch instead. To see how to configure the correct Elasticsearch endpoint to use, see the [**environment variables section**](#useful-environment-variables).
 
 ## 3) Run benchmark suites
 
@@ -109,10 +108,3 @@ This script resets index state, starts/restarts the sketch server, and runs the 
 - `ES_URL`, `ES_API_KEY`: Elasticsearch endpoint and auth
 - `TIME_RANGE_MS`: telemetry lookback window
 - `NODE_QUERY_LIMIT`, `SCHEDULER_BATCH_SIZE`: test-time scaling knobs
-
-## Validation / Tests
-
-```bash
-cd solver_experimental
-uv run pytest python_solver/tests/
-```

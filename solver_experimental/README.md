@@ -22,7 +22,6 @@ the sketch server. The optimization objective is to maximize schedulable workloa
 - `emulate_telemetry.py`: FastAPI telemetry generator/forwarder
 - `es_query.py`: backend query and metric comparison helpers
 - `bench_queries.py` and `../scripts/*.py`: benchmark drivers
-- `configs/sample.yml`: query manager configuration example
 
 ## Prerequisites
 
@@ -70,12 +69,6 @@ python3 scripts/run_rtt_sweep.py
 python3 scripts/run_rtt_sweep_epoch_full.py --run-solver
 python3 scripts/run_rtt_sweep_epoch_full_ortools.py --run-solver --solver-backend SCIP
 python3 scripts/run_dynamic_epoch_benchmark.py --solver-backend SCIP --max-epochs 50
-```
-
-## Tests
-
-```bash
-uv run pytest python_solver/tests/
 ```
 
 ## Key Environment Variables
