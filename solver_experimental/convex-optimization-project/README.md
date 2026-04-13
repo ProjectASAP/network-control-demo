@@ -1,46 +1,44 @@
-# Convex Optimization Project
+# Convex Optimization Prototype
 
-This project implements a convex optimization program using the `cvxpy` library to optimize task allocation based on various inputs such as tasks, resources, bandwidth needs, graph topology, and current task allocation.
+Experimental CVXPY-based task placement solver for the network control demo.
 
-## Overview
+## Purpose in This Repo
 
-The goal of this project is to efficiently allocate tasks to resources while respecting the constraints of resource capacities and bandwidth limitations. The program takes into account the current state of task allocation and aims to improve it through optimization.
+This directory explores a convex-optimization formulation of the same epoch scheduling
+problem used across the demo:
 
-## Project Structure
+- tasks arrive each epoch
+- tasks consume node CPU/memory
+- communicating tasks consume inter-node bandwidth
+- assignments should satisfy capacity constraints
 
-- `src/main.py`: Entry point for the program. Initializes the optimizer, loads input data, and executes the optimization process.
-- `src/optimizer.py`: Contains the `Optimizer` class responsible for setting up and solving the convex optimization problem.
-- `src/inputs/`: Directory containing modules for managing input data:
-  - `tasks.py`: Defines the `Task` class for individual tasks and their resource requirements.
-  - `resources.py`: Defines the `Resource` class for available physical resources.
-  - `bandwidth.py`: Defines the `Bandwidth` class for bandwidth needs and capacities.
-  - `topology.py`: Defines the `Topology` class for the graph structure of nodes and edges.
-  - `allocation.py`: Defines the `Allocation` class for managing current task allocations.
-- `src/constraints/capacity_constraints.py`: Functions to enforce capacity constraints for resources and bandwidth.
-- `src/decision_variables.py`: Defines decision variables for task allocation using `cvxpy`.
+Compared with the production benchmark path (`python_solver/` OR-Tools and
+`scheduler/` PuLP), this module is exploratory and may be incomplete for all scenarios.
 
-## Requirements
+## Layout
 
-To run this project, you need to install the required dependencies. You can do this by running:
+- `src/main.py`: entry point
+- `src/optimizer.py`: optimization model assembly and solve flow
+- `src/decision_variables.py`: CVXPY decision variables for assignment
+- `src/constraints/capacity_constraints.py`: node/link capacity constraints
+- `src/inputs/`: loaders and typed input models
 
-```
+## Quick Run
+
+From this directory:
+
+```bash
 pip install -r requirements.txt
-```
-
-## Running the Program
-
-To execute the optimization program, run the following command:
-
-```
 python src/main.py
 ```
 
-Make sure that all input files are properly configured and located in the appropriate directories.
+## Input Expectations
 
-## Input Files
+Input data models represent:
 
-The project expects input files to be structured according to the classes defined in the `src/inputs/` directory. Ensure that the data is formatted correctly for successful execution.
+- tasks (resource demand, communication)
+- resources/nodes (capacity and utilization)
+- network topology and bandwidth
+- current allocation state
 
-## License
-
-This project is licensed under the MIT License.
+Use this module as a research prototype, not as the default benchmark solver.

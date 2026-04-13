@@ -1,6 +1,12 @@
 # Network Controller Solver
 
-Branch-and-bound solver that assigns network tasks to compute nodes while respecting CPU, memory, and link bandwidth capacities. The solver also lets you bound the number of task migrations between scheduling epochs.
+OR-Tools MILP solver that assigns tasks to compute nodes at each epoch while respecting:
+
+- node CPU and memory capacities
+- link bandwidth capacities
+- optional migration limits between epochs
+
+This package is the most mature solver path used by the network control demo benchmarks.
 
 ## Project Layout
 
@@ -16,6 +22,12 @@ python -m examples.run_from_files
 ```
 
 Outputs include the objective value, chosen placements, unassigned tasks, and total migrations.
+
+If run from the `solver_experimental` root with `uv`:
+
+```bash
+uv run python_solver/examples/run_from_files.py
+```
 
 ## Input File Formats
 
@@ -55,10 +67,18 @@ result = solver.solve(
 )
 ```
 
+`result` includes chosen assignments, unassigned task IDs, objective value, and migration count.
+
 ## Testing
 
 Install pytest (e.g. `pip install pytest`) and run:
 
 ```bash
 PYTHONPATH=src pytest
+```
+
+Or from `solver_experimental` root:
+
+```bash
+uv run pytest python_solver/tests/
 ```

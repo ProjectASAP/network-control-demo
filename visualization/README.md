@@ -4,7 +4,7 @@ Live CLI dashboard for the ingest → query → solve loop against the Sketch
 server. Self-contained: nothing here modifies the existing codebase. Logic
 that's reused is vendored (copied) into `_vendored/`.
 
-## What it shows
+## What It Shows
 
 A `rich.Live` dashboard that updates in real time with:
 - current epoch + phase (ingest / query / solve)
