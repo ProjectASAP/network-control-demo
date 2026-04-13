@@ -2,8 +2,20 @@
 cd single_node_server/network-control-server
 ./docker-build.sh -t network-control-server:latest
 
+# Start the Docker server standalone (on port 10101)
+docker run --rm -p 10101:10101 --name ncs-server network-control-server:latest
+
+# Stop the standalone server gracefully (frees port 10101 for the sweep script)
+# --rm means the container is removed automatically on stop.
+docker stop ncs-server
+# If it was started detached or you forgot --rm, also remove it:
+docker rm -f ncs-server 2>/dev/null || true
+
 # Run benchmarks with Docker server
 bash scripts/run_rtt_sweep_all.sh --docker
 
 # Or run a single sweep with Docker
 python3 scripts/run_rtt_sweep_epoch_full_ortools.py --run-solver --server-mode docker
+
+# visualization
+/users/yuanyc/network-control-demo/solver_experimental/.venv/bin/python     visualization/demo.py --epochs 5 --rows-per-epoch 200000 --backend SCIP
