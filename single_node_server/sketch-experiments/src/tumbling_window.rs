@@ -10,7 +10,7 @@
 //! handles out-of-order insertion naturally.
 
 use rand::Rng;
-use asap_sketchlib::{KLL, SketchInput};
+use asap_sketchlib::{KLL};
 
 /// A metric value paired with its timestamp.
 #[derive(Debug, Clone)]
@@ -23,7 +23,7 @@ struct TimestampedValue {
 /// time-range queries without requiring ordered insertion.
 struct KllTumblingWindow {
     /// KLL sketch tracking the distribution of timestamps in this window.
-    timestamp_sketch: KLL,
+    timestamp_sketch: KLL<u64>,
     /// KLL sketch tracking the distribution of metric values in this window.
     value_sketch: KLL,
     /// All ingested (timestamp, value) pairs in the current window.
@@ -40,7 +40,7 @@ struct KllTumblingWindow {
 impl KllTumblingWindow {
     fn new(window_size_ms: u64, window_start_ms: u64) -> Self {
         Self {
-            timestamp_sketch: KLL::init_kll(200),
+            timestamp_sketch: KLL::<u64>::init_kll(200),
             value_sketch: KLL::init_kll(200),
             entries: Vec::new(),
             window_size_ms,
@@ -52,11 +52,9 @@ impl KllTumblingWindow {
     /// Ingest a data point. Timestamps can arrive out of order.
     fn insert(&mut self, timestamp_ms: u64, value: f64) {
         self.timestamp_sketch
-            .update(&SketchInput::U64(timestamp_ms))
-            .unwrap();
+            .update(&timestamp_ms);
         self.value_sketch
-            .update(&SketchInput::F64(value))
-            .unwrap();
+            .update(&value);
         self.entries.push(TimestampedValue {
             timestamp_ms,
             value,
@@ -90,8 +88,7 @@ impl KllTumblingWindow {
         for entry in &self.entries {
             if entry.timestamp_ms >= cutoff_ms {
                 filtered_kll
-                    .update(&SketchInput::F64(entry.value))
-                    .unwrap();
+                    .update(&entry.value);
                 exact_count += 1;
             }
         }
