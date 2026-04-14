@@ -1,5 +1,6 @@
 mod handlers;
 mod logging;
+mod payload_log;
 mod planner;
 mod query;
 mod timing;
@@ -10,6 +11,7 @@ pub use handlers::run_http_server;
 #[allow(unused_imports)]
 pub use logging::LogEntry;
 pub use logging::start_request_logger;
+pub use payload_log::PayloadLogger;
 pub use planner::DefaultRequestPlanner;
 pub use query::SketchAggregationEngine;
 #[allow(unused_imports)]

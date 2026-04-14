@@ -11,6 +11,7 @@ use crate::metrics::{MetricField, MetricStore};
 
 use super::TimingSender;
 use super::logging::LogSender;
+use super::payload_log::PayloadLogger;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -24,6 +25,7 @@ pub struct AppState {
     pub timing_enabled: bool,
     pub timing_sender: Option<TimingSender>,
     pub log_tx: Option<LogSender>,
+    pub payload_logger: Option<PayloadLogger>,
 }
 
 #[derive(Serialize)]
@@ -68,13 +70,13 @@ pub(crate) struct CumulativeAggregation {
     pub(crate) key: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct MetricsQuery {
     pub(crate) quantiles: Vec<String>,
     pub(crate) node_id: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct BatchQueryRequest {
     pub(crate) keys: Vec<String>,
     pub(crate) fields: Option<Vec<String>>,

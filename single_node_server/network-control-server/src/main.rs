@@ -16,8 +16,8 @@ use config::ServerRuntimeConfig;
 use metrics::{InMemoryKeyStore, RangeKeyCatalog};
 use reqwest::Client;
 use server::{
-    AppState, DefaultRequestPlanner, EsFallbackUpstreamClient, SketchAggregationEngine,
-    TimingSender, run_http_server, start_request_logger,
+    AppState, DefaultRequestPlanner, EsFallbackUpstreamClient, PayloadLogger,
+    SketchAggregationEngine, TimingSender, run_http_server, start_request_logger,
 };
 
 #[tokio::main]
@@ -34,6 +34,32 @@ async fn main() {
     if args.iter().any(|arg| arg == "--timing") {
         runtime_config.server.enable_timing = true;
     }
+
+    let log_payloads_stderr = args.iter().any(|arg| arg == "--log-payloads");
+    let record_payloads_path: Option<String> = args.iter().find_map(|arg| {
+        if arg == "--record-payloads" {
+            Some("server_payloads.log".to_string())
+        } else if let Some(rest) = arg.strip_prefix("--record-payloads=") {
+            Some(rest.to_string())
+        } else {
+            None
+        }
+    });
+    let payload_logger = if log_payloads_stderr || record_payloads_path.is_some() {
+        let logger = PayloadLogger::new(log_payloads_stderr, record_payloads_path.as_deref());
+        if logger.is_active() {
+            eprintln!(
+                "payload logging: stderr={} file={}",
+                log_payloads_stderr,
+                record_payloads_path.as_deref().unwrap_or("-")
+            );
+            Some(logger)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     let metric_names: Vec<String> = runtime_config
         .schema
@@ -94,6 +120,7 @@ async fn main() {
         log_tx: Some(start_request_logger(
             runtime_config.server.request_log_buffer,
         )),
+        payload_logger,
     };
 
     eprintln!("startup complete in {:.2?}", startup_start.elapsed());

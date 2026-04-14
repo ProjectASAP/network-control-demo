@@ -232,6 +232,12 @@ async fn search_handler(
     body: Bytes,
 ) -> impl IntoResponse {
     let mut timing = state.timing_enabled.then(QueryTiming::new);
+    if let Some(logger) = &state.payload_logger {
+        if logger.is_active() {
+            let payload = std::str::from_utf8(&body).unwrap_or("<non-utf8>");
+            logger.log(&state.runtime_config.search_path(), payload);
+        }
+    }
     let request: SearchRequest = match serde_json::from_slice(&body) {
         Ok(value) => value,
         Err(err) => {
@@ -403,6 +409,12 @@ async fn batch_query_handler(
     Json(request): Json<BatchQueryRequest>,
 ) -> impl IntoResponse {
     let mut timing = state.timing_enabled.then(QueryTiming::new);
+    if let Some(logger) = &state.payload_logger {
+        if logger.is_active() {
+            let payload = serde_json::to_string(&request).unwrap_or_default();
+            logger.log(&state.runtime_config.batch_path(), &payload);
+        }
+    }
     if let Some(t) = &mut timing {
         t.step("parse_json");
     }
@@ -618,6 +630,12 @@ async fn metrics_handler(
     }
 
     let mut timing = state.timing_enabled.then(QueryTiming::new);
+    if let Some(logger) = &state.payload_logger {
+        if logger.is_active() {
+            let payload = serde_json::to_string(&query).unwrap_or_default();
+            logger.log(&format!("/metrics/{field_spec}"), &payload);
+        }
+    }
     let field = match super::types::metric_field_for_name(&state.runtime_config, &field_spec) {
         Some(field) => field,
         None => {
