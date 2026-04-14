@@ -726,14 +726,118 @@ fn build_upstream_body(
 ) -> Result<Value, String> {
     let mut upstream_body = serde_json::to_value(request)
         .map_err(|err| format!("failed to build upstream payload: {err}"))?;
+    prune_nulls(&mut upstream_body);
     if can_execute_local {
         let handled_names: std::collections::HashSet<String> =
             plan.local_aggs.iter().map(|agg| agg.name.clone()).collect();
         if let Some(aggs_obj) = upstream_body.get_mut("aggs").and_then(Value::as_object_mut) {
             aggs_obj.retain(|name, _| !handled_names.contains(name));
+            if aggs_obj.is_empty() {
+                upstream_body
+                    .as_object_mut()
+                    .expect("upstream body should be a JSON object")
+                    .remove("aggs");
+            }
         }
     }
     Ok(upstream_body)
+}
+
+fn prune_nulls(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            map.retain(|_, child| {
+                prune_nulls(child);
+                !child.is_null()
+            });
+        }
+        Value::Array(items) => {
+            for item in items {
+                prune_nulls(item);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use crate::server::types::QueryExecutionPlan;
+
+    use super::{build_upstream_body, prune_nulls};
+
+    #[test]
+    fn prune_nulls_removes_null_object_fields() {
+        let mut value = json!({
+            "size": 0,
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"range": {"epoch": {"gte": 1}}}
+                    ]
+                }
+            },
+            "aggs": null
+        });
+
+        prune_nulls(&mut value);
+
+        assert_eq!(
+            value,
+            json!({
+                "size": 0,
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {"range": {"epoch": {"gte": 1}}}
+                        ]
+                    }
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn build_upstream_body_omits_empty_aggs() {
+        let request = crate::server::types::SearchRequest {
+            size: Some(0),
+            query: Some(json!({
+                "bool": {
+                    "filter": [
+                        {"range": {"epoch": {"gte": 1}}}
+                    ]
+                }
+            })),
+            aggs: None,
+            other: Default::default(),
+        };
+
+        let plan = QueryExecutionPlan {
+            context: Default::default(),
+            local_aggs: Vec::new(),
+            forwarded_aggs: Default::default(),
+            unsupported_features: Vec::new(),
+            has_other_fields: false,
+        };
+
+        let body = build_upstream_body(&request, &plan, false).unwrap();
+
+        assert_eq!(
+            body,
+            json!({
+                "size": 0,
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {"range": {"epoch": {"gte": 1}}}
+                        ]
+                    }
+                }
+            })
+        );
+    }
 }
 
 fn error_json_response(
