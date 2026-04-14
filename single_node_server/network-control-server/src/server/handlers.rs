@@ -122,7 +122,11 @@ async fn ingest_handler(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> impl IntoResponse {
+    let mut timing = state.timing_enabled.then(QueryTiming::new);
     let mapping = &state.runtime_config.schema.ingest_field_mapping;
+    if let Some(t) = &mut timing {
+        t.step("parse_json");
+    }
     let record = match IngestRecord::from_json(&body, mapping) {
         Ok(record) => record,
         Err(message) => {
@@ -213,6 +217,10 @@ async fn ingest_handler(
             );
         }
         inserted += 1;
+    }
+    if let Some(t) = &mut timing {
+        t.step("insert_samples");
+        t.log();
     }
 
     Json(json!({ "inserted": inserted })).into_response()
@@ -394,6 +402,10 @@ async fn batch_query_handler(
     State(state): State<AppState>,
     Json(request): Json<BatchQueryRequest>,
 ) -> impl IntoResponse {
+    let mut timing = state.timing_enabled.then(QueryTiming::new);
+    if let Some(t) = &mut timing {
+        t.step("parse_json");
+    }
     if request.keys.is_empty() {
         return error_json_response(
             axum::http::StatusCode::BAD_REQUEST,
@@ -581,6 +593,11 @@ async fn batch_query_handler(
         }
     }
 
+    if let Some(t) = &mut timing {
+        t.step("batch_execute");
+        t.log();
+    }
+
     Json(BatchQueryResponse {
         results: results.into_iter().flatten().collect(),
     })
@@ -682,6 +699,7 @@ async fn metrics_handler(
         }
         let mut response = Json(response_value).into_response();
         t.step("serialize");
+        t.log();
         response
             .headers_mut()
             .insert("X-Server-Timing", t.to_header().parse().unwrap());
