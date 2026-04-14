@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, RwLock};
 
-use asap_sketchlib::{KLL, SketchInput};
+use asap_sketchlib::KLL;
 
 use crate::config::RangeKeyCatalogConfig;
 
@@ -163,8 +163,7 @@ impl MetricStore for InMemoryKeyStore {
                     .kll
                     .write()
                     .map_err(|_| format!("failed to lock kll for {}", name))?;
-                kll.update(&SketchInput::F64(*value))
-                    .map_err(|_| format!("{} values should be numeric", name))?;
+                kll.update(value);
             }
             {
                 let mut cum = metric_data
@@ -234,7 +233,7 @@ impl MetricStore for InMemoryKeyStore {
                         .kll
                         .write()
                         .map_err(|_| format!("failed to lock kll for {}", name))?;
-                    *kll = KLL::default();
+                    kll.clear();
                 }
                 {
                     let mut cum = metric_data
