@@ -28,8 +28,6 @@ pub async fn run_http_server(
     state: AppState,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let log_state = state.clone();
-    let search_path = state.runtime_config.search_path();
-    let batch_path = state.runtime_config.batch_path();
     let metrics_enabled = state.runtime_config.api.enable_metrics_endpoint;
     let batch_enabled = state.runtime_config.api.enable_batch_endpoint;
     let body_limit = state.runtime_config.body_limit_bytes();
@@ -37,15 +35,18 @@ pub async fn run_http_server(
 
     // Build routes first (Router<AppState>), then apply layers, then consume state.
     let mut router = Router::new()
-        .route("/", get(root_handler).post(ingest_handler))
+        .route("/", get(root_handler).post(ingest_handler_default))
+        .route("/:index", post(ingest_handler_with_index))
         .route("/healthz", get(healthz_handler))
-        .route(&search_path, post(search_handler));
+        .route("/:index/_search", post(search_handler));
 
     if batch_enabled {
-        router = router.route(&batch_path, post(batch_query_handler));
+        router = router.route("/:index/_batch", post(batch_query_handler));
     }
     if metrics_enabled {
-        router = router.route("/metrics/:field", post(metrics_handler));
+        router = router
+            .route("/metrics/:field", post(metrics_handler_default))
+            .route("/:index/metrics/:field", post(metrics_handler_with_index));
     }
 
     // Apply layers before consuming state so from_fn_with_state has access to AppState.
@@ -88,7 +89,11 @@ async fn shutdown_signal() {
 }
 
 async fn root_handler(State(state): State<AppState>) -> Json<RootResponse<'static>> {
-    let search_path = state.runtime_config.search_path();
+    let default_index = state
+        .runtime_config
+        .default_index_name()
+        .unwrap_or_else(|| "cluster-metrics".to_string());
+    let search_path = state.runtime_config.search_path_for(&default_index);
     Json(RootResponse {
         message: "Portable single-node metrics server. Supports local percentiles and cumulative aggregations over configured keys; unsupported features are either forwarded upstream or rejected based on runtime config.",
         examples: [
@@ -118,10 +123,38 @@ async fn healthz_handler(State(state): State<AppState>) -> Json<Value> {
     }))
 }
 
-async fn ingest_handler(
+async fn ingest_handler_default(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> impl IntoResponse {
+    ingest_handler_inner(state, None, body).await
+}
+
+async fn ingest_handler_with_index(
+    State(state): State<AppState>,
+    Path(index): Path<String>,
+    Json(body): Json<Value>,
+) -> impl IntoResponse {
+    ingest_handler_inner(state, Some(index), body).await
+}
+
+async fn ingest_handler_inner(
+    state: AppState,
+    index: Option<String>,
+    body: Value,
+) -> axum::response::Response {
+    let index_name = match resolve_index_name(&state, index.as_deref()) {
+        Ok(index_name) => index_name,
+        Err(response) => return response,
+    };
+    let index_key = AppState::normalize_index_name(&index_name);
+    let Some(store) = state.store_for_index(&index_name) else {
+        return error_json_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorResponse::bad_request(format!("store for index '{index_name}' is not available")),
+        );
+    };
+
     let mut timing = state.timing_enabled.then(QueryTiming::new);
     let mapping = &state.runtime_config.schema.ingest_field_mapping;
     if let Some(t) = &mut timing {
@@ -169,10 +202,10 @@ async fn ingest_handler(
 
     if let Some(epoch) = record.epoch {
         let mut should_clear = false;
-        match state.current_epoch.lock() {
+        match state.current_epoch_by_index.lock() {
             Ok(mut guard) => {
-                if guard.map_or(true, |current| current != epoch) {
-                    *guard = Some(epoch);
+                if guard.get(&index_key).copied() != Some(epoch) {
+                    guard.insert(index_key.clone(), epoch);
                     should_clear = true;
                 }
             }
@@ -184,7 +217,7 @@ async fn ingest_handler(
             }
         }
         if should_clear {
-            if let Err(message) = state.store.clear_all() {
+            if let Err(message) = store.clear_all() {
                 return error_json_response(
                     axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::bad_request(message),
@@ -210,7 +243,7 @@ async fn ingest_handler(
         for (name, values) in &record.metrics {
             sample_metrics.insert(name.clone(), values[idx]);
         }
-        if let Err(message) = state.store.insert_sample(key, &sample_metrics) {
+        if let Err(message) = store.insert_sample(key, &sample_metrics) {
             return error_json_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 ErrorResponse::bad_request(message),
@@ -223,19 +256,31 @@ async fn ingest_handler(
         t.log();
     }
 
-    Json(json!({ "inserted": inserted })).into_response()
+    Json(json!({ "index": index_name, "inserted": inserted })).into_response()
 }
 
 async fn search_handler(
     State(state): State<AppState>,
+    Path(index): Path<String>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
+    let index_name = match resolve_index_name(&state, Some(index.as_str())) {
+        Ok(index_name) => index_name,
+        Err(response) => return response,
+    };
+    let Some(store) = state.store_for_index(&index_name) else {
+        return error_json_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorResponse::bad_request(format!("store for index '{index_name}' is not available")),
+        );
+    };
+
     let mut timing = state.timing_enabled.then(QueryTiming::new);
     if let Some(logger) = &state.payload_logger {
         if logger.is_active() {
             let payload = std::str::from_utf8(&body).unwrap_or("<non-utf8>");
-            logger.log(&state.runtime_config.search_path(), payload);
+            logger.log(&state.runtime_config.search_path_for(&index_name), payload);
         }
     }
     let request: SearchRequest = match serde_json::from_slice(&body) {
@@ -316,7 +361,7 @@ async fn search_handler(
             let t0 = Instant::now();
             let result = match state
                 .aggregation_engine
-                .evaluate(&state, &plan.context, local_agg)
+                .evaluate(&state, store.as_ref(), &plan.context, local_agg)
             {
                 Ok(result) => result,
                 Err(message) => {
@@ -354,7 +399,7 @@ async fn search_handler(
         }
         let value = match state
             .upstream_client
-            .forward(&state, &headers, &upstream_body)
+            .forward(&state, &index_name, &headers, &upstream_body)
             .await
         {
             Ok(value) => value,
@@ -394,7 +439,7 @@ async fn search_handler(
             &headers,
             request_type,
             "POST",
-            &state.runtime_config.search_path(),
+            &state.runtime_config.search_path_for(&index_name),
             response.status(),
             t,
         );
@@ -406,13 +451,25 @@ async fn search_handler(
 
 async fn batch_query_handler(
     State(state): State<AppState>,
+    Path(index): Path<String>,
     Json(request): Json<BatchQueryRequest>,
 ) -> impl IntoResponse {
+    let index_name = match resolve_index_name(&state, Some(index.as_str())) {
+        Ok(index_name) => index_name,
+        Err(response) => return response,
+    };
+    let Some(store) = state.store_for_index(&index_name) else {
+        return error_json_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorResponse::bad_request(format!("store for index '{index_name}' is not available")),
+        );
+    };
+
     let mut timing = state.timing_enabled.then(QueryTiming::new);
     if let Some(logger) = &state.payload_logger {
         if logger.is_active() {
             let payload = serde_json::to_string(&request).unwrap_or_default();
-            logger.log(&state.runtime_config.batch_path(), &payload);
+            logger.log(&state.runtime_config.batch_path_for(&index_name), &payload);
         }
     }
     if let Some(t) = &mut timing {
@@ -477,7 +534,7 @@ async fn batch_query_handler(
     }
 
     for key in &request.keys {
-        if state.runtime_config.api.strict_mode && !state.store.contains_key(key.trim()) {
+        if state.runtime_config.api.strict_mode && !store.contains_key(key.trim()) {
             return error_json_response(
                 axum::http::StatusCode::BAD_REQUEST,
                 ErrorResponse::bad_request(format!("unknown key '{}'", key)),
@@ -504,6 +561,7 @@ async fn batch_query_handler(
     let mut join_set = JoinSet::new();
     for (idx, key) in request.keys.iter().cloned().enumerate() {
         let state = state.clone();
+        let store = Arc::clone(&store);
         let requested_aggs = Arc::clone(&requested_aggs);
         let percents = Arc::clone(&percents);
         let fields = Arc::clone(&fields);
@@ -533,7 +591,9 @@ async fn batch_query_handler(
                                 ),
                             };
                             if let Some(value) =
-                                state.aggregation_engine.evaluate(&state, &context, &plan)?
+                                state
+                                    .aggregation_engine
+                                    .evaluate(&state, store.as_ref(), &context, &plan)?
                             {
                                 let values = value
                                     .get("values")
@@ -567,7 +627,9 @@ async fn batch_query_handler(
                                 ),
                             };
                             if let Some(value) =
-                                state.aggregation_engine.evaluate(&state, &context, &plan)?
+                                state
+                                    .aggregation_engine
+                                    .evaluate(&state, store.as_ref(), &context, &plan)?
                             {
                                 if let Some(value) = value.get("value").and_then(Value::as_f64) {
                                     field_cumulative.insert(field.clone(), value);
@@ -616,12 +678,31 @@ async fn batch_query_handler(
     .into_response()
 }
 
-async fn metrics_handler(
+async fn metrics_handler_default(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(field_spec): Path<String>,
     Json(query): Json<MetricsQuery>,
 ) -> impl IntoResponse {
+    metrics_handler_inner(state, None, headers, field_spec, query).await
+}
+
+async fn metrics_handler_with_index(
+    State(state): State<AppState>,
+    Path((index, field_spec)): Path<(String, String)>,
+    headers: HeaderMap,
+    Json(query): Json<MetricsQuery>,
+) -> impl IntoResponse {
+    metrics_handler_inner(state, Some(index), headers, field_spec, query).await
+}
+
+async fn metrics_handler_inner(
+    state: AppState,
+    index: Option<String>,
+    headers: HeaderMap,
+    field_spec: String,
+    query: MetricsQuery,
+) -> axum::response::Response {
     if !state.runtime_config.api.enable_metrics_endpoint {
         return error_json_response(
             axum::http::StatusCode::NOT_FOUND,
@@ -629,11 +710,22 @@ async fn metrics_handler(
         );
     }
 
+    let index_name = match resolve_index_name(&state, index.as_deref()) {
+        Ok(index_name) => index_name,
+        Err(response) => return response,
+    };
+    let Some(store) = state.store_for_index(&index_name) else {
+        return error_json_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorResponse::bad_request(format!("store for index '{index_name}' is not available")),
+        );
+    };
+
     let mut timing = state.timing_enabled.then(QueryTiming::new);
     if let Some(logger) = &state.payload_logger {
         if logger.is_active() {
             let payload = serde_json::to_string(&query).unwrap_or_default();
-            logger.log(&format!("/metrics/{field_spec}"), &payload);
+            logger.log(&format!("/{index_name}/metrics/{field_spec}"), &payload);
         }
     }
     let field = match super::types::metric_field_for_name(&state.runtime_config, &field_spec) {
@@ -688,7 +780,7 @@ async fn metrics_handler(
                 );
             }
         };
-        let values = match state.store.query_percentiles(node_id, &field, &[percent]) {
+        let values = match store.query_percentiles(node_id, &field, &[percent]) {
             Ok(values) => values,
             Err(message) => {
                 return error_json_response(
@@ -726,7 +818,7 @@ async fn metrics_handler(
             &headers,
             "metrics_compat",
             "POST",
-            "/metrics/:field",
+            &format!("/{index_name}/metrics/:field"),
             response.status(),
             t,
         );
@@ -739,6 +831,30 @@ async fn metrics_handler(
         }))
         .into_response()
     }
+}
+
+fn resolve_index_name(
+    state: &AppState,
+    requested: Option<&str>,
+) -> Result<String, axum::response::Response> {
+    let resolved = match requested {
+        Some(index) if !index.trim().is_empty() => index.trim().to_string(),
+        _ => state.runtime_config.default_index_name().ok_or_else(|| {
+            error_json_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorResponse::bad_request("no configured indices are available"),
+            )
+        })?,
+    };
+
+    if !state.runtime_config.supports_index(&resolved) {
+        return Err(error_json_response(
+            axum::http::StatusCode::NOT_FOUND,
+            ErrorResponse::bad_request(format!("unsupported index '{resolved}'")),
+        ));
+    }
+
+    Ok(resolved)
 }
 
 fn should_forward_request(

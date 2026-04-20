@@ -3,6 +3,7 @@ mod metrics;
 mod server;
 
 use std::{
+    collections::HashMap,
     env,
     fs::OpenOptions,
     io::{BufWriter, Write},
@@ -86,16 +87,22 @@ async fn main() {
         initial_keys.extend(catalog.keys());
     }
 
-    let store = if initial_keys.is_empty() {
-        InMemoryKeyStore::new(&metric_names)
-    } else {
-        InMemoryKeyStore::with_keys(&initial_keys, &metric_names)
-    };
+    let configured_indices = runtime_config.index_names();
+    let mut stores_by_index: HashMap<String, Arc<dyn metrics::MetricStore>> = HashMap::new();
+    for index_name in &configured_indices {
+        let normalized = AppState::normalize_index_name(index_name);
+        let store = if initial_keys.is_empty() {
+            InMemoryKeyStore::new(&metric_names)
+        } else {
+            InMemoryKeyStore::with_keys(&initial_keys, &metric_names)
+        };
+        stores_by_index.insert(normalized, Arc::new(store));
+    }
 
     eprintln!(
-        "resolved config: bind={} index={} upstream_mode={} timing={} seeded_keys={}",
+        "resolved config: bind={} indices={} upstream_mode={} timing={} seeded_keys={}",
         runtime_config.bind_addr(),
-        runtime_config.api.index_name,
+        configured_indices.join(","),
         runtime_config.upstream.mode,
         runtime_config.server.enable_timing,
         initial_keys.len()
@@ -108,8 +115,8 @@ async fn main() {
     };
 
     let state = AppState {
-        store: Arc::new(store),
-        current_epoch: Arc::new(std::sync::Mutex::new(None)),
+        stores_by_index,
+        current_epoch_by_index: Arc::new(std::sync::Mutex::new(HashMap::new())),
         runtime_config: Arc::new(runtime_config.clone()),
         aggregation_engine: Arc::new(SketchAggregationEngine),
         request_planner: Arc::new(DefaultRequestPlanner),

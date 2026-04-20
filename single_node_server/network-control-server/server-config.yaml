@@ -7,14 +7,16 @@ server:
   timing_csv_path: "server_request_timing.csv"
 
 api:
-  index_name: "cluster-metrics"
+  index_names:
+    - "cluster-metrics"
+    - "edge-metrics"
   enable_batch_endpoint: true
   enable_metrics_endpoint: true
   strict_mode: false
 
 upstream:
   mode: "fallback"
-  search_url: "http://localhost:9200/cluster-metrics/_search"
+  search_url_template: "http://localhost:9200/{index}/_search"
   forward_headers:
     - "x-request-id"
     - "x-request-type"

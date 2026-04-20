@@ -15,8 +15,8 @@ use super::payload_log::PayloadLogger;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub store: Arc<dyn MetricStore>,
-    pub current_epoch: Arc<Mutex<Option<u64>>>,
+    pub stores_by_index: HashMap<String, Arc<dyn MetricStore>>,
+    pub current_epoch_by_index: Arc<Mutex<HashMap<String, u64>>>,
     pub runtime_config: Arc<ServerRuntimeConfig>,
     pub aggregation_engine: Arc<dyn AggregationEngine>,
     pub request_planner: Arc<dyn RequestPlanner>,
@@ -26,6 +26,18 @@ pub struct AppState {
     pub timing_sender: Option<TimingSender>,
     pub log_tx: Option<LogSender>,
     pub payload_logger: Option<PayloadLogger>,
+}
+
+impl AppState {
+    pub(crate) fn normalize_index_name(index_name: &str) -> String {
+        index_name.trim().to_ascii_lowercase()
+    }
+
+    pub(crate) fn store_for_index(&self, index_name: &str) -> Option<Arc<dyn MetricStore>> {
+        self.stores_by_index
+            .get(&Self::normalize_index_name(index_name))
+            .cloned()
+    }
 }
 
 #[derive(Serialize)]
@@ -237,6 +249,7 @@ pub(crate) trait UpstreamClient: Send + Sync {
     async fn forward(
         &self,
         state: &AppState,
+        index_name: &str,
         headers: &axum::http::HeaderMap,
         body: &Value,
     ) -> Result<Value, axum::response::Response>;
@@ -246,6 +259,7 @@ pub(crate) trait AggregationEngine: Send + Sync {
     fn evaluate(
         &self,
         state: &AppState,
+        store: &dyn MetricStore,
         context: &QueryContext,
         plan: &LocalAggregationPlan,
     ) -> Result<Option<Value>, String>;

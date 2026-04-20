@@ -6,15 +6,17 @@ The runtime contract is driven by `server-config.yaml`.
 
 ## Supported Surface
 
-- `POST /cluster-metrics/_search`
-- `POST /cluster-metrics/_batch`
+- `POST /:index/_search`
+- `POST /:index/_batch`
 - `POST /metrics/:field` (compatibility endpoint, deprecated)
+- `POST /:index/metrics/:field` (index-aware compatibility endpoint)
 - `POST /` for ingest
+- `POST /:index` for index-aware ingest
 - `GET /healthz`
 
 ## Local Search Contract
 
-`POST /cluster-metrics/_search`
+`POST /:index/_search` (example: `POST /cluster-metrics/_search`)
 
 Supported local aggregations:
 
@@ -106,7 +108,7 @@ You may also provide `key` directly on the aggregation:
 
 ## Batch Contract
 
-`POST /cluster-metrics/_batch`
+`POST /:index/_batch` (example: `POST /cluster-metrics/_batch`)
 
 ```json
 {
@@ -126,7 +128,7 @@ Notes:
 
 ## Metrics Compatibility Endpoint
 
-`POST /metrics/:field`
+`POST /metrics/:field` or `POST /:index/metrics/:field`
 
 ```json
 {
@@ -139,7 +141,7 @@ Response includes `"deprecated": true`.
 
 ## Ingest
 
-`POST /`
+`POST /` (uses the default configured index) or `POST /:index`
 
 ```json
 {

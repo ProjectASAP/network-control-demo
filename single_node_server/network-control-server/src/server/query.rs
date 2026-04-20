@@ -13,6 +13,7 @@ impl AggregationEngine for SketchAggregationEngine {
     fn evaluate(
         &self,
         state: &AppState,
+        store: &dyn crate::metrics::MetricStore,
         context: &QueryContext,
         plan: &LocalAggregationPlan,
     ) -> Result<Option<Value>, String> {
@@ -32,7 +33,7 @@ impl AggregationEngine for SketchAggregationEngine {
                 let key = explicit_key
                     .or_else(|| context.key.clone())
                     .ok_or_else(|| "percentiles key is required".to_string())?;
-                let query_results = state.store.query_percentiles(&key, &field, &pct.percents)?;
+                let query_results = store.query_percentiles(&key, &field, &pct.percents)?;
 
                 let mut values = BTreeMap::new();
                 for (percent, value) in pct.percents.iter().zip(query_results.iter()) {
@@ -54,7 +55,7 @@ impl AggregationEngine for SketchAggregationEngine {
                 let key = explicit_key
                     .or_else(|| context.key.clone())
                     .ok_or_else(|| "cumulative key is required".to_string())?;
-                let value = state.store.cumulative_value(&key, &field)?;
+                let value = store.cumulative_value(&key, &field)?;
                 Ok(Some(json!({ "key": key, "value": value })))
             }
         }

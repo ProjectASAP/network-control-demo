@@ -35,7 +35,10 @@ pub struct ServerConfig {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ApiConfig {
-    pub index_name: String,
+    #[serde(default)]
+    pub index_name: Option<String>,
+    #[serde(default)]
+    pub index_names: Vec<String>,
     #[serde(default = "default_true")]
     pub enable_batch_endpoint: bool,
     #[serde(default = "default_true")]
@@ -48,6 +51,7 @@ pub struct ApiConfig {
 pub struct UpstreamConfig {
     pub mode: String,
     pub search_url: Option<String>,
+    pub search_url_template: Option<String>,
     #[serde(default)]
     pub forward_headers: Vec<String>,
     /// Loaded at runtime from ES_API_KEY env var or a key file; never from YAML.
@@ -126,8 +130,18 @@ impl ServerRuntimeConfig {
         if self.server.timing_csv_path.trim().is_empty() {
             return Err("server.timing_csv_path must not be empty".into());
         }
-        if self.api.index_name.trim().is_empty() {
-            return Err("api.index_name must not be empty".into());
+        if self
+            .api
+            .index_names
+            .iter()
+            .any(|value| value.trim().is_empty())
+        {
+            return Err("api.index_names must not contain empty values".into());
+        }
+        let index_names = self.index_names();
+        if index_names.is_empty() {
+            return Err("api.index_names must contain at least one value (or set api.index_name)"
+                .into());
         }
         let backend = self.storage.backend.trim().to_ascii_lowercase();
         if backend != "in_memory_key_store" && backend != "in_memory_node_store" {
@@ -165,7 +179,14 @@ impl ServerRuntimeConfig {
             )
             .into());
         }
+        let has_search_template = self
+            .upstream
+            .search_url_template
+            .as_ref()
+            .map(|url| !url.trim().is_empty())
+            .unwrap_or(false);
         if upstream_mode == "fallback"
+            && !has_search_template
             && self
                 .upstream
                 .search_url
@@ -173,7 +194,10 @@ impl ServerRuntimeConfig {
                 .map(|url| url.trim().is_empty())
                 .unwrap_or(true)
         {
-            return Err("upstream.search_url is required when upstream.mode=fallback".into());
+            return Err(
+                "upstream.search_url or upstream.search_url_template is required when upstream.mode=fallback"
+                    .into(),
+            );
         }
 
         let mut metrics = HashSet::new();
@@ -273,6 +297,9 @@ impl ServerRuntimeConfig {
         if let Ok(url) = env::var("NCS_UPSTREAM_SEARCH_URL") {
             self.upstream.search_url = Some(url);
         }
+        if let Ok(url) = env::var("NCS_UPSTREAM_SEARCH_URL_TEMPLATE") {
+            self.upstream.search_url_template = Some(url);
+        }
         if let Ok(enabled) = env::var("NCS_TIMING_ENABLED") {
             self.server.enable_timing = parse_bool(&enabled);
         }
@@ -294,12 +321,72 @@ impl ServerRuntimeConfig {
         self.upstream.mode.eq_ignore_ascii_case("fallback")
     }
 
-    pub fn search_path(&self) -> String {
-        format!("/{}/_search", self.api.index_name)
+    pub fn index_names(&self) -> Vec<String> {
+        let mut dedup = HashSet::new();
+        let mut ordered = Vec::new();
+
+        for value in &self.api.index_names {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let normalized = trimmed.to_ascii_lowercase();
+            if dedup.insert(normalized) {
+                ordered.push(trimmed.to_string());
+            }
+        }
+
+        if let Some(single) = &self.api.index_name {
+            let trimmed = single.trim();
+            if !trimmed.is_empty() {
+                let normalized = trimmed.to_ascii_lowercase();
+                if dedup.insert(normalized) {
+                    ordered.push(trimmed.to_string());
+                }
+            }
+        }
+
+        ordered
     }
 
-    pub fn batch_path(&self) -> String {
-        format!("/{}/_batch", self.api.index_name)
+    pub fn default_index_name(&self) -> Option<String> {
+        self.index_names().into_iter().next()
+    }
+
+    pub fn supports_index(&self, index_name: &str) -> bool {
+        let candidate = index_name.trim().to_ascii_lowercase();
+        self.index_names()
+            .iter()
+            .any(|name| name.trim().eq_ignore_ascii_case(&candidate))
+    }
+
+    pub fn search_path_for(&self, index_name: &str) -> String {
+        format!("/{}/_search", index_name)
+    }
+
+    pub fn batch_path_for(&self, index_name: &str) -> String {
+        format!("/{}/_batch", index_name)
+    }
+
+    pub fn upstream_search_url_for(&self, index_name: &str) -> Option<String> {
+        if let Some(template) = self.upstream.search_url_template.as_ref() {
+            let trimmed = template.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+            if trimmed.contains("{index}") {
+                return Some(trimmed.replace("{index}", index_name));
+            }
+            return Some(trimmed.to_string());
+        }
+        self.upstream.search_url.as_ref().and_then(|url| {
+            let trimmed = url.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
     }
 
     pub fn metric_names(&self) -> HashSet<String> {

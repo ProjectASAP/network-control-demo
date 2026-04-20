@@ -9,10 +9,11 @@ The deploy contract is now driven by `server-config.yaml`.
 ## Current Contract
 
 - Primary endpoints:
-  - `POST /cluster-metrics/_search`
-  - `POST /cluster-metrics/_batch`
+  - `POST /:index/_search`
+  - `POST /:index/_batch`
 - Compatibility endpoint:
   - `POST /metrics/:field`
+  - `POST /:index/metrics/:field`
 - Local aggregations:
   - `percentiles`
   - `cumulative`
@@ -45,6 +46,7 @@ Unsupported features are either forwarded to upstream Elasticsearch when fallbac
   - `NCS_SERVER_HOST`
   - `NCS_SERVER_PORT`
   - `NCS_UPSTREAM_SEARCH_URL`
+  - `NCS_UPSTREAM_SEARCH_URL_TEMPLATE`
   - `NCS_TIMING_ENABLED`
   - `NCS_TIMING_CSV_PATH`
 - `--timing` still forces timing on.
