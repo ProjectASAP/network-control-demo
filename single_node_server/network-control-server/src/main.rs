@@ -62,12 +62,16 @@ async fn main() {
         None
     };
 
-    let metric_names: Vec<String> = runtime_config
-        .schema
-        .metrics
-        .iter()
-        .map(|m| m.storage_field.clone())
-        .collect();
+    let _metric_names: Vec<String> = runtime_config
+        .schema_for_index("") // Get first available schema
+        .map(|schema| {
+            schema
+                .metrics
+                .iter()
+                .map(|m| m.storage_field.clone())
+                .collect()
+        })
+        .unwrap_or_default();
     let mut initial_keys: Vec<String> = runtime_config
         .storage
         .predefined_keys
@@ -91,10 +95,12 @@ async fn main() {
     let mut stores_by_index: HashMap<String, Arc<dyn metrics::MetricStore>> = HashMap::new();
     for index_name in &configured_indices {
         let normalized = AppState::normalize_index_name(index_name);
+        // Use per-index metric storage fields
+        let index_metric_fields = runtime_config.metric_storage_fields_for_index(index_name);
         let store = if initial_keys.is_empty() {
-            InMemoryKeyStore::new(&metric_names)
+            InMemoryKeyStore::new(&index_metric_fields)
         } else {
-            InMemoryKeyStore::with_keys(&initial_keys, &metric_names)
+            InMemoryKeyStore::with_keys(&initial_keys, &index_metric_fields)
         };
         stores_by_index.insert(normalized, Arc::new(store));
     }

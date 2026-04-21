@@ -13,6 +13,12 @@ api:
   enable_batch_endpoint: true
   enable_metrics_endpoint: true
   strict_mode: false
+  default_batch_fields:
+    - "cpu_cores"
+    - "memory_gb"
+    - "network_mbps"
+  default_batch_percents:
+    - 50.0
 
 upstream:
   mode: "fallback"
@@ -29,37 +35,47 @@ storage:
     start: 1
     end: 30
 
-schema:
-  metrics:
-    - name: "cpu_cores"
-      aliases: ["cpucores", "cpu-cores"]
-      storage_field: "cpu_cores"
-    - name: "memory_gb"
-      aliases: ["memorygb", "memory-gb"]
-      storage_field: "memory_gb"
-    - name: "network_mbps"
-      aliases: ["networkmbps", "network-mbps"]
-      storage_field: "network_mbps"
-  key_fields:
-    - "cluster"
-  ingest_field_mapping:
-    key_field: "cluster"
-    epoch_field: "epoch"
-    task_field: "task"
-    metric_fields:
-      cpu_cores: "cpu_cores"
-      memory_gb: "memory_gb"
-      network_mbps: "network_mbps"
+indices:
+  cluster-metrics:
+    metrics:
+      - name: "cpu_cores"
+        aliases: ["cpucores", "cpu-cores"]
+        storage_field: "cpu_cores"
+      - name: "memory_gb"
+        aliases: ["memorygb", "memory-gb"]
+        storage_field: "memory_gb"
+      - name: "network_mbps"
+        aliases: ["networkmbps", "network-mbps"]
+        storage_field: "network_mbps"
+    key_fields:
+      - "cluster"
+    ingest_field_mapping:
+      key_field: "cluster"
+      epoch_field: "epoch"
+      task_field: "task"
+      metric_fields:
+        cpu_cores: "cpu_cores"
+        memory_gb: "memory_gb"
+        network_mbps: "network_mbps"
 
-query_support:
-  aggregations:
-    - "percentiles"
-    - "cumulative"
-  supported_filter_types:
-    - "term"
-  default_batch_fields:
-    - "cpu_cores"
-    - "memory_gb"
-    - "network_mbps"
-  default_batch_percents:
-    - 50.0
+  edge-metrics:
+    metrics:
+      - name: "cpu_cores"
+        aliases: ["cpucores", "cpu-cores"]
+        storage_field: "cpu_cores"
+      - name: "memory_gb"
+        aliases: ["memorygb", "memory-gb"]
+        storage_field: "memory_gb"
+      - name: "network_mbps"
+        aliases: ["networkmbps", "network-mbps"]
+        storage_field: "network_mbps"
+    key_fields:
+      - "edge"
+    ingest_field_mapping:
+      key_field: "edge"
+      epoch_field: "epoch"
+      task_field: "task"
+      metric_fields:
+        cpu_cores: "cpu_cores"
+        memory_gb: "memory_gb"
+        network_mbps: "network_mbps"

@@ -16,10 +16,15 @@ impl RequestPlanner for DefaultRequestPlanner {
         &self,
         state: &AppState,
         request: &SearchRequest,
+        index_name: &str,
     ) -> Result<QueryExecutionPlan, String> {
         let mut unsupported_features = Vec::new();
-        let context =
-            parse_query_context(&state.runtime_config, request, &mut unsupported_features);
+        let context = parse_query_context(
+            &state.runtime_config,
+            index_name,
+            request,
+            &mut unsupported_features,
+        );
         let allowed_aggs: HashSet<String> = state.runtime_config.aggregation_names();
         let mut local_aggs = Vec::new();
         let mut forwarded_aggs = HashSet::new();
@@ -76,10 +81,14 @@ impl RequestPlanner for DefaultRequestPlanner {
 
 fn parse_query_context(
     config: &ServerRuntimeConfig,
+    index_name: &str,
     request: &SearchRequest,
     unsupported_features: &mut Vec<UnsupportedFeature>,
 ) -> QueryContext {
-    let mut context = QueryContext::default();
+    let mut context = QueryContext {
+        index_name: Some(index_name.to_string()),
+        ..QueryContext::default()
+    };
     let Some(query) = request.query.as_ref() else {
         return context;
     };
@@ -118,7 +127,7 @@ fn parse_query_context(
         }
         for (field, value) in term_obj {
             let normalized_field = field.trim().to_ascii_lowercase();
-            if config.key_fields().contains(&normalized_field) {
+            if config.key_fields_for_index(index_name).contains(&normalized_field) {
                 let Some(key) = extract_scalar_string(value) else {
                     unsupported_features.push(UnsupportedFeature {
                         code: "invalid_term_value".to_string(),
@@ -256,7 +265,7 @@ query_support:
             other: Default::default(),
         };
         let mut unsupported = Vec::new();
-        let context = parse_query_context(&config(), &request, &mut unsupported);
+        let context = parse_query_context(&config(), "cluster-metrics", &request, &mut unsupported);
         assert!(unsupported.is_empty());
         assert_eq!(context.key, Some("N001".to_string()));
         assert_eq!(context.epoch, Some(7));
@@ -271,7 +280,7 @@ query_support:
             other: Default::default(),
         };
         let mut unsupported = Vec::new();
-        let context = parse_query_context(&config(), &request, &mut unsupported);
+        let context = parse_query_context(&config(), "cluster-metrics", &request, &mut unsupported);
         assert_eq!(context.key, QueryContext::default().key);
         assert!(unsupported.is_empty());
     }

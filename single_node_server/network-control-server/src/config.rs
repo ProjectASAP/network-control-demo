@@ -9,7 +9,7 @@ use std::{
 use serde::Deserialize;
 
 const SUPPORTED_AGGREGATIONS: &[&str] = &["percentiles", "cumulative"];
-const SUPPORTED_FILTER_TYPES: &[&str] = &["term"];
+const _SUPPORTED_FILTER_TYPES: &[&str] = &["term"];
 const SUPPORTED_UPSTREAM_MODES: &[&str] = &["disabled", "fallback"];
 
 #[derive(Clone, Debug, Deserialize)]
@@ -18,8 +18,7 @@ pub struct ServerRuntimeConfig {
     pub api: ApiConfig,
     pub upstream: UpstreamConfig,
     pub storage: StorageConfig,
-    pub schema: SchemaConfig,
-    pub query_support: QuerySupportConfig,
+    pub indices: HashMap<String, SchemaConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -45,6 +44,10 @@ pub struct ApiConfig {
     pub enable_metrics_endpoint: bool,
     #[serde(default)]
     pub strict_mode: bool,
+    #[serde(default)]
+    pub default_batch_fields: Vec<String>,
+    #[serde(default)]
+    pub default_batch_percents: Vec<f64>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -97,13 +100,7 @@ pub struct IngestFieldMapping {
     pub metric_fields: HashMap<String, String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-pub struct QuerySupportConfig {
-    pub aggregations: Vec<String>,
-    pub supported_filter_types: Vec<String>,
-    pub default_batch_fields: Vec<String>,
-    pub default_batch_percents: Vec<f64>,
-}
+
 
 impl ServerRuntimeConfig {
     pub fn load_from_env_and_args(args: &[String]) -> Result<Self, Box<dyn Error + Send + Sync>> {
@@ -142,6 +139,20 @@ impl ServerRuntimeConfig {
         if index_names.is_empty() {
             return Err("api.index_names must contain at least one value (or set api.index_name)"
                 .into());
+        }
+        if self.api.default_batch_fields.is_empty() {
+            return Err("api.default_batch_fields must not be empty".into());
+        }
+        if self.api.default_batch_percents.is_empty() {
+            return Err("api.default_batch_percents must not be empty".into());
+        }
+        for percent in &self.api.default_batch_percents {
+            if !(0.0..=100.0).contains(percent) {
+                return Err(format!(
+                    "api.default_batch_percents contains out-of-range value {percent}"
+                )
+                .into());
+            }
         }
         let backend = self.storage.backend.trim().to_ascii_lowercase();
         if backend != "in_memory_key_store" && backend != "in_memory_node_store" {
@@ -200,82 +211,52 @@ impl ServerRuntimeConfig {
             );
         }
 
-        let mut metrics = HashSet::new();
-        for metric in &self.schema.metrics {
-            if metric.name.trim().is_empty() {
-                return Err("schema.metrics[].name must not be empty".into());
+        for (idx_name, schema) in &self.indices {
+            let mut metrics = HashSet::new();
+            for metric in &schema.metrics {
+                if metric.name.trim().is_empty() {
+                    return Err(format!("indices[{}].metrics[].name must not be empty", idx_name).into());
+                }
+                if metric.storage_field.trim().is_empty() {
+                    return Err(format!("indices[{}].metrics[].storage_field must not be empty", idx_name).into());
+                }
+                if !metrics.insert(metric.name.trim().to_ascii_lowercase()) {
+                    return Err(format!("duplicate metric '{}' in indices[{}]", metric.name, idx_name).into());
+                }
             }
-            if metric.storage_field.trim().is_empty() {
-                return Err("schema.metrics[].storage_field must not be empty".into());
+            if schema.key_fields.is_empty() {
+                return Err(format!("indices[{}].key_fields must not be empty", idx_name).into());
             }
-            if !metrics.insert(metric.name.trim().to_ascii_lowercase()) {
-                return Err(format!("duplicate schema metric '{}'", metric.name).into());
+            let allowed_key_fields: HashSet<String> = schema
+                .key_fields
+                .iter()
+                .map(|item| item.trim().to_ascii_lowercase())
+                .collect();
+            if !allowed_key_fields.contains(
+                &schema
+                    .ingest_field_mapping
+                    .key_field
+                    .trim()
+                    .to_ascii_lowercase(),
+            ) {
+                return Err(
+                    format!("indices[{}].ingest_field_mapping.key_field must be listed in key_fields", idx_name).into(),
+                );
             }
         }
-        if self.schema.key_fields.is_empty() {
-            return Err("schema.key_fields must not be empty".into());
-        }
-        let allowed_key_fields: HashSet<String> = self
-            .schema
-            .key_fields
-            .iter()
-            .map(|item| item.trim().to_ascii_lowercase())
+
+        // Validate that default_batch_fields exist in at least one index's metrics
+        let all_metric_names: HashSet<String> = self.indices
+            .values()
+            .flat_map(|schema| {
+                schema.metrics.iter()
+                    .map(|m| m.name.trim().to_ascii_lowercase())
+            })
             .collect();
-        if !allowed_key_fields.contains(
-            &self
-                .schema
-                .ingest_field_mapping
-                .key_field
-                .trim()
-                .to_ascii_lowercase(),
-        ) {
-            return Err(
-                "schema.ingest_field_mapping.key_field must be listed in schema.key_fields".into(),
-            );
-        }
-
-        for agg in &self.query_support.aggregations {
-            let normalized = agg.trim().to_ascii_lowercase();
-            if !SUPPORTED_AGGREGATIONS.contains(&normalized.as_str()) {
+        for field in &self.api.default_batch_fields {
+            if !all_metric_names.contains(&field.trim().to_ascii_lowercase()) {
                 return Err(format!(
-                    "unsupported query_support aggregation '{}'; supported: {}",
-                    agg,
-                    SUPPORTED_AGGREGATIONS.join(", ")
-                )
-                .into());
-            }
-        }
-        for filter_type in &self.query_support.supported_filter_types {
-            let normalized = filter_type.trim().to_ascii_lowercase();
-            if !SUPPORTED_FILTER_TYPES.contains(&normalized.as_str()) {
-                return Err(format!(
-                    "unsupported query_support filter '{}'; supported: {}",
-                    filter_type,
-                    SUPPORTED_FILTER_TYPES.join(", ")
-                )
-                .into());
-            }
-        }
-        if self.query_support.default_batch_fields.is_empty() {
-            return Err("query_support.default_batch_fields must not be empty".into());
-        }
-        if self.query_support.default_batch_percents.is_empty() {
-            return Err("query_support.default_batch_percents must not be empty".into());
-        }
-        for percent in &self.query_support.default_batch_percents {
-            if !(0.0..=100.0).contains(percent) {
-                return Err(format!(
-                    "query_support.default_batch_percents contains out-of-range value {percent}"
-                )
-                .into());
-            }
-        }
-
-        let metric_names = self.metric_names();
-        for field in &self.query_support.default_batch_fields {
-            if !metric_names.contains(&field.trim().to_ascii_lowercase()) {
-                return Err(format!(
-                    "query_support.default_batch_fields contains unknown metric '{}'",
+                    "api.default_batch_fields contains unknown metric '{}'",
                     field
                 )
                 .into());
@@ -389,27 +370,38 @@ impl ServerRuntimeConfig {
         })
     }
 
-    pub fn metric_names(&self) -> HashSet<String> {
-        self.schema
-            .metrics
-            .iter()
-            .map(|metric| metric.name.trim().to_ascii_lowercase())
-            .collect()
+    pub fn schema_for_index(&self, index_name: &str) -> Option<&SchemaConfig> {
+        self.indices.get(&index_name.trim().to_ascii_lowercase())
     }
 
-    pub fn key_fields(&self) -> HashSet<String> {
-        self.schema
-            .key_fields
-            .iter()
-            .map(|item| item.trim().to_ascii_lowercase())
-            .collect()
+    pub fn metric_storage_fields_for_index(&self, index_name: &str) -> Vec<String> {
+        self.schema_for_index(index_name)
+            .map(|schema| {
+                schema
+                    .metrics
+                    .iter()
+                    .map(|metric| metric.storage_field.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn key_fields_for_index(&self, index_name: &str) -> HashSet<String> {
+        self.schema_for_index(index_name)
+            .map(|schema| {
+                schema
+                    .key_fields
+                    .iter()
+                    .map(|item| item.trim().to_ascii_lowercase())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     pub fn aggregation_names(&self) -> HashSet<String> {
-        self.query_support
-            .aggregations
+        SUPPORTED_AGGREGATIONS
             .iter()
-            .map(|item| item.trim().to_ascii_lowercase())
+            .map(|s| s.to_string())
             .collect()
     }
 }
@@ -461,60 +453,86 @@ fn default_true() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::ServerRuntimeConfig;
+        use std::collections::HashMap;
+
+        use super::{
+                ApiConfig, IngestFieldMapping, MetricConfig, RangeKeyCatalogConfig, SchemaConfig,
+                ServerConfig, ServerRuntimeConfig, StorageConfig, UpstreamConfig,
+        };
 
     #[test]
     fn validates_minimal_config() {
-        let yaml = r#"
-server:
-  host: "0.0.0.0"
-  port: 10101
-  body_limit_mb: 50
-  request_log_buffer: 1000
-  enable_timing: false
-  timing_csv_path: "server_request_timing.csv"
-api:
-  index_name: "cluster-metrics"
-  enable_batch_endpoint: true
-  enable_metrics_endpoint: true
-  strict_mode: false
-upstream:
-  mode: "fallback"
-  search_url: "http://localhost:9200/cluster-metrics/_search"
-  forward_headers: ["x-request-id"]
-storage:
-    backend: "in_memory_key_store"
-    range_key_catalog:
-        format: "N{:03}"
-        start: 1
-        end: 2
-schema:
-  metrics:
-    - name: "cpu_cores"
-      aliases: ["cpucores"]
-      storage_field: "cpu_cores"
-    - name: "memory_gb"
-      aliases: ["memorygb"]
-      storage_field: "memory_gb"
-    - name: "network_mbps"
-      aliases: ["networkmbps"]
-      storage_field: "network_mbps"
-  key_fields: ["cluster"]
-  ingest_field_mapping:
-    key_field: "cluster"
-    epoch_field: "epoch"
-    task_field: "task"
-    metric_fields:
-      cpu_cores: "cpu_cores"
-      memory_gb: "memory_gb"
-      network_mbps: "network_mbps"
-query_support:
-  aggregations: ["percentiles", "cumulative"]
-  supported_filter_types: ["term"]
-  default_batch_fields: ["cpu_cores"]
-  default_batch_percents: [50.0]
-"#;
-        let config: ServerRuntimeConfig = serde_yaml::from_str(yaml).unwrap();
+                let mut indices = HashMap::new();
+                indices.insert(
+                        "cluster-metrics".to_string(),
+                        SchemaConfig {
+                                metrics: vec![
+                                        MetricConfig {
+                                                name: "cpu_cores".to_string(),
+                                                aliases: vec!["cpucores".to_string()],
+                                                storage_field: "cpu_cores".to_string(),
+                                        },
+                                        MetricConfig {
+                                                name: "memory_gb".to_string(),
+                                                aliases: vec!["memorygb".to_string()],
+                                                storage_field: "memory_gb".to_string(),
+                                        },
+                                        MetricConfig {
+                                                name: "network_mbps".to_string(),
+                                                aliases: vec!["networkmbps".to_string()],
+                                                storage_field: "network_mbps".to_string(),
+                                        },
+                                ],
+                                key_fields: vec!["cluster".to_string()],
+                                ingest_field_mapping: IngestFieldMapping {
+                                        key_field: "cluster".to_string(),
+                                        epoch_field: "epoch".to_string(),
+                                        task_field: Some("task".to_string()),
+                                        metric_fields: HashMap::from([
+                                                ("cpu_cores".to_string(), "cpu_cores".to_string()),
+                                                ("memory_gb".to_string(), "memory_gb".to_string()),
+                                                ("network_mbps".to_string(), "network_mbps".to_string()),
+                                        ]),
+                                },
+                        },
+                );
+
+                let config = ServerRuntimeConfig {
+                        server: ServerConfig {
+                                host: "0.0.0.0".to_string(),
+                                port: 10101,
+                                body_limit_mb: 50,
+                                request_log_buffer: 1000,
+                                enable_timing: false,
+                                timing_csv_path: "server_request_timing.csv".to_string(),
+                        },
+                        api: ApiConfig {
+                                index_name: Some("cluster-metrics".to_string()),
+                                index_names: Vec::new(),
+                                enable_batch_endpoint: true,
+                                enable_metrics_endpoint: true,
+                                strict_mode: false,
+                                default_batch_fields: vec!["cpu_cores".to_string()],
+                                default_batch_percents: vec![50.0],
+                        },
+                        upstream: UpstreamConfig {
+                                mode: "fallback".to_string(),
+                                search_url: Some("http://localhost:9200/cluster-metrics/_search".to_string()),
+                                search_url_template: None,
+                                forward_headers: vec!["x-request-id".to_string()],
+                                es_api_key: None,
+                        },
+                        storage: StorageConfig {
+                                backend: "in_memory_key_store".to_string(),
+                                predefined_keys: Vec::new(),
+                                range_key_catalog: Some(RangeKeyCatalogConfig {
+                                        format: "N{:03}".to_string(),
+                                        start: 1,
+                                        end: 2,
+                                }),
+                        },
+                        indices,
+                };
         config.validate().unwrap();
     }
 }

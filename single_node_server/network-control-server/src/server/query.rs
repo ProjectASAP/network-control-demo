@@ -22,7 +22,11 @@ impl AggregationEngine for SketchAggregationEngine {
                 if pct.percents.is_empty() {
                     return Ok(None);
                 }
-                let field = metric_field_for_name(&state.runtime_config, &pct.field)
+                let index_name = context
+                    .index_name
+                    .as_deref()
+                    .ok_or_else(|| "query index is required".to_string())?;
+                let field = metric_field_for_name(&state.runtime_config, index_name, &pct.field)
                     .ok_or_else(|| format!("unsupported percentile field: {}", pct.field))?;
                 let explicit_key = pct
                     .key
@@ -44,7 +48,11 @@ impl AggregationEngine for SketchAggregationEngine {
                 Ok(Some(json!({ "values": values })))
             }
             AggregationKind::Cumulative(cum) => {
-                let field = metric_field_for_name(&state.runtime_config, &cum.field)
+                let index_name = context
+                    .index_name
+                    .as_deref()
+                    .ok_or_else(|| "query index is required".to_string())?;
+                let field = metric_field_for_name(&state.runtime_config, index_name, &cum.field)
                     .ok_or_else(|| format!("unsupported cumulative field: {}", cum.field))?;
                 let explicit_key = cum
                     .key

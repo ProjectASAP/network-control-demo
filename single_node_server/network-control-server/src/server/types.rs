@@ -207,6 +207,7 @@ pub(crate) struct AggregationRegistration {
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct QueryContext {
+    pub(crate) index_name: Option<String>,
     pub(crate) key: Option<String>,
     pub(crate) epoch: Option<u64>,
 }
@@ -272,6 +273,7 @@ pub(crate) trait RequestPlanner: Send + Sync {
         &self,
         state: &AppState,
         request: &SearchRequest,
+        index_name: &str,
     ) -> Result<QueryExecutionPlan, String>;
 }
 
@@ -316,19 +318,23 @@ impl ErrorResponse {
 
 pub(crate) fn metric_field_for_name(
     config: &ServerRuntimeConfig,
+    index_name: &str,
     name: &str,
 ) -> Option<MetricField> {
     let normalized = name.trim().to_ascii_lowercase();
     config
-        .schema
-        .metrics
-        .iter()
-        .find(|metric| {
-            metric.name.trim().eq_ignore_ascii_case(&normalized)
-                || metric
-                    .aliases
-                    .iter()
-                    .any(|alias| alias.trim().eq_ignore_ascii_case(&normalized))
+        .schema_for_index(index_name)
+        .and_then(|schema| {
+            schema
+                .metrics
+                .iter()
+                .find(|metric| {
+                    metric.name.trim().eq_ignore_ascii_case(&normalized)
+                        || metric
+                            .aliases
+                            .iter()
+                            .any(|alias| alias.trim().eq_ignore_ascii_case(&normalized))
+                })
+                .map(|metric| MetricField::new(&metric.storage_field))
         })
-        .map(|metric| MetricField::new(&metric.storage_field))
 }

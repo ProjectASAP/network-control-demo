@@ -119,7 +119,7 @@ async fn healthz_handler(State(state): State<AppState>) -> Json<Value> {
         "status": "ok",
         "config_loaded": true,
         "upstream_enabled": state.runtime_config.is_upstream_enabled(),
-        "registered_aggregations": state.runtime_config.query_support.aggregations.clone(),
+        "registered_aggregations": ["percentiles", "cumulative"],
     }))
 }
 
@@ -156,7 +156,16 @@ async fn ingest_handler_inner(
     };
 
     let mut timing = state.timing_enabled.then(QueryTiming::new);
-    let mapping = &state.runtime_config.schema.ingest_field_mapping;
+    let schema = match state.runtime_config.schema_for_index(&index_name) {
+        Some(s) => s,
+        None => {
+            return error_json_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorResponse::bad_request(format!("schema for index '{index_name}' is not available")),
+            );
+        }
+    };
+    let mapping = &schema.ingest_field_mapping;
     if let Some(t) = &mut timing {
         t.step("parse_json");
     }
@@ -296,7 +305,7 @@ async fn search_handler(
         t.step("parse_json");
     }
 
-    let plan = match state.request_planner.plan_search(&state, &request) {
+    let plan = match state.request_planner.plan_search(&state, &request, &index_name) {
         Ok(plan) => plan,
         Err(message) => {
             return error_json_response(
@@ -485,14 +494,14 @@ async fn batch_query_handler(
     let fields = request.fields.unwrap_or_else(|| {
         state
             .runtime_config
-            .query_support
+            .api
             .default_batch_fields
             .clone()
     });
     let percents = request.percents.unwrap_or_else(|| {
         state
             .runtime_config
-            .query_support
+            .api
             .default_batch_percents
             .clone()
     });
@@ -544,7 +553,9 @@ async fn batch_query_handler(
 
     let fields: Vec<String> = fields
         .into_iter()
-        .filter(|field| super::types::metric_field_for_name(&state.runtime_config, field).is_some())
+        .filter(|field| {
+            super::types::metric_field_for_name(&state.runtime_config, &index_name, field).is_some()
+        })
         .collect();
     if fields.is_empty() {
         return error_json_response(
@@ -558,6 +569,7 @@ async fn batch_query_handler(
     let requested_aggs = Arc::new(requested_aggs);
     let percents = Arc::new(percents);
     let fields = Arc::new(fields);
+    let index_name_for_tasks = index_name.clone();
     let mut join_set = JoinSet::new();
     for (idx, key) in request.keys.iter().cloned().enumerate() {
         let state = state.clone();
@@ -565,6 +577,7 @@ async fn batch_query_handler(
         let requested_aggs = Arc::clone(&requested_aggs);
         let percents = Arc::clone(&percents);
         let fields = Arc::clone(&fields);
+        let index_name = index_name_for_tasks.clone();
         join_set.spawn_blocking(move || {
             let mut result = BatchQueryResult {
                 key: key.clone(),
@@ -572,6 +585,7 @@ async fn batch_query_handler(
                 cumulative: None,
             };
             let context = super::types::QueryContext {
+                index_name: Some(index_name),
                 key: Some(key.clone()),
                 epoch: None,
             };
@@ -728,7 +742,7 @@ async fn metrics_handler_inner(
             logger.log(&format!("/{index_name}/metrics/{field_spec}"), &payload);
         }
     }
-    let field = match super::types::metric_field_for_name(&state.runtime_config, &field_spec) {
+    let field = match super::types::metric_field_for_name(&state.runtime_config, &index_name, &field_spec) {
         Some(field) => field,
         None => {
             return error_json_response(
