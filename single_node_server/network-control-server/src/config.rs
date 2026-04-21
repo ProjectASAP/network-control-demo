@@ -34,18 +34,12 @@ pub struct ServerConfig {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ApiConfig {
-    #[serde(default)]
-    pub index_name: Option<String>,
-    #[serde(default)]
-    pub index_names: Vec<String>,
     #[serde(default = "default_true")]
     pub enable_batch_endpoint: bool,
     #[serde(default = "default_true")]
     pub enable_metrics_endpoint: bool,
     #[serde(default)]
     pub strict_mode: bool,
-    #[serde(default)]
-    pub default_batch_fields: Vec<String>,
     #[serde(default)]
     pub default_batch_percents: Vec<f64>,
 }
@@ -125,21 +119,10 @@ impl ServerRuntimeConfig {
         if self.server.timing_csv_path.trim().is_empty() {
             return Err("server.timing_csv_path must not be empty".into());
         }
-        if self
-            .api
-            .index_names
-            .iter()
-            .any(|value| value.trim().is_empty())
-        {
-            return Err("api.index_names must not contain empty values".into());
-        }
         let index_names = self.index_names();
         if index_names.is_empty() {
-            return Err("api.index_names must contain at least one value (or set api.index_name)"
+            return Err("indices must not be empty; at least one index schema is required"
                 .into());
-        }
-        if self.api.default_batch_fields.is_empty() {
-            return Err("api.default_batch_fields must not be empty".into());
         }
         if self.api.default_batch_percents.is_empty() {
             return Err("api.default_batch_percents must not be empty".into());
@@ -243,24 +226,6 @@ impl ServerRuntimeConfig {
             }
         }
 
-        // Validate that default_batch_fields exist in at least one index's metrics
-        let all_metric_names: HashSet<String> = self.indices
-            .values()
-            .flat_map(|schema| {
-                schema.metrics.iter()
-                    .map(|m| m.name.trim().to_ascii_lowercase())
-            })
-            .collect();
-        for field in &self.api.default_batch_fields {
-            if !all_metric_names.contains(&field.trim().to_ascii_lowercase()) {
-                return Err(format!(
-                    "api.default_batch_fields contains unknown metric '{}'",
-                    field
-                )
-                .into());
-            }
-        }
-
         Ok(())
     }
 
@@ -304,7 +269,7 @@ impl ServerRuntimeConfig {
         let mut dedup = HashSet::new();
         let mut ordered = Vec::new();
 
-        for value in &self.api.index_names {
+        for value in self.indices.keys() {
             let trimmed = value.trim();
             if trimmed.is_empty() {
                 continue;
@@ -314,17 +279,6 @@ impl ServerRuntimeConfig {
                 ordered.push(trimmed.to_string());
             }
         }
-
-        if let Some(single) = &self.api.index_name {
-            let trimmed = single.trim();
-            if !trimmed.is_empty() {
-                let normalized = trimmed.to_ascii_lowercase();
-                if dedup.insert(normalized) {
-                    ordered.push(trimmed.to_string());
-                }
-            }
-        }
-
         ordered
     }
 
@@ -504,12 +458,9 @@ mod tests {
                                 timing_csv_path: "server_request_timing.csv".to_string(),
                         },
                         api: ApiConfig {
-                                index_name: Some("cluster-metrics".to_string()),
-                                index_names: Vec::new(),
                                 enable_batch_endpoint: true,
                                 enable_metrics_endpoint: true,
                                 strict_mode: false,
-                                default_batch_fields: vec!["cpu_cores".to_string()],
                                 default_batch_percents: vec![50.0],
                         },
                         upstream: UpstreamConfig {

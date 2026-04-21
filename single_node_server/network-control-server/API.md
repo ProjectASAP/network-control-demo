@@ -121,8 +121,7 @@ You may also provide `key` directly on the aggregation:
 
 Notes:
 
-- `keys` is required.
-- `fields` defaults from `query_support.default_batch_fields`.
+- `keys` and `fields` is required.
 - `percents` defaults from `query_support.default_batch_percents`.
 - Only configured and registered aggs are accepted.
 

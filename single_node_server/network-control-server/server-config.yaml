@@ -7,16 +7,9 @@ server:
   timing_csv_path: "server_request_timing.csv"
 
 api:
-  index_names:
-    - "cluster-metrics"
-    - "edge-metrics"
   enable_batch_endpoint: true
   enable_metrics_endpoint: true
   strict_mode: false
-  default_batch_fields:
-    - "cpu_cores"
-    - "memory_gb"
-    - "network_mbps"
   default_batch_percents:
     - 50.0
 

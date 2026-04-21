@@ -477,13 +477,12 @@ async fn batch_query_handler(
         );
     }
 
-    let fields = request.fields.unwrap_or_else(|| {
-        state
-            .runtime_config
-            .api
-            .default_batch_fields
-            .clone()
-    });
+    let Some(fields) = request.fields else {
+        return error_json_response(
+            axum::http::StatusCode::BAD_REQUEST,
+            ErrorResponse::bad_request("fields must be specified for batch queries"),
+        );
+    };
     let percents = request.percents.unwrap_or_else(|| {
         state
             .runtime_config
@@ -491,6 +490,7 @@ async fn batch_query_handler(
             .default_batch_percents
             .clone()
     });
+
     let supported_aggs = state.runtime_config.aggregation_names();
     let mut requested_aggs = Vec::new();
     for agg in &request.aggs {
