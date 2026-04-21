@@ -112,7 +112,6 @@ pub(crate) struct BatchQueryResponse {
 pub(crate) struct IngestRecord {
     pub(crate) epoch: Option<u64>,
     pub(crate) key: Vec<String>,
-    pub(crate) task: Option<Vec<String>>,
     /// metric storage_field name → values
     pub(crate) metrics: std::collections::HashMap<String, Vec<f64>>,
 }
@@ -131,17 +130,6 @@ impl IngestRecord {
 
         let key = parse_string_array(obj, &mapping.key_field)?;
 
-        let task = match &mapping.task_field {
-            Some(task_field) => {
-                if obj.contains_key(task_field) {
-                    Some(parse_string_array(obj, task_field)?)
-                } else {
-                    None
-                }
-            }
-            None => None,
-        };
-
         let mut metrics = std::collections::HashMap::new();
         for (metric_name, json_field) in &mapping.metric_fields {
             let values = parse_f64_array(obj, json_field)?;
@@ -151,7 +139,6 @@ impl IngestRecord {
         Ok(Self {
             epoch,
             key,
-            task,
             metrics,
         })
     }

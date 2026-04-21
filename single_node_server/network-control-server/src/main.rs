@@ -62,16 +62,6 @@ async fn main() {
         None
     };
 
-    let _metric_names: Vec<String> = runtime_config
-        .schema_for_index("") // Get first available schema
-        .map(|schema| {
-            schema
-                .metrics
-                .iter()
-                .map(|m| m.storage_field.clone())
-                .collect()
-        })
-        .unwrap_or_default();
     let mut initial_keys: Vec<String> = runtime_config
         .storage
         .predefined_keys

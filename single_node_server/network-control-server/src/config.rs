@@ -96,10 +96,8 @@ pub struct MetricConfig {
 pub struct IngestFieldMapping {
     pub key_field: String,
     pub epoch_field: String,
-    pub task_field: Option<String>,
     pub metric_fields: HashMap<String, String>,
 }
-
 
 
 impl ServerRuntimeConfig {
@@ -487,7 +485,6 @@ mod tests {
                                 ingest_field_mapping: IngestFieldMapping {
                                         key_field: "cluster".to_string(),
                                         epoch_field: "epoch".to_string(),
-                                        task_field: Some("task".to_string()),
                                         metric_fields: HashMap::from([
                                                 ("cpu_cores".to_string(), "cpu_cores".to_string()),
                                                 ("memory_gb".to_string(), "memory_gb".to_string()),

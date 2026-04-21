@@ -200,14 +200,6 @@ async fn ingest_handler_inner(
             );
         }
     }
-    if let Some(ref task) = record.task {
-        if task.len() != len {
-            return error_json_response(
-                axum::http::StatusCode::BAD_REQUEST,
-                ErrorResponse::bad_request("task field length must match key field length"),
-            );
-        }
-    }
 
     if let Some(epoch) = record.epoch {
         let mut should_clear = false;
@@ -240,12 +232,6 @@ async fn ingest_handler_inner(
         let key = record.key[idx].trim();
         if key.is_empty() {
             continue;
-        }
-        // If task is configured and present, skip rows with empty task.
-        if let Some(ref task) = record.task {
-            if task[idx].trim().is_empty() {
-                continue;
-            }
         }
         // Build per-sample metric map for this row.
         let mut sample_metrics = std::collections::HashMap::new();

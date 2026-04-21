@@ -52,7 +52,6 @@ indices:
     ingest_field_mapping:
       key_field: "cluster"
       epoch_field: "epoch"
-      task_field: "task"
       metric_fields:
         cpu_cores: "cpu_cores"
         memory_gb: "memory_gb"
@@ -74,7 +73,6 @@ indices:
     ingest_field_mapping:
       key_field: "edge"
       epoch_field: "epoch"
-      task_field: "task"
       metric_fields:
         cpu_cores: "cpu_cores"
         memory_gb: "memory_gb"
