@@ -314,7 +314,7 @@ def ingest_server(
     retries: int,
     retry_backoff_s: float,
 ) -> None:
-    ingest_url = f"{server_url}/"
+    ingest_url = f"{server_url}/cluster-metrics"
     payload = {
         "epoch": epoch,
         "task": [row["task"] for row in batch],
