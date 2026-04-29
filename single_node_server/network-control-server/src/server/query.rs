@@ -28,14 +28,9 @@ impl AggregationEngine for SketchAggregationEngine {
                     .ok_or_else(|| "query index is required".to_string())?;
                 let field = metric_field_for_name(&state.runtime_config, index_name, &pct.field)
                     .ok_or_else(|| format!("unsupported percentile field: {}", pct.field))?;
-                let explicit_key = pct
+                let key = context
                     .key
-                    .as_ref()
-                    .map(|key| key.trim())
-                    .filter(|key| !key.is_empty())
-                    .map(|key| key.to_string());
-                let key = explicit_key
-                    .or_else(|| context.key.clone())
+                    .clone()
                     .ok_or_else(|| "percentiles key is required".to_string())?;
                 let query_results = store.query_percentiles(&key, &field, &pct.percents)?;
 
@@ -47,22 +42,17 @@ impl AggregationEngine for SketchAggregationEngine {
                 }
                 Ok(Some(json!({ "values": values })))
             }
-            AggregationKind::Cumulative(cum) => {
+            AggregationKind::Sum(sum) => {
                 let index_name = context
                     .index_name
                     .as_deref()
                     .ok_or_else(|| "query index is required".to_string())?;
-                let field = metric_field_for_name(&state.runtime_config, index_name, &cum.field)
-                    .ok_or_else(|| format!("unsupported cumulative field: {}", cum.field))?;
-                let explicit_key = cum
+                let field = metric_field_for_name(&state.runtime_config, index_name, &sum.field)
+                    .ok_or_else(|| format!("unsupported sum field: {}", sum.field))?;
+                let key = context
                     .key
-                    .as_ref()
-                    .map(|key| key.trim())
-                    .filter(|key| !key.is_empty())
-                    .map(|key| key.to_string());
-                let key = explicit_key
-                    .or_else(|| context.key.clone())
-                    .ok_or_else(|| "cumulative key is required".to_string())?;
+                    .clone()
+                    .ok_or_else(|| "sum key is required".to_string())?;
                 let value = store.cumulative_value(&key, &field)?;
                 Ok(Some(json!({ "key": key, "value": value })))
             }
@@ -76,8 +66,8 @@ impl AggregationEngine for SketchAggregationEngine {
                 supports_search: true,
                 supports_batch: true,
             }),
-            "cumulative" => Some(AggregationRegistration {
-                name: "cumulative",
+            "sum" => Some(AggregationRegistration {
+                name: "sum",
                 supports_search: true,
                 supports_batch: true,
             }),
@@ -88,11 +78,11 @@ impl AggregationEngine for SketchAggregationEngine {
     fn supported_features(&self) -> Vec<String> {
         vec![
             "aggregations.percentiles".to_string(),
-            "aggregations.cumulative".to_string(),
+            "aggregations.sum".to_string(),
             "query.bool.filter.term".to_string(),
             "size=0".to_string(),
             "batch.percentiles".to_string(),
-            "batch.cumulative".to_string(),
+            "batch.sum".to_string(),
         ]
     }
 }

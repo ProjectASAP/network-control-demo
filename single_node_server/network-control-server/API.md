@@ -21,7 +21,7 @@ The runtime contract is driven by `server-config.yaml`.
 Supported local aggregations:
 
 - `percentiles`
-- `cumulative`
+- `sum`
 
 Supported local query subset:
 
@@ -57,33 +57,26 @@ Anything outside that subset is either:
 }
 ```
 
-You may also provide `key` directly on the aggregation:
+The key is always derived from `query.bool.filter.term` (sketch-server-specific
+`key` overrides on aggregations are no longer supported now that requests are
+parsed as standard ES DSL).
+
+### Sum
 
 ```json
 {
   "size": 0,
-  "aggs": {
-    "cpu_quantiles": {
-      "percentiles": {
-        "field": "cpu_cores",
-        "percents": [50],
-        "key": "N001"
-      }
+  "query": {
+    "bool": {
+      "filter": [
+        { "term": { "cluster": "N001" } }
+      ]
     }
-  }
-}
-```
-
-### Cumulative
-
-```json
-{
-  "size": 0,
+  },
   "aggs": {
     "cpu_sum": {
-      "cumulative": {
-        "field": "cpu_cores",
-        "key": "N001"
+      "sum": {
+        "field": "cpu_cores"
       }
     }
   }
@@ -99,7 +92,7 @@ You may also provide `key` directly on the aggregation:
   "details": ["unsupported_query: only bool.filter.term queries are supported locally"],
   "supported_features": [
     "aggregations.percentiles",
-    "aggregations.cumulative",
+    "aggregations.sum",
     "query.bool.filter.term",
     "size=0"
   ]
@@ -114,7 +107,7 @@ You may also provide `key` directly on the aggregation:
 {
   "keys": ["N001", "N002"],
   "fields": ["cpu_cores", "memory_gb"],
-  "aggs": ["percentiles", "cumulative"],
+  "aggs": ["percentiles", "sum"],
   "percents": [50, 90]
 }
 ```

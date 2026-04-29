@@ -4,8 +4,8 @@
 
 | Feature | Configurable | Implemented | Local `_search` | `_batch` | Notes |
 |---|---|---:|---:|---:|---|
-| `percentiles` | yes | yes | yes | yes | key from query term filter or agg `key` |
-| `cumulative` | yes | yes | yes | yes | key from query term filter or agg `key` |
+| `percentiles` | yes | yes | yes | yes | key from query term filter |
+| `sum` | yes | yes | yes | yes | key from query term filter |
 | `top_entities` | no | no | no | no | explicitly unsupported |
 | `frequency` | no | no | no | no | explicitly unsupported |
 

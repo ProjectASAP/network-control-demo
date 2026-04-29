@@ -8,7 +8,7 @@ use std::{
 
 use serde::Deserialize;
 
-const SUPPORTED_AGGREGATIONS: &[&str] = &["percentiles", "cumulative"];
+const SUPPORTED_AGGREGATIONS: &[&str] = &["percentiles", "sum"];
 const _SUPPORTED_FILTER_TYPES: &[&str] = &["term"];
 const SUPPORTED_UPSTREAM_MODES: &[&str] = &["disabled", "fallback"];
 

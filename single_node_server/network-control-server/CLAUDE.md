@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An Axum HTTP server for ingesting per-node metrics and serving keyed percentile/cumulative queries from an in-memory sketch-backed store.
+An Axum HTTP server for ingesting per-node metrics and serving keyed percentile/sum queries from an in-memory sketch-backed store. The `_search` endpoint parses incoming bodies as standard Elasticsearch DSL via the `elasticsearch-dsl-ast` crate.
 
 The deploy contract is now driven by `server-config.yaml`.
 
@@ -16,7 +16,7 @@ The deploy contract is now driven by `server-config.yaml`.
   - `POST /:index/metrics/:field`
 - Local aggregations:
   - `percentiles`
-  - `cumulative`
+  - `sum`
 - Local query subset:
   - `size: 0`
   - `query.bool.filter.term` on configured key fields and `epoch`

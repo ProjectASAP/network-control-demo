@@ -1,12 +1,20 @@
 use std::collections::HashSet;
 
+use elasticsearch_dsl_ast::{Aggregation, AggregationName, Query, Term};
 use serde_json::Value;
+
+// Workaround: the elasticsearch-dsl-ast crate's `BoolQuery: Deserialize` impl
+// is broken (it recurses through the `Deserialize` trait and errors with
+// `missing field 'bool'`), so `Query`'s untagged enum falls through and bool
+// queries land in `Query::Json(serde_json::Value)`. Until the upstream crate is
+// fixed we walk that fallback Value manually for the bool/term shape we
+// support. Aggregations are unaffected and use the typed AST normally.
 
 use crate::config::ServerRuntimeConfig;
 
 use super::types::{
-    AggregationKind, AppState, LocalAggregationPlan, QueryContext, QueryExecutionPlan,
-    RequestPlanner, SearchRequest, UnsupportedFeature,
+    AggregationKind, AppState, LocalAggregationPlan, PercentileAggregation, QueryContext,
+    QueryExecutionPlan, RequestPlanner, SearchRequest, SumAggregation, UnsupportedFeature,
 };
 
 pub struct DefaultRequestPlanner;
@@ -39,42 +47,54 @@ impl RequestPlanner for DefaultRequestPlanner {
             }
         }
 
-        if let Some(aggs) = request.aggs.as_ref() {
-            for (name, agg) in aggs {
-                let Some(kind) = agg.kind() else {
-                    forwarded_aggs.insert(name.clone());
-                    continue;
-                };
-                let registration = match &kind {
-                    AggregationKind::Percentiles(_) => {
-                        state.aggregation_engine.registration("percentiles")
-                    }
-                    AggregationKind::Cumulative(_) => {
-                        state.aggregation_engine.registration("cumulative")
-                    }
-                };
-                let Some(registration) = registration else {
-                    forwarded_aggs.insert(name.clone());
-                    continue;
-                };
-                if !allowed_aggs.contains(registration.name) || !registration.supports_search {
-                    forwarded_aggs.insert(name.clone());
-                    continue;
+        for (name, agg) in request.aggs.iter() {
+            let name_str = aggregation_name_str(name);
+            let kind = match agg {
+                Aggregation::Percentiles(pct) => {
+                    let inner = &pct.percentiles;
+                    let percents = inner.percents.clone().unwrap_or_default();
+                    Some((
+                        "percentiles",
+                        AggregationKind::Percentiles(PercentileAggregation {
+                            field: inner.field.clone(),
+                            percents,
+                        }),
+                    ))
                 }
-                local_aggs.push(LocalAggregationPlan {
-                    name: name.clone(),
-                    kind,
-                });
+                Aggregation::Sum(s) => {
+                    let inner = &s.sum;
+                    let Some(field) = inner.field.clone() else {
+                        forwarded_aggs.insert(name_str.clone());
+                        continue;
+                    };
+                    Some(("sum", AggregationKind::Sum(SumAggregation { field })))
+                }
+                _ => None,
+            };
+            let Some((reg_name, kind)) = kind else {
+                forwarded_aggs.insert(name_str);
+                continue;
+            };
+            let Some(registration) = state.aggregation_engine.registration(reg_name) else {
+                forwarded_aggs.insert(name_str);
+                continue;
+            };
+            if !allowed_aggs.contains(registration.name) || !registration.supports_search {
+                forwarded_aggs.insert(name_str);
+                continue;
             }
+            local_aggs.push(LocalAggregationPlan {
+                name: name_str,
+                kind,
+            });
         }
 
-        let has_other_fields = !request.other.is_empty();
         Ok(QueryExecutionPlan {
             context,
             local_aggs,
             forwarded_aggs,
             unsupported_features,
-            has_other_fields,
+            has_other_fields: false,
         })
     }
 }
@@ -92,13 +112,76 @@ fn parse_query_context(
     let Some(query) = request.query.as_ref() else {
         return context;
     };
-    let Some(bool_obj) = query.get("bool").and_then(Value::as_object) else {
+    match query {
+        Query::Bool(bool_query) => {
+            for filter in &bool_query.filter.0 {
+                apply_typed_term_filter(config, index_name, filter, &mut context, unsupported_features);
+            }
+        }
+        Query::Json(raw) => {
+            // See module-top comment: bool queries fall through to JsonQuery.
+            apply_value_bool_filter(config, index_name, &raw.0, &mut context, unsupported_features);
+        }
+        _ => {
+            unsupported_features.push(UnsupportedFeature {
+                code: "unsupported_query".to_string(),
+                message: "only bool.filter.term queries are supported locally".to_string(),
+                details: vec![format!("got {query:?}")],
+            });
+        }
+    }
+    context
+}
+
+fn apply_typed_term_filter(
+    config: &ServerRuntimeConfig,
+    index_name: &str,
+    filter: &Query,
+    context: &mut QueryContext,
+    unsupported_features: &mut Vec<UnsupportedFeature>,
+) {
+    let Query::Term(term) = filter else {
+        unsupported_features.push(UnsupportedFeature {
+            code: "unsupported_filter".to_string(),
+            message: "only term filters are supported locally".to_string(),
+            details: vec![format!("{filter:?}")],
+        });
+        return;
+    };
+    let field = term.field.trim().to_ascii_lowercase();
+    let Some(value) = term.value.as_ref() else {
+        unsupported_features.push(UnsupportedFeature {
+            code: "invalid_term_value".to_string(),
+            message: "term filter must specify a value".to_string(),
+            details: vec![format!("field={field}")],
+        });
+        return;
+    };
+    apply_term_assignment(
+        config,
+        index_name,
+        &field,
+        term_as_string(value),
+        term_as_u64(value),
+        context,
+        unsupported_features,
+    );
+}
+
+fn apply_value_bool_filter(
+    config: &ServerRuntimeConfig,
+    index_name: &str,
+    raw_query: &Value,
+    context: &mut QueryContext,
+    unsupported_features: &mut Vec<UnsupportedFeature>,
+) {
+    let Some(bool_obj) = raw_query.get("bool").and_then(Value::as_object) else {
         unsupported_features.push(UnsupportedFeature {
             code: "unsupported_query".to_string(),
             message: "only bool.filter.term queries are supported locally".to_string(),
-            details: vec!["expected query.bool.filter".to_string()],
+            details: vec!["expected query.bool".to_string()],
         });
-        return context;
+        return;
     };
     let Some(filters) = bool_obj.get("filter").and_then(Value::as_array) else {
         unsupported_features.push(UnsupportedFeature {
@@ -106,7 +189,7 @@ fn parse_query_context(
             message: "only bool.filter.term queries are supported locally".to_string(),
             details: vec!["query.bool.filter must be an array".to_string()],
         });
-        return context;
+        return;
     };
     for filter in filters {
         let Some(term_obj) = filter.get("term").and_then(Value::as_object) else {
@@ -125,65 +208,109 @@ fn parse_query_context(
             });
             continue;
         }
-        for (field, value) in term_obj {
-            let normalized_field = field.trim().to_ascii_lowercase();
-            if config.key_fields_for_index(index_name).contains(&normalized_field) {
-                let Some(key) = extract_scalar_string(value) else {
-                    unsupported_features.push(UnsupportedFeature {
-                        code: "invalid_term_value".to_string(),
-                        message: "key term filter value must be a scalar".to_string(),
-                        details: vec![filter.to_string()],
-                    });
-                    continue;
-                };
-                if context
-                    .key
-                    .as_ref()
-                    .map(|current| current != &key)
-                    .unwrap_or(false)
-                {
-                    unsupported_features.push(UnsupportedFeature {
-                        code: "multiple_keys".to_string(),
-                        message: "multiple key filters are not supported locally".to_string(),
-                        details: vec![filter.to_string()],
-                    });
-                    continue;
-                }
-                context.key = Some(key);
-                continue;
-            }
-            if normalized_field == "epoch" {
-                let epoch = value.as_u64().or_else(|| {
-                    value
-                        .as_str()
-                        .and_then(|candidate| candidate.parse::<u64>().ok())
-                });
-                if let Some(epoch) = epoch {
-                    context.epoch = Some(epoch);
-                } else {
-                    unsupported_features.push(UnsupportedFeature {
-                        code: "invalid_epoch".to_string(),
-                        message: "epoch term filter must be an integer".to_string(),
-                        details: vec![filter.to_string()],
-                    });
-                }
-                continue;
-            }
-            unsupported_features.push(UnsupportedFeature {
-                code: "unsupported_term_field".to_string(),
-                message: format!("unsupported term filter field '{field}'"),
-                details: vec![filter.to_string()],
+        for (raw_field, value) in term_obj {
+            let field = raw_field.trim().to_ascii_lowercase();
+            let as_string = match value {
+                Value::String(s) => Some(s.clone()),
+                Value::Number(n) => Some(n.to_string()),
+                _ => None,
+            };
+            let as_u64 = value.as_u64().or_else(|| {
+                value
+                    .as_str()
+                    .and_then(|candidate| candidate.parse::<u64>().ok())
             });
+            apply_term_assignment(
+                config,
+                index_name,
+                &field,
+                as_string,
+                as_u64,
+                context,
+                unsupported_features,
+            );
         }
     }
-    context
 }
 
-fn extract_scalar_string(value: &Value) -> Option<String> {
-    if let Some(value) = value.as_str() {
-        return Some(value.to_string());
+fn apply_term_assignment(
+    config: &ServerRuntimeConfig,
+    index_name: &str,
+    field: &str,
+    as_string: Option<String>,
+    as_u64: Option<u64>,
+    context: &mut QueryContext,
+    unsupported_features: &mut Vec<UnsupportedFeature>,
+) {
+    if config.key_fields_for_index(index_name).contains(field) {
+        let Some(key) = as_string else {
+            unsupported_features.push(UnsupportedFeature {
+                code: "invalid_term_value".to_string(),
+                message: "key term filter value must be a scalar".to_string(),
+                details: vec![format!("field={field}")],
+            });
+            return;
+        };
+        if context
+            .key
+            .as_ref()
+            .map(|current| current != &key)
+            .unwrap_or(false)
+        {
+            unsupported_features.push(UnsupportedFeature {
+                code: "multiple_keys".to_string(),
+                message: "multiple key filters are not supported locally".to_string(),
+                details: vec![format!("field={field}")],
+            });
+            return;
+        }
+        context.key = Some(key);
+        return;
     }
-    value.as_i64().map(|value| value.to_string())
+    if field == "epoch" {
+        if let Some(epoch) = as_u64 {
+            context.epoch = Some(epoch);
+        } else {
+            unsupported_features.push(UnsupportedFeature {
+                code: "invalid_epoch".to_string(),
+                message: "epoch term filter must be an integer".to_string(),
+                details: Vec::new(),
+            });
+        }
+        return;
+    }
+    unsupported_features.push(UnsupportedFeature {
+        code: "unsupported_term_field".to_string(),
+        message: format!("unsupported term filter field '{field}'"),
+        details: Vec::new(),
+    });
+}
+
+fn term_as_u64(value: &Term) -> Option<u64> {
+    match value {
+        Term::PositiveNumber(n) => Some(*n),
+        Term::NegativeNumber(n) if *n >= 0 => Some(*n as u64),
+        Term::String(s) => s.parse::<u64>().ok(),
+        _ => None,
+    }
+}
+
+/// Extract the underlying string from an `AggregationName`. The crate exposes
+/// no accessor, so we go through serde (newtype struct -> JSON string).
+fn aggregation_name_str(name: &AggregationName) -> String {
+    match serde_json::to_value(name) {
+        Ok(Value::String(s)) => s,
+        _ => format!("{name:?}"),
+    }
+}
+
+fn term_as_string(value: &Term) -> Option<String> {
+    match value {
+        Term::String(s) => Some(s.clone()),
+        Term::PositiveNumber(n) => Some(n.to_string()),
+        Term::NegativeNumber(n) => Some(n.to_string()),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -219,28 +346,28 @@ storage:
         format: "N{:03}"
         start: 1
         end: 1
-schema:
-  metrics:
-    - name: "cpu_cores"
-      aliases: ["cpucores"]
-      storage_field: "cpu_cores"
-    - name: "memory_gb"
-      aliases: ["memorygb"]
-      storage_field: "memory_gb"
-    - name: "network_mbps"
-      aliases: ["networkmbps"]
-      storage_field: "network_mbps"
-  key_fields: ["cluster"]
-  ingest_field_mapping:
-    key_field: "cluster"
-    epoch_field: "epoch"
-    task_field: "task"
-    metric_fields:
-      cpu_cores: "cpu_cores"
-      memory_gb: "memory_gb"
-      network_mbps: "network_mbps"
+indices:
+  cluster-metrics:
+    metrics:
+      - name: "cpu_cores"
+        aliases: ["cpucores"]
+        storage_field: "cpu_cores"
+      - name: "memory_gb"
+        aliases: ["memorygb"]
+        storage_field: "memory_gb"
+      - name: "network_mbps"
+        aliases: ["networkmbps"]
+        storage_field: "network_mbps"
+    key_fields: ["cluster"]
+    ingest_field_mapping:
+      key_field: "cluster"
+      epoch_field: "epoch"
+      metric_fields:
+        cpu_cores: "cpu_cores"
+        memory_gb: "memory_gb"
+        network_mbps: "network_mbps"
 query_support:
-  aggregations: ["percentiles", "cumulative"]
+  aggregations: ["percentiles", "sum"]
   supported_filter_types: ["term"]
   default_batch_fields: ["cpu_cores"]
   default_batch_percents: [50.0]
@@ -251,34 +378,28 @@ query_support:
 
     #[test]
     fn parses_term_filter_into_context() {
-        let request = crate::server::types::SearchRequest {
-            size: Some(0),
-            query: Some(json!({
+        let request: super::SearchRequest = serde_json::from_value(json!({
+            "size": 0,
+            "query": {
                 "bool": {
                     "filter": [
                         {"term": {"cluster": "N001"}},
                         {"term": {"epoch": 7}}
                     ]
                 }
-            })),
-            aggs: None,
-            other: Default::default(),
-        };
+            }
+        }))
+        .unwrap();
         let mut unsupported = Vec::new();
         let context = parse_query_context(&config(), "cluster-metrics", &request, &mut unsupported);
-        assert!(unsupported.is_empty());
+        assert!(unsupported.is_empty(), "unexpected: {unsupported:?}");
         assert_eq!(context.key, Some("N001".to_string()));
         assert_eq!(context.epoch, Some(7));
     }
 
     #[test]
     fn empty_query_yields_default_context() {
-        let request = crate::server::types::SearchRequest {
-            size: None,
-            query: None,
-            aggs: None,
-            other: Default::default(),
-        };
+        let request: super::SearchRequest = serde_json::from_value(json!({})).unwrap();
         let mut unsupported = Vec::new();
         let context = parse_query_context(&config(), "cluster-metrics", &request, &mut unsupported);
         assert_eq!(context.key, QueryContext::default().key);

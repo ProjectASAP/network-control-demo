@@ -1,13 +1,17 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use elasticsearch_dsl_ast::Search;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::config::ServerRuntimeConfig;
 use crate::metrics::{MetricField, MetricStore};
+
+/// The wire-level search request is the typed Elasticsearch DSL `Search` AST.
+pub(crate) type SearchRequest = Search;
 
 use super::TimingSender;
 use super::logging::LogSender;
@@ -46,40 +50,19 @@ pub(crate) struct RootResponse<'a> {
     pub(crate) examples: [&'a str; 3],
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct SearchRequest {
-    #[serde(default)]
-    pub(crate) size: Option<u64>,
-    #[serde(default)]
-    pub(crate) query: Option<Value>,
-    pub(crate) aggs: Option<BTreeMap<String, AggregationRequest>>,
-    #[serde(flatten, default)]
-    pub(crate) other: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct AggregationRequest {
-    #[serde(default)]
-    pub(crate) percentiles: Option<PercentileAggregation>,
-    #[serde(default)]
-    pub(crate) cumulative: Option<CumulativeAggregation>,
-    #[serde(flatten, default)]
-    pub(crate) other: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
+/// Engine-side description of a `percentiles` aggregation request, extracted
+/// from the typed DSL during planning.
+#[derive(Debug, Clone)]
 pub(crate) struct PercentileAggregation {
     pub(crate) field: String,
     pub(crate) percents: Vec<f64>,
-    #[serde(default)]
-    pub(crate) key: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct CumulativeAggregation {
+/// Engine-side description of a standard ES `sum` aggregation request,
+/// extracted from the typed DSL during planning.
+#[derive(Debug, Clone)]
+pub(crate) struct SumAggregation {
     pub(crate) field: String,
-    #[serde(default)]
-    pub(crate) key: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -100,7 +83,7 @@ pub(crate) struct BatchQueryRequest {
 pub(crate) struct BatchQueryResult {
     pub(crate) key: String,
     pub(crate) percentiles: Option<HashMap<String, HashMap<String, f64>>>,
-    pub(crate) cumulative: Option<HashMap<String, f64>>,
+    pub(crate) sum: Option<HashMap<String, f64>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -182,7 +165,7 @@ fn parse_f64_array(obj: &serde_json::Map<String, Value>, field: &str) -> Result<
 #[derive(Clone, Debug)]
 pub(crate) enum AggregationKind {
     Percentiles(PercentileAggregation),
-    Cumulative(CumulativeAggregation),
+    Sum(SumAggregation),
 }
 
 #[derive(Clone, Debug)]
@@ -262,21 +245,6 @@ pub(crate) trait RequestPlanner: Send + Sync {
         request: &SearchRequest,
         index_name: &str,
     ) -> Result<QueryExecutionPlan, String>;
-}
-
-impl AggregationRequest {
-    pub(crate) fn kind(&self) -> Option<AggregationKind> {
-        let percentiles = self.percentiles.as_ref();
-        let cumulative = self.cumulative.as_ref();
-        let count = usize::from(percentiles.is_some()) + usize::from(cumulative.is_some());
-        if count != 1 || !self.other.is_empty() {
-            return None;
-        }
-        if let Some(pct) = percentiles {
-            return Some(AggregationKind::Percentiles(pct.clone()));
-        }
-        cumulative.map(|cum| AggregationKind::Cumulative(cum.clone()))
-    }
 }
 
 impl ErrorResponse {

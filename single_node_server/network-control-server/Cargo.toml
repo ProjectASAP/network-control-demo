@@ -14,3 +14,4 @@ serde_yaml = "0.9"
 asap_sketchlib = { package = "asap_sketchlib", path = "../../../asap_sketchlib" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+elasticsearch-dsl-ast = { path = "../../../elasticsearch-dsl-ast" }

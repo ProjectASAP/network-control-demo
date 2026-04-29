@@ -95,7 +95,7 @@ async fn root_handler(State(state): State<AppState>) -> Json<RootResponse<'stati
         .unwrap_or_else(|| "cluster-metrics".to_string());
     let search_path = state.runtime_config.search_path_for(&default_index);
     Json(RootResponse {
-        message: "Portable single-node metrics server. Supports local percentiles and cumulative aggregations over configured keys; unsupported features are either forwarded upstream or rejected based on runtime config.",
+        message: "Portable single-node metrics server. Supports local percentiles and sum aggregations over configured keys; unsupported features are either forwarded upstream or rejected based on runtime config.",
         examples: [
             Box::leak(
                 format!(
@@ -105,7 +105,7 @@ async fn root_handler(State(state): State<AppState>) -> Json<RootResponse<'stati
             ),
             Box::leak(
                 format!(
-                    "POST {search_path} {{\"size\":0,\"aggs\":{{\"mem_sum\":{{\"cumulative\":{{\"field\":\"memory_gb\",\"key\":\"N001\"}}}}}}}}"
+                    "POST {search_path} {{\"size\":0,\"query\":{{\"bool\":{{\"filter\":[{{\"term\":{{\"cluster\":\"N001\"}}}}]}}}},\"aggs\":{{\"mem_sum\":{{\"sum\":{{\"field\":\"memory_gb\"}}}}}}}}"
                 )
                 .into_boxed_str(),
             ),
@@ -119,7 +119,7 @@ async fn healthz_handler(State(state): State<AppState>) -> Json<Value> {
         "status": "ok",
         "config_loaded": true,
         "upstream_enabled": state.runtime_config.is_upstream_enabled(),
-        "registered_aggregations": ["percentiles", "cumulative"],
+        "registered_aggregations": ["percentiles", "sum"],
     }))
 }
 
@@ -568,7 +568,7 @@ async fn batch_query_handler(
             let mut result = BatchQueryResult {
                 key: key.clone(),
                 percentiles: None,
-                cumulative: None,
+                sum: None,
             };
             let context = super::types::QueryContext {
                 index_name: Some(index_name),
@@ -586,7 +586,6 @@ async fn batch_query_handler(
                                     super::types::PercentileAggregation {
                                         field: field.clone(),
                                         percents: percents.as_ref().clone(),
-                                        key: None,
                                     },
                                 ),
                             };
@@ -614,15 +613,14 @@ async fn batch_query_handler(
                             result.percentiles = Some(field_percentiles);
                         }
                     }
-                    "cumulative" => {
-                        let mut field_cumulative = HashMap::new();
+                    "sum" => {
+                        let mut field_sum = HashMap::new();
                         for field in fields.iter() {
                             let plan = super::types::LocalAggregationPlan {
                                 name: field.clone(),
-                                kind: super::types::AggregationKind::Cumulative(
-                                    super::types::CumulativeAggregation {
+                                kind: super::types::AggregationKind::Sum(
+                                    super::types::SumAggregation {
                                         field: field.clone(),
-                                        key: None,
                                     },
                                 ),
                             };
@@ -632,12 +630,12 @@ async fn batch_query_handler(
                                     .evaluate(&state, store.as_ref(), &context, &plan)?
                             {
                                 if let Some(value) = value.get("value").and_then(Value::as_f64) {
-                                    field_cumulative.insert(field.clone(), value);
+                                    field_sum.insert(field.clone(), value);
                                 }
                             }
                         }
-                        if !field_cumulative.is_empty() {
-                            result.cumulative = Some(field_cumulative);
+                        if !field_sum.is_empty() {
+                            result.sum = Some(field_sum);
                         }
                     }
                     _ => {}
@@ -953,18 +951,17 @@ mod tests {
 
     #[test]
     fn build_upstream_body_omits_empty_aggs() {
-        let request = crate::server::types::SearchRequest {
-            size: Some(0),
-            query: Some(json!({
+        let request: crate::server::types::SearchRequest = serde_json::from_value(json!({
+            "size": 0,
+            "query": {
                 "bool": {
                     "filter": [
                         {"range": {"epoch": {"gte": 1}}}
                     ]
                 }
-            })),
-            aggs: None,
-            other: Default::default(),
-        };
+            }
+        }))
+        .unwrap();
 
         let plan = QueryExecutionPlan {
             context: Default::default(),
