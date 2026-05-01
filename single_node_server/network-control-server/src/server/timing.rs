@@ -55,6 +55,23 @@ impl QueryTiming {
         );
     }
 
+    /// Log cumulative timing of different steps to stderr
+    pub fn log_cumulative(&self) {
+        let mut steps: BTreeMap<&str, f64> = BTreeMap::new();
+        for (name, ms) in &self.steps {
+            *steps.entry(name.as_str()).or_insert(0.0) += *ms;
+        }
+        let steps_str: Vec<String> = steps
+            .iter()
+            .map(|(name, ms)| format!("{}={:.3}ms", name, ms))
+            .collect();
+        eprintln!(
+            "[TIMING] {} total={:.3}ms",
+            steps_str.join(" "),
+            self.total_ms()
+        );
+    }
+
     /// Convert to JSON value for response
     pub fn to_json(&self) -> Value {
         let mut steps_obj = serde_json::Map::new();

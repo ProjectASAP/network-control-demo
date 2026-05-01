@@ -131,6 +131,9 @@ async fn elasticsearch_bulk_handler_with_index(
     _headers: HeaderMap,
     body: Bytes
 ) -> impl IntoResponse {
+    let t0 = Instant::now(); // Track execution time even when timing is disabled to include in response body.
+    let mut timing = state.timing_enabled.then(QueryTiming::new);
+
     // Fetch index-specific config and store before parsing body since bulk endpoint requires index in path and we want to fail fast.
     let index_name = match resolve_index_name(&state, Some(index.as_str())) {
         Ok(index_name) => index_name,
@@ -154,7 +157,9 @@ async fn elasticsearch_bulk_handler_with_index(
     };
     let ingest_mapping = &schema.ingest_field_mapping;
 
-    let t0 = Instant::now();
+    if let Some(t) = &mut timing {
+        t.step("fetch_index_config");
+    }
 
     // Parse NDJSON body.
     let reader = std::io::BufReader::new(&body[..]);
@@ -168,6 +173,9 @@ async fn elasticsearch_bulk_handler_with_index(
                 ErrorResponse::bad_request("invalid JSON in bulk request body"),
             ),
         };
+        if let Some(t) = &mut timing {
+            t.step("parse_json");
+        }
         // Look for the line before the document source that specifies the action being performed and document ID.
         if !action_seen {
             let action = serde_json::from_value::<DocumentAction>(document);
@@ -188,16 +196,12 @@ async fn elasticsearch_bulk_handler_with_index(
                     );
                 }
             }
+            if let Some(t) = &mut timing {
+                t.step("deserialize_action");
+            }
             continue;
         }
-        // Process document source line following the action line.
-        let Ok(incoming_document) = serde_json::from_str::<Value>(&line) else {
-            return error_json_response(
-                axum::http::StatusCode::BAD_REQUEST,
-                ErrorResponse::bad_request("invalid JSON in bulk request body"),
-            )
-        };
-        match incoming_document {
+        match document {
             Value::Object(map) => {
                 // eprintln!("Document source for bulk action: {:?}", map);
 
@@ -250,6 +254,12 @@ async fn elasticsearch_bulk_handler_with_index(
                 );
             }
         }
+        if let Some(t) = &mut timing {
+            t.step("insert_record");
+        }
+    }
+    if let Some(t) = &mut timing {
+        t.log_cumulative();
     }
     Json(json!({
         "took": t0.elapsed().as_millis(),
