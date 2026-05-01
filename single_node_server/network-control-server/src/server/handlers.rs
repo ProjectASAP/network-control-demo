@@ -131,6 +131,28 @@ async fn elasticsearch_bulk_handler_with_index(
     _headers: HeaderMap,
     body: Bytes
 ) -> impl IntoResponse {
+    // Fetch index-specific config and store before parsing body since bulk endpoint requires index in path and we want to fail fast.
+    let index_name = match resolve_index_name(&state, Some(index.as_str())) {
+        Ok(index_name) => index_name,
+        Err(response) => return response,
+    };
+    let index_key = AppState::normalize_index_name(&index_name);
+    let Some(store) = state.store_for_index(&index_name) else {
+        return error_json_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorResponse::bad_request(format!("store for index '{index_name}' is not available")),
+        );
+    };
+    let schema = match state.runtime_config.schema_for_index(&index_name) {
+        Some(s) => s,
+        None => {
+            return error_json_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorResponse::bad_request(format!("schema for index '{index_name}' is not available")),
+            );
+        }
+    };
+    let ingest_mapping = &schema.ingest_field_mapping;
 
     let t0 = Instant::now();
 
@@ -178,27 +200,6 @@ async fn elasticsearch_bulk_handler_with_index(
         match incoming_document {
             Value::Object(map) => {
                 // eprintln!("Document source for bulk action: {:?}", map);
-                let index_name = match resolve_index_name(&state, Some(index.as_str())) {
-                    Ok(index_name) => index_name,
-                    Err(response) => return response,
-                };
-                let index_key = AppState::normalize_index_name(&index_name);
-                let Some(store) = state.store_for_index(&index_name) else {
-                    return error_json_response(
-                        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                        ErrorResponse::bad_request(format!("store for index '{index_name}' is not available")),
-                    );
-                };
-                let schema = match state.runtime_config.schema_for_index(&index_name) {
-                    Some(s) => s,
-                    None => {
-                        return error_json_response(
-                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                            ErrorResponse::bad_request(format!("schema for index '{index_name}' is not available")),
-                        );
-                    }
-                };
-                let ingest_mapping = &schema.ingest_field_mapping;
 
                 // Clear stale data from previous epoch.
                 let epoch = map.get(ingest_mapping.epoch_field.as_str()).and_then(|v| v.as_u64());
