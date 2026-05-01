@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+use std::io::BufRead;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -20,7 +21,7 @@ use super::query::parse_quantile_spec;
 use super::timing::{QueryTiming, write_timing_log};
 use super::types::{
     AppState, BatchQueryRequest, BatchQueryResponse, BatchQueryResult, ErrorResponse, IngestRecord,
-    MetricsQuery, QueryExecutionPlan, RootResponse, SearchRequest,
+    MetricsQuery, QueryExecutionPlan, RootResponse, SearchRequest, DocumentAction,
 };
 use super::upstream::merge_aggregations;
 
@@ -37,6 +38,7 @@ pub async fn run_http_server(
     let mut router = Router::new()
         .route("/", get(root_handler).post(ingest_handler_default))
         .route("/:index", post(ingest_handler_with_index))
+        .route("/:index/_bulk", post(elasticsearch_bulk_handler_with_index))
         .route("/healthz", get(healthz_handler))
         .route("/:index/_search", post(search_handler));
 
@@ -121,6 +123,140 @@ async fn healthz_handler(State(state): State<AppState>) -> Json<Value> {
         "upstream_enabled": state.runtime_config.is_upstream_enabled(),
         "registered_aggregations": ["percentiles", "sum"],
     }))
+}
+
+async fn elasticsearch_bulk_handler_with_index(
+    State(state): State<AppState>, 
+    Path(index): Path<String>,
+    _headers: HeaderMap,
+    body: Bytes
+) -> impl IntoResponse {
+
+    let t0 = Instant::now();
+
+    // Parse NDJSON body.
+    let reader = std::io::BufReader::new(&body[..]);
+    let mut action_seen = false;
+    let mut inserted = 0usize;
+    for line in reader.lines().flatten() {
+        let document = match serde_json::from_str::<Value>(&line) {
+            Ok(v) => v,
+            Err(_) => return error_json_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                ErrorResponse::bad_request("invalid JSON in bulk request body"),
+            ),
+        };
+        // Look for the line before the document source that specifies the action being performed and document ID.
+        if !action_seen {
+            let action = serde_json::from_value::<DocumentAction>(document);
+            match action {
+                Ok(DocumentAction::Index(_)) | Ok(DocumentAction::Create(_)) => {
+                    action_seen = true;
+                }
+                Ok(other) => {
+                    return error_json_response(
+                        axum::http::StatusCode::BAD_REQUEST,
+                        ErrorResponse::bad_request(format!("action '{:?}' not supported in bulk endpoint", other)),
+                    );
+                },
+                Err(_) => {
+                    return error_json_response(
+                        axum::http::StatusCode::BAD_REQUEST,
+                        ErrorResponse::bad_request("invalid bulk action in request body"),
+                    );
+                }
+            }
+            continue;
+        }
+        // Process document source line following the action line.
+        let Ok(incoming_document) = serde_json::from_str::<Value>(&line) else {
+            return error_json_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                ErrorResponse::bad_request("invalid JSON in bulk request body"),
+            )
+        };
+        match incoming_document {
+            Value::Object(map) => {
+                // eprintln!("Document source for bulk action: {:?}", map);
+                let index_name = match resolve_index_name(&state, Some(index.as_str())) {
+                    Ok(index_name) => index_name,
+                    Err(response) => return response,
+                };
+                let index_key = AppState::normalize_index_name(&index_name);
+                let Some(store) = state.store_for_index(&index_name) else {
+                    return error_json_response(
+                        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                        ErrorResponse::bad_request(format!("store for index '{index_name}' is not available")),
+                    );
+                };
+                let schema = match state.runtime_config.schema_for_index(&index_name) {
+                    Some(s) => s,
+                    None => {
+                        return error_json_response(
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            ErrorResponse::bad_request(format!("schema for index '{index_name}' is not available")),
+                        );
+                    }
+                };
+                let ingest_mapping = &schema.ingest_field_mapping;
+
+                // Clear stale data from previous epoch.
+                let epoch = map.get(ingest_mapping.epoch_field.as_str()).and_then(|v| v.as_u64());
+                if let Some(epoch) = epoch {
+                    let mut should_clear = false;
+                    match state.current_epoch_by_index.lock() {
+                        Ok(mut guard) => {
+                            if guard.get(&index_key).copied() != Some(epoch) {
+                                guard.insert(index_key.clone(), epoch);
+                                should_clear = true;
+                            }
+                        }
+                        Err(_) => {
+                            return error_json_response(
+                                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                                ErrorResponse::bad_request("failed to lock epoch state"),
+                            );
+                        }
+                    }
+                    if should_clear {
+                        if let Err(message) = store.clear_all() {
+                            return error_json_response(
+                                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                                ErrorResponse::bad_request(message),
+                            );
+                        }
+                    }
+                }
+
+                // Built record (row) for this document based on the schema's ingest field mapping. The mapping specifies which JSON fields to extract for each metric, and which JSON field to use as the key.
+                let mut record = HashMap::new();
+                for (metric_name, json_field) in &ingest_mapping.metric_fields {
+                    let value = map.get(json_field).and_then(|v| v.as_f64());
+                    if let Some(value) = value {
+                        record.insert(metric_name.clone(), value);
+                    }
+                }
+                store.insert_sample(&ingest_mapping.key_field, &record).unwrap_or_else(|err| {
+                    eprintln!("Failed to insert sample from bulk document: {err}");
+                });
+                inserted += 1;
+                action_seen = false; // Reset for next action/document pair in the bulk request.
+            }
+            _ => {
+                return error_json_response(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    ErrorResponse::bad_request("expected document source after bulk action line"),
+                );
+            }
+        }
+    }
+    Json(json!({
+        "took": t0.elapsed().as_millis(),
+        "errors": false,
+        "items": [],
+        "inserted": inserted,
+    }))
+    .into_response()
 }
 
 async fn ingest_handler_default(
