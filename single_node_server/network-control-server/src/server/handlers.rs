@@ -241,9 +241,13 @@ async fn elasticsearch_bulk_handler_with_index(
                         record.insert(metric_name.clone(), value);
                     }
                 }
-                store.insert_sample(&ingest_mapping.key_field, &record).unwrap_or_else(|err| {
-                    eprintln!("Failed to insert sample from bulk document: {err}");
-                });
+                let key = map.get(&ingest_mapping.key_field).and_then(|v| v.as_str()).unwrap_or("").trim();
+                if let Err(message) = store.insert_sample(&key, &record) {
+                    return error_json_response(
+                        axum::http::StatusCode::BAD_REQUEST,
+                        ErrorResponse::bad_request(message),
+                    );
+                }
                 inserted += 1;
                 action_seen = false; // Reset for next action/document pair in the bulk request.
             }
