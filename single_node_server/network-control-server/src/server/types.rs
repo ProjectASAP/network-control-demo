@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use elasticsearch_dsl_ast::Search;
+use elasticsearch_dsl_ast::{Document, Search};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -89,6 +89,23 @@ pub(crate) struct BatchQueryResult {
 #[derive(Debug, Serialize)]
 pub(crate) struct BatchQueryResponse {
     pub(crate) results: Vec<BatchQueryResult>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum DocumentAction {
+    Index(DocumentActionInner),
+    Create(DocumentActionInner),
+    Update(DocumentActionInner),
+    Delete(DocumentActionInner),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub (crate) struct DocumentActionInner {
+    #[serde(rename = "_index")]
+    pub(crate) index: Option<String>,
+    #[serde(rename = "_id")]
+    pub(crate) id: Option<String>,
 }
 
 #[derive(Debug)]
