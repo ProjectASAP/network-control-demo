@@ -14,13 +14,15 @@ impl UpstreamClient for EsFallbackUpstreamClient {
     async fn forward(
         &self,
         state: &AppState,
+        index_name: &str,
         headers: &HeaderMap,
         body: &Value,
     ) -> Result<Value, axum::response::Response> {
-        let Some(url) = state.runtime_config.upstream.search_url.as_ref() else {
+        let Some(url) = state.runtime_config.upstream_search_url_for(index_name) else {
             return Err((
                 axum::http::StatusCode::BAD_REQUEST,
-                "upstream fallback requested but upstream.search_url is not configured".to_string(),
+                "upstream fallback requested but upstream search URL is not configured"
+                    .to_string(),
             )
                 .into_response());
         };
@@ -31,7 +33,7 @@ impl UpstreamClient for EsFallbackUpstreamClient {
             .iter()
             .map(|value| value.trim().to_ascii_lowercase())
             .collect();
-        let mut upstream_req = state.http_client.post(url).json(body);
+        let mut upstream_req = state.http_client.post(&url).json(body);
 
         if let Some(api_key) = &state.runtime_config.upstream.es_api_key {
             upstream_req = upstream_req.header(

@@ -2,20 +2,21 @@
 
 ## What This Is
 
-An Axum HTTP server for ingesting per-node metrics and serving keyed percentile/cumulative queries from an in-memory sketch-backed store.
+An Axum HTTP server for ingesting per-node metrics and serving keyed percentile/sum queries from an in-memory sketch-backed store. The `_search` endpoint parses incoming bodies as standard Elasticsearch DSL via the `elasticsearch-dsl-ast` crate.
 
 The deploy contract is now driven by `server-config.yaml`.
 
 ## Current Contract
 
 - Primary endpoints:
-  - `POST /cluster-metrics/_search`
-  - `POST /cluster-metrics/_batch`
+  - `POST /:index/_search`
+  - `POST /:index/_batch`
 - Compatibility endpoint:
   - `POST /metrics/:field`
+  - `POST /:index/metrics/:field`
 - Local aggregations:
   - `percentiles`
-  - `cumulative`
+  - `sum`
 - Local query subset:
   - `size: 0`
   - `query.bool.filter.term` on configured key fields and `epoch`
@@ -45,6 +46,7 @@ Unsupported features are either forwarded to upstream Elasticsearch when fallbac
   - `NCS_SERVER_HOST`
   - `NCS_SERVER_PORT`
   - `NCS_UPSTREAM_SEARCH_URL`
+  - `NCS_UPSTREAM_SEARCH_URL_TEMPLATE`
   - `NCS_TIMING_ENABLED`
   - `NCS_TIMING_CSV_PATH`
 - `--timing` still forces timing on.

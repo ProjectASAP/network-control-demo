@@ -7,6 +7,10 @@ edition = "2024"
 name = "tumbling-window"
 path = "src/tumbling_window.rs"
 
+[[bin]]
+name = "raw-vs-kll"
+path = "src/raw_vs_kll.rs"
+
 [dependencies]
 asap_sketchlib = { path = "/users/yuanyc/asap_sketchlib" }
 rand = "0.9"

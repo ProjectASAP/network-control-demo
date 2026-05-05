@@ -17,7 +17,8 @@ sketch-experiments/
 ├── Cargo.toml
 ├── CLAUDE.md
 └── src/
-    └── tumbling_window.rs   # Bin: tumbling-window
+    ├── tumbling_window.rs   # Bin: tumbling-window
+    └── raw_vs_kll.rs        # Bin: raw-vs-kll
 ```
 
 ## Dependencies
@@ -69,3 +70,16 @@ cargo run --bin tumbling-window
 **Key types:**
 - `KllTumblingWindow` — the window struct holding both KLL sketches and raw entries
 - `QueryResult` — output containing the value percentile, estimated vs exact point counts, and cutoff rank
+
+### `raw-vs-kll`
+
+**File:** `src/raw_vs_kll.rs`
+
+**Idea:** Benchmark four approaches to storing out-of-order timestamped metric values along three axes (memory, insert speed, query speed):
+
+1. `RawVec` — append-only `Vec<TimestampedValue>`, scans on query.
+2. `SortedBTree` — `BTreeMap<u64, Vec<f64>>` keyed by timestamp; sorted at insert time, range queries via `range()`, O(log n) min/max via `first_key_value`/`last_key_value`.
+3. `KllOnly` — KLL sketch on timestamps + KLL sketch on values. Cheapest in memory, but cannot answer per-time-range percentiles — returns the global value percentile plus an estimated fraction-in-range.
+4. `BucketedKll` — window split into N fixed-width time buckets, one value KLL per bucket. On query, `KLL.merge()` the relevant buckets and read the percentile. This is the form where KLL actually competes on the same query the raw approaches answer exactly. Time resolution = bucket width (boundary buckets are merged whole).
+
+**What it reports:** insert throughput (ns/op + ops/s), approximate memory footprint, `earliest()/latest()` latency, and "last N minutes percentile" query latency, plus a spot check showing accuracy of each approximate method against the exact answer.

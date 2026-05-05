@@ -1,7 +1,8 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use elasticsearch_dsl_ast::{Document, Search};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -9,14 +10,17 @@ use serde_json::Value;
 use crate::config::ServerRuntimeConfig;
 use crate::metrics::{MetricField, MetricStore};
 
+/// The wire-level search request is the typed Elasticsearch DSL `Search` AST.
+pub(crate) type SearchRequest = Search;
+
 use super::TimingSender;
 use super::logging::LogSender;
 use super::payload_log::PayloadLogger;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub store: Arc<dyn MetricStore>,
-    pub current_epoch: Arc<Mutex<Option<u64>>>,
+    pub stores_by_index: HashMap<String, Arc<dyn MetricStore>>,
+    pub current_epoch_by_index: Arc<Mutex<HashMap<String, u64>>>,
     pub runtime_config: Arc<ServerRuntimeConfig>,
     pub aggregation_engine: Arc<dyn AggregationEngine>,
     pub request_planner: Arc<dyn RequestPlanner>,
@@ -28,46 +32,37 @@ pub struct AppState {
     pub payload_logger: Option<PayloadLogger>,
 }
 
+impl AppState {
+    pub(crate) fn normalize_index_name(index_name: &str) -> String {
+        index_name.trim().to_ascii_lowercase()
+    }
+
+    pub(crate) fn store_for_index(&self, index_name: &str) -> Option<Arc<dyn MetricStore>> {
+        self.stores_by_index
+            .get(&Self::normalize_index_name(index_name))
+            .cloned()
+    }
+}
+
 #[derive(Serialize)]
 pub(crate) struct RootResponse<'a> {
     pub(crate) message: &'a str,
     pub(crate) examples: [&'a str; 3],
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct SearchRequest {
-    #[serde(default)]
-    pub(crate) size: Option<u64>,
-    #[serde(default)]
-    pub(crate) query: Option<Value>,
-    pub(crate) aggs: Option<BTreeMap<String, AggregationRequest>>,
-    #[serde(flatten, default)]
-    pub(crate) other: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct AggregationRequest {
-    #[serde(default)]
-    pub(crate) percentiles: Option<PercentileAggregation>,
-    #[serde(default)]
-    pub(crate) cumulative: Option<CumulativeAggregation>,
-    #[serde(flatten, default)]
-    pub(crate) other: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
+/// Engine-side description of a `percentiles` aggregation request, extracted
+/// from the typed DSL during planning.
+#[derive(Debug, Clone)]
 pub(crate) struct PercentileAggregation {
     pub(crate) field: String,
     pub(crate) percents: Vec<f64>,
-    #[serde(default)]
-    pub(crate) key: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct CumulativeAggregation {
+/// Engine-side description of a standard ES `sum` aggregation request,
+/// extracted from the typed DSL during planning.
+#[derive(Debug, Clone)]
+pub(crate) struct SumAggregation {
     pub(crate) field: String,
-    #[serde(default)]
-    pub(crate) key: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -88,7 +83,7 @@ pub(crate) struct BatchQueryRequest {
 pub(crate) struct BatchQueryResult {
     pub(crate) key: String,
     pub(crate) percentiles: Option<HashMap<String, HashMap<String, f64>>>,
-    pub(crate) cumulative: Option<HashMap<String, f64>>,
+    pub(crate) sum: Option<HashMap<String, f64>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -96,11 +91,27 @@ pub(crate) struct BatchQueryResponse {
     pub(crate) results: Vec<BatchQueryResult>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum DocumentAction {
+    Index(DocumentActionInner),
+    Create(DocumentActionInner),
+    Update(DocumentActionInner),
+    Delete(DocumentActionInner),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub (crate) struct DocumentActionInner {
+    #[serde(rename = "_index")]
+    pub(crate) index: Option<String>,
+    #[serde(rename = "_id")]
+    pub(crate) id: Option<String>,
+}
+
 #[derive(Debug)]
 pub(crate) struct IngestRecord {
     pub(crate) epoch: Option<u64>,
     pub(crate) key: Vec<String>,
-    pub(crate) task: Option<Vec<String>>,
     /// metric storage_field name → values
     pub(crate) metrics: std::collections::HashMap<String, Vec<f64>>,
 }
@@ -119,17 +130,6 @@ impl IngestRecord {
 
         let key = parse_string_array(obj, &mapping.key_field)?;
 
-        let task = match &mapping.task_field {
-            Some(task_field) => {
-                if obj.contains_key(task_field) {
-                    Some(parse_string_array(obj, task_field)?)
-                } else {
-                    None
-                }
-            }
-            None => None,
-        };
-
         let mut metrics = std::collections::HashMap::new();
         for (metric_name, json_field) in &mapping.metric_fields {
             let values = parse_f64_array(obj, json_field)?;
@@ -139,7 +139,6 @@ impl IngestRecord {
         Ok(Self {
             epoch,
             key,
-            task,
             metrics,
         })
     }
@@ -183,7 +182,7 @@ fn parse_f64_array(obj: &serde_json::Map<String, Value>, field: &str) -> Result<
 #[derive(Clone, Debug)]
 pub(crate) enum AggregationKind {
     Percentiles(PercentileAggregation),
-    Cumulative(CumulativeAggregation),
+    Sum(SumAggregation),
 }
 
 #[derive(Clone, Debug)]
@@ -195,6 +194,7 @@ pub(crate) struct AggregationRegistration {
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct QueryContext {
+    pub(crate) index_name: Option<String>,
     pub(crate) key: Option<String>,
     pub(crate) epoch: Option<u64>,
 }
@@ -237,6 +237,7 @@ pub(crate) trait UpstreamClient: Send + Sync {
     async fn forward(
         &self,
         state: &AppState,
+        index_name: &str,
         headers: &axum::http::HeaderMap,
         body: &Value,
     ) -> Result<Value, axum::response::Response>;
@@ -246,6 +247,7 @@ pub(crate) trait AggregationEngine: Send + Sync {
     fn evaluate(
         &self,
         state: &AppState,
+        store: &dyn MetricStore,
         context: &QueryContext,
         plan: &LocalAggregationPlan,
     ) -> Result<Option<Value>, String>;
@@ -258,22 +260,8 @@ pub(crate) trait RequestPlanner: Send + Sync {
         &self,
         state: &AppState,
         request: &SearchRequest,
+        index_name: &str,
     ) -> Result<QueryExecutionPlan, String>;
-}
-
-impl AggregationRequest {
-    pub(crate) fn kind(&self) -> Option<AggregationKind> {
-        let percentiles = self.percentiles.as_ref();
-        let cumulative = self.cumulative.as_ref();
-        let count = usize::from(percentiles.is_some()) + usize::from(cumulative.is_some());
-        if count != 1 || !self.other.is_empty() {
-            return None;
-        }
-        if let Some(pct) = percentiles {
-            return Some(AggregationKind::Percentiles(pct.clone()));
-        }
-        cumulative.map(|cum| AggregationKind::Cumulative(cum.clone()))
-    }
 }
 
 impl ErrorResponse {
@@ -302,19 +290,23 @@ impl ErrorResponse {
 
 pub(crate) fn metric_field_for_name(
     config: &ServerRuntimeConfig,
+    index_name: &str,
     name: &str,
 ) -> Option<MetricField> {
     let normalized = name.trim().to_ascii_lowercase();
     config
-        .schema
-        .metrics
-        .iter()
-        .find(|metric| {
-            metric.name.trim().eq_ignore_ascii_case(&normalized)
-                || metric
-                    .aliases
-                    .iter()
-                    .any(|alias| alias.trim().eq_ignore_ascii_case(&normalized))
+        .schema_for_index(index_name)
+        .and_then(|schema| {
+            schema
+                .metrics
+                .iter()
+                .find(|metric| {
+                    metric.name.trim().eq_ignore_ascii_case(&normalized)
+                        || metric
+                            .aliases
+                            .iter()
+                            .any(|alias| alias.trim().eq_ignore_ascii_case(&normalized))
+                })
+                .map(|metric| MetricField::new(&metric.storage_field))
         })
-        .map(|metric| MetricField::new(&metric.storage_field))
 }

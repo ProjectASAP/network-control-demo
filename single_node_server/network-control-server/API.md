@@ -6,20 +6,22 @@ The runtime contract is driven by `server-config.yaml`.
 
 ## Supported Surface
 
-- `POST /cluster-metrics/_search`
-- `POST /cluster-metrics/_batch`
+- `POST /:index/_search`
+- `POST /:index/_batch`
 - `POST /metrics/:field` (compatibility endpoint, deprecated)
+- `POST /:index/metrics/:field` (index-aware compatibility endpoint)
 - `POST /` for ingest
+- `POST /:index` for index-aware ingest
 - `GET /healthz`
 
 ## Local Search Contract
 
-`POST /cluster-metrics/_search`
+`POST /:index/_search` (example: `POST /cluster-metrics/_search`)
 
 Supported local aggregations:
 
 - `percentiles`
-- `cumulative`
+- `sum`
 
 Supported local query subset:
 
@@ -55,33 +57,26 @@ Anything outside that subset is either:
 }
 ```
 
-You may also provide `key` directly on the aggregation:
+The key is always derived from `query.bool.filter.term` (sketch-server-specific
+`key` overrides on aggregations are no longer supported now that requests are
+parsed as standard ES DSL).
+
+### Sum
 
 ```json
 {
   "size": 0,
-  "aggs": {
-    "cpu_quantiles": {
-      "percentiles": {
-        "field": "cpu_cores",
-        "percents": [50],
-        "key": "N001"
-      }
+  "query": {
+    "bool": {
+      "filter": [
+        { "term": { "cluster": "N001" } }
+      ]
     }
-  }
-}
-```
-
-### Cumulative
-
-```json
-{
-  "size": 0,
+  },
   "aggs": {
     "cpu_sum": {
-      "cumulative": {
-        "field": "cpu_cores",
-        "key": "N001"
+      "sum": {
+        "field": "cpu_cores"
       }
     }
   }
@@ -97,7 +92,7 @@ You may also provide `key` directly on the aggregation:
   "details": ["unsupported_query: only bool.filter.term queries are supported locally"],
   "supported_features": [
     "aggregations.percentiles",
-    "aggregations.cumulative",
+    "aggregations.sum",
     "query.bool.filter.term",
     "size=0"
   ]
@@ -106,27 +101,26 @@ You may also provide `key` directly on the aggregation:
 
 ## Batch Contract
 
-`POST /cluster-metrics/_batch`
+`POST /:index/_batch` (example: `POST /cluster-metrics/_batch`)
 
 ```json
 {
   "keys": ["N001", "N002"],
   "fields": ["cpu_cores", "memory_gb"],
-  "aggs": ["percentiles", "cumulative"],
+  "aggs": ["percentiles", "sum"],
   "percents": [50, 90]
 }
 ```
 
 Notes:
 
-- `keys` is required.
-- `fields` defaults from `query_support.default_batch_fields`.
+- `keys` and `fields` is required.
 - `percents` defaults from `query_support.default_batch_percents`.
 - Only configured and registered aggs are accepted.
 
 ## Metrics Compatibility Endpoint
 
-`POST /metrics/:field`
+`POST /metrics/:field` or `POST /:index/metrics/:field`
 
 ```json
 {
@@ -139,7 +133,7 @@ Response includes `"deprecated": true`.
 
 ## Ingest
 
-`POST /`
+`POST /` (uses the default configured index) or `POST /:index`
 
 ```json
 {

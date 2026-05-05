@@ -4,8 +4,8 @@
 
 | Feature | Configurable | Implemented | Local `_search` | `_batch` | Notes |
 |---|---|---:|---:|---:|---|
-| `percentiles` | yes | yes | yes | yes | key from query term filter or agg `key` |
-| `cumulative` | yes | yes | yes | yes | key from query term filter or agg `key` |
+| `percentiles` | yes | yes | yes | yes | key from query term filter |
+| `sum` | yes | yes | yes | yes | key from query term filter |
 | `top_entities` | no | no | no | no | explicitly unsupported |
 | `frequency` | no | no | no | no | explicitly unsupported |
 
@@ -23,8 +23,10 @@
 
 | Endpoint | Status | Notes |
 |---|---|---|
-| `POST /cluster-metrics/_search` | primary | compatibility facade |
-| `POST /cluster-metrics/_batch` | primary | explicit keyed query API |
-| `POST /metrics/:field` | deprecated | compatibility-only |
-| `POST /` | active | ingest path |
+| `POST /:index/_search` | primary | index-aware facade for local + fallback search |
+| `POST /:index/_batch` | primary | explicit keyed query API per index |
+| `POST /metrics/:field` | deprecated | compatibility-only, default index |
+| `POST /:index/metrics/:field` | deprecated | compatibility-only, explicit index |
+| `POST /` | active | ingest path for default index |
+| `POST /:index` | active | ingest path for explicit index |
 | `GET /healthz` | active | includes config/upstream summary |

@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+use std::io::BufRead;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -20,7 +21,7 @@ use super::query::parse_quantile_spec;
 use super::timing::{QueryTiming, write_timing_log};
 use super::types::{
     AppState, BatchQueryRequest, BatchQueryResponse, BatchQueryResult, ErrorResponse, IngestRecord,
-    MetricsQuery, QueryExecutionPlan, RootResponse, SearchRequest,
+    MetricsQuery, QueryExecutionPlan, RootResponse, SearchRequest, DocumentAction,
 };
 use super::upstream::merge_aggregations;
 
@@ -28,8 +29,6 @@ pub async fn run_http_server(
     state: AppState,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let log_state = state.clone();
-    let search_path = state.runtime_config.search_path();
-    let batch_path = state.runtime_config.batch_path();
     let metrics_enabled = state.runtime_config.api.enable_metrics_endpoint;
     let batch_enabled = state.runtime_config.api.enable_batch_endpoint;
     let body_limit = state.runtime_config.body_limit_bytes();
@@ -37,15 +36,19 @@ pub async fn run_http_server(
 
     // Build routes first (Router<AppState>), then apply layers, then consume state.
     let mut router = Router::new()
-        .route("/", get(root_handler).post(ingest_handler))
+        .route("/", get(root_handler).post(ingest_handler_default))
+        .route("/:index", post(ingest_handler_with_index))
+        .route("/:index/_bulk", post(elasticsearch_bulk_handler_with_index))
         .route("/healthz", get(healthz_handler))
-        .route(&search_path, post(search_handler));
+        .route("/:index/_search", post(search_handler));
 
     if batch_enabled {
-        router = router.route(&batch_path, post(batch_query_handler));
+        router = router.route("/:index/_batch", post(batch_query_handler));
     }
     if metrics_enabled {
-        router = router.route("/metrics/:field", post(metrics_handler));
+        router = router
+            .route("/metrics/:field", post(metrics_handler_default))
+            .route("/:index/metrics/:field", post(metrics_handler_with_index));
     }
 
     // Apply layers before consuming state so from_fn_with_state has access to AppState.
@@ -88,9 +91,13 @@ async fn shutdown_signal() {
 }
 
 async fn root_handler(State(state): State<AppState>) -> Json<RootResponse<'static>> {
-    let search_path = state.runtime_config.search_path();
+    let default_index = state
+        .runtime_config
+        .default_index_name()
+        .unwrap_or_else(|| "cluster-metrics".to_string());
+    let search_path = state.runtime_config.search_path_for(&default_index);
     Json(RootResponse {
-        message: "Portable single-node metrics server. Supports local percentiles and cumulative aggregations over configured keys; unsupported features are either forwarded upstream or rejected based on runtime config.",
+        message: "Portable single-node metrics server. Supports local percentiles and sum aggregations over configured keys; unsupported features are either forwarded upstream or rejected based on runtime config.",
         examples: [
             Box::leak(
                 format!(
@@ -100,7 +107,7 @@ async fn root_handler(State(state): State<AppState>) -> Json<RootResponse<'stati
             ),
             Box::leak(
                 format!(
-                    "POST {search_path} {{\"size\":0,\"aggs\":{{\"mem_sum\":{{\"cumulative\":{{\"field\":\"memory_gb\",\"key\":\"N001\"}}}}}}}}"
+                    "POST {search_path} {{\"size\":0,\"query\":{{\"bool\":{{\"filter\":[{{\"term\":{{\"cluster\":\"N001\"}}}}]}}}},\"aggs\":{{\"mem_sum\":{{\"sum\":{{\"field\":\"memory_gb\"}}}}}}}}"
                 )
                 .into_boxed_str(),
             ),
@@ -114,16 +121,202 @@ async fn healthz_handler(State(state): State<AppState>) -> Json<Value> {
         "status": "ok",
         "config_loaded": true,
         "upstream_enabled": state.runtime_config.is_upstream_enabled(),
-        "registered_aggregations": state.runtime_config.query_support.aggregations.clone(),
+        "registered_aggregations": ["percentiles", "sum"],
     }))
 }
 
-async fn ingest_handler(
+async fn elasticsearch_bulk_handler_with_index(
+    State(state): State<AppState>, 
+    Path(index): Path<String>,
+    _headers: HeaderMap,
+    body: Bytes
+) -> impl IntoResponse {
+    let t0 = Instant::now(); // Track execution time even when timing is disabled to include in response body.
+    let mut timing = state.timing_enabled.then(QueryTiming::new);
+
+    // Fetch index-specific config and store before parsing body since bulk endpoint requires index in path and we want to fail fast.
+    let index_name = match resolve_index_name(&state, Some(index.as_str())) {
+        Ok(index_name) => index_name,
+        Err(response) => return response,
+    };
+    let index_key = AppState::normalize_index_name(&index_name);
+    let Some(store) = state.store_for_index(&index_name) else {
+        return error_json_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorResponse::bad_request(format!("store for index '{index_name}' is not available")),
+        );
+    };
+    let schema = match state.runtime_config.schema_for_index(&index_name) {
+        Some(s) => s,
+        None => {
+            return error_json_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorResponse::bad_request(format!("schema for index '{index_name}' is not available")),
+            );
+        }
+    };
+    let ingest_mapping = &schema.ingest_field_mapping;
+
+    if let Some(t) = &mut timing {
+        t.step("fetch_index_config");
+    }
+
+    // Parse NDJSON body.
+    let reader = std::io::BufReader::new(&body[..]);
+    let mut action_seen = false;
+    let mut inserted = 0usize;
+    for line in reader.lines().flatten() {
+        let document = match serde_json::from_str::<Value>(&line) {
+            Ok(v) => v,
+            Err(_) => return error_json_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                ErrorResponse::bad_request("invalid JSON in bulk request body"),
+            ),
+        };
+        if let Some(t) = &mut timing {
+            t.step("parse_json");
+        }
+        // Look for the line before the document source that specifies the action being performed and document ID.
+        if !action_seen {
+            let action = serde_json::from_value::<DocumentAction>(document);
+            match action {
+                Ok(DocumentAction::Index(_)) | Ok(DocumentAction::Create(_)) => {
+                    action_seen = true;
+                }
+                Ok(other) => {
+                    return error_json_response(
+                        axum::http::StatusCode::BAD_REQUEST,
+                        ErrorResponse::bad_request(format!("action '{:?}' not supported in bulk endpoint", other)),
+                    );
+                },
+                Err(_) => {
+                    return error_json_response(
+                        axum::http::StatusCode::BAD_REQUEST,
+                        ErrorResponse::bad_request("invalid bulk action in request body"),
+                    );
+                }
+            }
+            if let Some(t) = &mut timing {
+                t.step("deserialize_action");
+            }
+            continue;
+        }
+        match document {
+            Value::Object(map) => {
+                // eprintln!("Document source for bulk action: {:?}", map);
+
+                // Clear stale data from previous epoch.
+                let epoch = map.get(ingest_mapping.epoch_field.as_str()).and_then(|v| v.as_u64());
+                if let Some(epoch) = epoch {
+                    let mut should_clear = false;
+                    match state.current_epoch_by_index.lock() {
+                        Ok(mut guard) => {
+                            if guard.get(&index_key).copied() != Some(epoch) {
+                                guard.insert(index_key.clone(), epoch);
+                                should_clear = true;
+                            }
+                        }
+                        Err(_) => {
+                            return error_json_response(
+                                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                                ErrorResponse::bad_request("failed to lock epoch state"),
+                            );
+                        }
+                    }
+                    if should_clear {
+                        if let Err(message) = store.clear_all() {
+                            return error_json_response(
+                                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                                ErrorResponse::bad_request(message),
+                            );
+                        }
+                    }
+                }
+
+                // Built record (row) for this document based on the schema's ingest field mapping. The mapping specifies which JSON fields to extract for each metric, and which JSON field to use as the key.
+                let mut record = HashMap::new();
+                for (metric_name, json_field) in &ingest_mapping.metric_fields {
+                    let value = map.get(json_field).and_then(|v| v.as_f64());
+                    if let Some(value) = value {
+                        record.insert(metric_name.clone(), value);
+                    }
+                }
+                let key = map.get(&ingest_mapping.key_field).and_then(|v| v.as_str()).unwrap_or("").trim();
+                if let Err(message) = store.insert_sample(&key, &record) {
+                    return error_json_response(
+                        axum::http::StatusCode::BAD_REQUEST,
+                        ErrorResponse::bad_request(message),
+                    );
+                }
+                inserted += 1;
+                action_seen = false; // Reset for next action/document pair in the bulk request.
+            }
+            _ => {
+                return error_json_response(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    ErrorResponse::bad_request("expected document source after bulk action line"),
+                );
+            }
+        }
+        if let Some(t) = &mut timing {
+            t.step("insert_record");
+        }
+    }
+    if let Some(t) = &mut timing {
+        t.log_cumulative();
+    }
+    Json(json!({
+        "took": t0.elapsed().as_millis(),
+        "errors": false,
+        "items": [],
+        "inserted": inserted,
+    }))
+    .into_response()
+}
+
+async fn ingest_handler_default(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> impl IntoResponse {
+    ingest_handler_inner(state, None, body).await
+}
+
+async fn ingest_handler_with_index(
+    State(state): State<AppState>,
+    Path(index): Path<String>,
+    Json(body): Json<Value>,
+) -> impl IntoResponse {
+    ingest_handler_inner(state, Some(index), body).await
+}
+
+async fn ingest_handler_inner(
+    state: AppState,
+    index: Option<String>,
+    body: Value,
+) -> axum::response::Response {
+    let index_name = match resolve_index_name(&state, index.as_deref()) {
+        Ok(index_name) => index_name,
+        Err(response) => return response,
+    };
+    let index_key = AppState::normalize_index_name(&index_name);
+    let Some(store) = state.store_for_index(&index_name) else {
+        return error_json_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorResponse::bad_request(format!("store for index '{index_name}' is not available")),
+        );
+    };
+
     let mut timing = state.timing_enabled.then(QueryTiming::new);
-    let mapping = &state.runtime_config.schema.ingest_field_mapping;
+    let schema = match state.runtime_config.schema_for_index(&index_name) {
+        Some(s) => s,
+        None => {
+            return error_json_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorResponse::bad_request(format!("schema for index '{index_name}' is not available")),
+            );
+        }
+    };
+    let mapping = &schema.ingest_field_mapping;
     if let Some(t) = &mut timing {
         t.step("parse_json");
     }
@@ -158,21 +351,13 @@ async fn ingest_handler(
             );
         }
     }
-    if let Some(ref task) = record.task {
-        if task.len() != len {
-            return error_json_response(
-                axum::http::StatusCode::BAD_REQUEST,
-                ErrorResponse::bad_request("task field length must match key field length"),
-            );
-        }
-    }
 
     if let Some(epoch) = record.epoch {
         let mut should_clear = false;
-        match state.current_epoch.lock() {
+        match state.current_epoch_by_index.lock() {
             Ok(mut guard) => {
-                if guard.map_or(true, |current| current != epoch) {
-                    *guard = Some(epoch);
+                if guard.get(&index_key).copied() != Some(epoch) {
+                    guard.insert(index_key.clone(), epoch);
                     should_clear = true;
                 }
             }
@@ -184,7 +369,7 @@ async fn ingest_handler(
             }
         }
         if should_clear {
-            if let Err(message) = state.store.clear_all() {
+            if let Err(message) = store.clear_all() {
                 return error_json_response(
                     axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::bad_request(message),
@@ -199,18 +384,12 @@ async fn ingest_handler(
         if key.is_empty() {
             continue;
         }
-        // If task is configured and present, skip rows with empty task.
-        if let Some(ref task) = record.task {
-            if task[idx].trim().is_empty() {
-                continue;
-            }
-        }
         // Build per-sample metric map for this row.
         let mut sample_metrics = std::collections::HashMap::new();
         for (name, values) in &record.metrics {
             sample_metrics.insert(name.clone(), values[idx]);
         }
-        if let Err(message) = state.store.insert_sample(key, &sample_metrics) {
+        if let Err(message) = store.insert_sample(key, &sample_metrics) {
             return error_json_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 ErrorResponse::bad_request(message),
@@ -223,19 +402,31 @@ async fn ingest_handler(
         t.log();
     }
 
-    Json(json!({ "inserted": inserted })).into_response()
+    Json(json!({ "index": index_name, "inserted": inserted })).into_response()
 }
 
 async fn search_handler(
     State(state): State<AppState>,
+    Path(index): Path<String>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
+    let index_name = match resolve_index_name(&state, Some(index.as_str())) {
+        Ok(index_name) => index_name,
+        Err(response) => return response,
+    };
+    let Some(store) = state.store_for_index(&index_name) else {
+        return error_json_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorResponse::bad_request(format!("store for index '{index_name}' is not available")),
+        );
+    };
+
     let mut timing = state.timing_enabled.then(QueryTiming::new);
     if let Some(logger) = &state.payload_logger {
         if logger.is_active() {
             let payload = std::str::from_utf8(&body).unwrap_or("<non-utf8>");
-            logger.log(&state.runtime_config.search_path(), payload);
+            logger.log(&state.runtime_config.search_path_for(&index_name), payload);
         }
     }
     let request: SearchRequest = match serde_json::from_slice(&body) {
@@ -251,7 +442,7 @@ async fn search_handler(
         t.step("parse_json");
     }
 
-    let plan = match state.request_planner.plan_search(&state, &request) {
+    let plan = match state.request_planner.plan_search(&state, &request, &index_name) {
         Ok(plan) => plan,
         Err(message) => {
             return error_json_response(
@@ -316,7 +507,7 @@ async fn search_handler(
             let t0 = Instant::now();
             let result = match state
                 .aggregation_engine
-                .evaluate(&state, &plan.context, local_agg)
+                .evaluate(&state, store.as_ref(), &plan.context, local_agg)
             {
                 Ok(result) => result,
                 Err(message) => {
@@ -354,7 +545,7 @@ async fn search_handler(
         }
         let value = match state
             .upstream_client
-            .forward(&state, &headers, &upstream_body)
+            .forward(&state, &index_name, &headers, &upstream_body)
             .await
         {
             Ok(value) => value,
@@ -394,7 +585,7 @@ async fn search_handler(
             &headers,
             request_type,
             "POST",
-            &state.runtime_config.search_path(),
+            &state.runtime_config.search_path_for(&index_name),
             response.status(),
             t,
         );
@@ -406,13 +597,25 @@ async fn search_handler(
 
 async fn batch_query_handler(
     State(state): State<AppState>,
+    Path(index): Path<String>,
     Json(request): Json<BatchQueryRequest>,
 ) -> impl IntoResponse {
+    let index_name = match resolve_index_name(&state, Some(index.as_str())) {
+        Ok(index_name) => index_name,
+        Err(response) => return response,
+    };
+    let Some(store) = state.store_for_index(&index_name) else {
+        return error_json_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorResponse::bad_request(format!("store for index '{index_name}' is not available")),
+        );
+    };
+
     let mut timing = state.timing_enabled.then(QueryTiming::new);
     if let Some(logger) = &state.payload_logger {
         if logger.is_active() {
             let payload = serde_json::to_string(&request).unwrap_or_default();
-            logger.log(&state.runtime_config.batch_path(), &payload);
+            logger.log(&state.runtime_config.batch_path_for(&index_name), &payload);
         }
     }
     if let Some(t) = &mut timing {
@@ -425,20 +628,20 @@ async fn batch_query_handler(
         );
     }
 
-    let fields = request.fields.unwrap_or_else(|| {
-        state
-            .runtime_config
-            .query_support
-            .default_batch_fields
-            .clone()
-    });
+    let Some(fields) = request.fields else {
+        return error_json_response(
+            axum::http::StatusCode::BAD_REQUEST,
+            ErrorResponse::bad_request("fields must be specified for batch queries"),
+        );
+    };
     let percents = request.percents.unwrap_or_else(|| {
         state
             .runtime_config
-            .query_support
+            .api
             .default_batch_percents
             .clone()
     });
+
     let supported_aggs = state.runtime_config.aggregation_names();
     let mut requested_aggs = Vec::new();
     for agg in &request.aggs {
@@ -477,7 +680,7 @@ async fn batch_query_handler(
     }
 
     for key in &request.keys {
-        if state.runtime_config.api.strict_mode && !state.store.contains_key(key.trim()) {
+        if state.runtime_config.api.strict_mode && !store.contains_key(key.trim()) {
             return error_json_response(
                 axum::http::StatusCode::BAD_REQUEST,
                 ErrorResponse::bad_request(format!("unknown key '{}'", key)),
@@ -487,7 +690,9 @@ async fn batch_query_handler(
 
     let fields: Vec<String> = fields
         .into_iter()
-        .filter(|field| super::types::metric_field_for_name(&state.runtime_config, field).is_some())
+        .filter(|field| {
+            super::types::metric_field_for_name(&state.runtime_config, &index_name, field).is_some()
+        })
         .collect();
     if fields.is_empty() {
         return error_json_response(
@@ -501,19 +706,23 @@ async fn batch_query_handler(
     let requested_aggs = Arc::new(requested_aggs);
     let percents = Arc::new(percents);
     let fields = Arc::new(fields);
+    let index_name_for_tasks = index_name.clone();
     let mut join_set = JoinSet::new();
     for (idx, key) in request.keys.iter().cloned().enumerate() {
         let state = state.clone();
+        let store = Arc::clone(&store);
         let requested_aggs = Arc::clone(&requested_aggs);
         let percents = Arc::clone(&percents);
         let fields = Arc::clone(&fields);
+        let index_name = index_name_for_tasks.clone();
         join_set.spawn_blocking(move || {
             let mut result = BatchQueryResult {
                 key: key.clone(),
                 percentiles: None,
-                cumulative: None,
+                sum: None,
             };
             let context = super::types::QueryContext {
+                index_name: Some(index_name),
                 key: Some(key.clone()),
                 epoch: None,
             };
@@ -528,12 +737,13 @@ async fn batch_query_handler(
                                     super::types::PercentileAggregation {
                                         field: field.clone(),
                                         percents: percents.as_ref().clone(),
-                                        key: None,
                                     },
                                 ),
                             };
                             if let Some(value) =
-                                state.aggregation_engine.evaluate(&state, &context, &plan)?
+                                state
+                                    .aggregation_engine
+                                    .evaluate(&state, store.as_ref(), &context, &plan)?
                             {
                                 let values = value
                                     .get("values")
@@ -554,28 +764,29 @@ async fn batch_query_handler(
                             result.percentiles = Some(field_percentiles);
                         }
                     }
-                    "cumulative" => {
-                        let mut field_cumulative = HashMap::new();
+                    "sum" => {
+                        let mut field_sum = HashMap::new();
                         for field in fields.iter() {
                             let plan = super::types::LocalAggregationPlan {
                                 name: field.clone(),
-                                kind: super::types::AggregationKind::Cumulative(
-                                    super::types::CumulativeAggregation {
+                                kind: super::types::AggregationKind::Sum(
+                                    super::types::SumAggregation {
                                         field: field.clone(),
-                                        key: None,
                                     },
                                 ),
                             };
                             if let Some(value) =
-                                state.aggregation_engine.evaluate(&state, &context, &plan)?
+                                state
+                                    .aggregation_engine
+                                    .evaluate(&state, store.as_ref(), &context, &plan)?
                             {
                                 if let Some(value) = value.get("value").and_then(Value::as_f64) {
-                                    field_cumulative.insert(field.clone(), value);
+                                    field_sum.insert(field.clone(), value);
                                 }
                             }
                         }
-                        if !field_cumulative.is_empty() {
-                            result.cumulative = Some(field_cumulative);
+                        if !field_sum.is_empty() {
+                            result.sum = Some(field_sum);
                         }
                     }
                     _ => {}
@@ -616,12 +827,31 @@ async fn batch_query_handler(
     .into_response()
 }
 
-async fn metrics_handler(
+async fn metrics_handler_default(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(field_spec): Path<String>,
     Json(query): Json<MetricsQuery>,
 ) -> impl IntoResponse {
+    metrics_handler_inner(state, None, headers, field_spec, query).await
+}
+
+async fn metrics_handler_with_index(
+    State(state): State<AppState>,
+    Path((index, field_spec)): Path<(String, String)>,
+    headers: HeaderMap,
+    Json(query): Json<MetricsQuery>,
+) -> impl IntoResponse {
+    metrics_handler_inner(state, Some(index), headers, field_spec, query).await
+}
+
+async fn metrics_handler_inner(
+    state: AppState,
+    index: Option<String>,
+    headers: HeaderMap,
+    field_spec: String,
+    query: MetricsQuery,
+) -> axum::response::Response {
     if !state.runtime_config.api.enable_metrics_endpoint {
         return error_json_response(
             axum::http::StatusCode::NOT_FOUND,
@@ -629,14 +859,25 @@ async fn metrics_handler(
         );
     }
 
+    let index_name = match resolve_index_name(&state, index.as_deref()) {
+        Ok(index_name) => index_name,
+        Err(response) => return response,
+    };
+    let Some(store) = state.store_for_index(&index_name) else {
+        return error_json_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ErrorResponse::bad_request(format!("store for index '{index_name}' is not available")),
+        );
+    };
+
     let mut timing = state.timing_enabled.then(QueryTiming::new);
     if let Some(logger) = &state.payload_logger {
         if logger.is_active() {
             let payload = serde_json::to_string(&query).unwrap_or_default();
-            logger.log(&format!("/metrics/{field_spec}"), &payload);
+            logger.log(&format!("/{index_name}/metrics/{field_spec}"), &payload);
         }
     }
-    let field = match super::types::metric_field_for_name(&state.runtime_config, &field_spec) {
+    let field = match super::types::metric_field_for_name(&state.runtime_config, &index_name, &field_spec) {
         Some(field) => field,
         None => {
             return error_json_response(
@@ -688,7 +929,7 @@ async fn metrics_handler(
                 );
             }
         };
-        let values = match state.store.query_percentiles(node_id, &field, &[percent]) {
+        let values = match store.query_percentiles(node_id, &field, &[percent]) {
             Ok(values) => values,
             Err(message) => {
                 return error_json_response(
@@ -726,7 +967,7 @@ async fn metrics_handler(
             &headers,
             "metrics_compat",
             "POST",
-            "/metrics/:field",
+            &format!("/{index_name}/metrics/:field"),
             response.status(),
             t,
         );
@@ -739,6 +980,30 @@ async fn metrics_handler(
         }))
         .into_response()
     }
+}
+
+fn resolve_index_name(
+    state: &AppState,
+    requested: Option<&str>,
+) -> Result<String, axum::response::Response> {
+    let resolved = match requested {
+        Some(index) if !index.trim().is_empty() => index.trim().to_string(),
+        _ => state.runtime_config.default_index_name().ok_or_else(|| {
+            error_json_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorResponse::bad_request("no configured indices are available"),
+            )
+        })?,
+    };
+
+    if !state.runtime_config.supports_index(&resolved) {
+        return Err(error_json_response(
+            axum::http::StatusCode::NOT_FOUND,
+            ErrorResponse::bad_request(format!("unsupported index '{resolved}'")),
+        ));
+    }
+
+    Ok(resolved)
 }
 
 fn should_forward_request(
@@ -837,18 +1102,17 @@ mod tests {
 
     #[test]
     fn build_upstream_body_omits_empty_aggs() {
-        let request = crate::server::types::SearchRequest {
-            size: Some(0),
-            query: Some(json!({
+        let request: crate::server::types::SearchRequest = serde_json::from_value(json!({
+            "size": 0,
+            "query": {
                 "bool": {
                     "filter": [
                         {"range": {"epoch": {"gte": 1}}}
                     ]
                 }
-            })),
-            aggs: None,
-            other: Default::default(),
-        };
+            }
+        }))
+        .unwrap();
 
         let plan = QueryExecutionPlan {
             context: Default::default(),
