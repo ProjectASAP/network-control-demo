@@ -157,6 +157,29 @@ async fn elasticsearch_bulk_handler_with_index(
     };
     let ingest_mapping = &schema.ingest_field_mapping;
 
+    // Pre-resolve metric storage_field names to positional indices once per bulk request.
+    // The per-document loop then iterates this Vec and reads JSON fields directly,
+    // avoiding any HashMap<String,_> allocation or string hashing on the hot path.
+    let metric_plan: Vec<(usize, &str)> = match ingest_mapping
+        .metric_fields
+        .iter()
+        .map(|(metric_name, json_field)| {
+            store
+                .metric_index(metric_name)
+                .map(|i| (i, json_field.as_str()))
+                .ok_or_else(|| format!("unknown metric '{}'", metric_name))
+        })
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(plan) => plan,
+        Err(message) => {
+            return error_json_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                ErrorResponse::bad_request(message),
+            );
+        }
+    };
+
     if let Some(t) = &mut timing {
         t.step("fetch_index_config");
     }
@@ -165,6 +188,7 @@ async fn elasticsearch_bulk_handler_with_index(
     let reader = std::io::BufReader::new(&body[..]);
     let mut action_seen = false;
     let mut inserted = 0usize;
+    let mut sample_buf: Vec<(usize, f64)> = Vec::with_capacity(metric_plan.len());
     for line in reader.lines().flatten() {
         let document = match serde_json::from_str::<Value>(&line) {
             Ok(v) => v,
@@ -233,16 +257,15 @@ async fn elasticsearch_bulk_handler_with_index(
                     }
                 }
 
-                // Built record (row) for this document based on the schema's ingest field mapping. The mapping specifies which JSON fields to extract for each metric, and which JSON field to use as the key.
-                let mut record = HashMap::new();
-                for (metric_name, json_field) in &ingest_mapping.metric_fields {
-                    let value = map.get(json_field).and_then(|v| v.as_f64());
-                    if let Some(value) = value {
-                        record.insert(metric_name.clone(), value);
+                // Build the row from the pre-resolved (metric_idx, json_field) plan.
+                sample_buf.clear();
+                for (idx, json_field) in &metric_plan {
+                    if let Some(value) = map.get(*json_field).and_then(|v| v.as_f64()) {
+                        sample_buf.push((*idx, value));
                     }
                 }
                 let key = map.get(&ingest_mapping.key_field).and_then(|v| v.as_str()).unwrap_or("").trim();
-                if let Err(message) = store.insert_sample(&key, &record) {
+                if let Err(message) = store.insert_sample(&key, &sample_buf) {
                     return error_json_response(
                         axum::http::StatusCode::BAD_REQUEST,
                         ErrorResponse::bad_request(message),
@@ -378,18 +401,40 @@ async fn ingest_handler_inner(
         }
     }
 
+    // Resolve metric names to positional indices once per request so the per-row hot
+    // loop is just integer + f64 pushes — no HashMap, no string hashing.
+    let metric_plan: Vec<(usize, &Vec<f64>)> = match record
+        .metrics
+        .iter()
+        .map(|(name, values)| {
+            store
+                .metric_index(name)
+                .map(|i| (i, values))
+                .ok_or_else(|| format!("unknown metric '{}'", name))
+        })
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(plan) => plan,
+        Err(message) => {
+            return error_json_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                ErrorResponse::bad_request(message),
+            );
+        }
+    };
+
+    let mut sample_buf: Vec<(usize, f64)> = Vec::with_capacity(metric_plan.len());
     let mut inserted = 0usize;
-    for idx in 0..len {
-        let key = record.key[idx].trim();
+    for row in 0..len {
+        let key = record.key[row].trim();
         if key.is_empty() {
             continue;
         }
-        // Build per-sample metric map for this row.
-        let mut sample_metrics = std::collections::HashMap::new();
-        for (name, values) in &record.metrics {
-            sample_metrics.insert(name.clone(), values[idx]);
+        sample_buf.clear();
+        for (idx, values) in &metric_plan {
+            sample_buf.push((*idx, values[row]));
         }
-        if let Err(message) = store.insert_sample(key, &sample_metrics) {
+        if let Err(message) = store.insert_sample(key, &sample_buf) {
             return error_json_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 ErrorResponse::bad_request(message),

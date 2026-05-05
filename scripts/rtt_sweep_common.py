@@ -514,7 +514,7 @@ def query_server_batch(
     payload = {
         "keys": nodes,
         "fields": ["cpu_cores", "memory_gb", "network_mbps"],
-        "aggs": ["percentiles", "cumulative"],
+        "aggs": ["percentiles", "sum"],
         "percents": [0, 50, 90, 100],
     }
     t0 = time.perf_counter()

@@ -300,13 +300,14 @@ pub(crate) fn metric_field_for_name(
             schema
                 .metrics
                 .iter()
-                .find(|metric| {
+                .enumerate()
+                .find(|(_, metric)| {
                     metric.name.trim().eq_ignore_ascii_case(&normalized)
                         || metric
                             .aliases
                             .iter()
                             .any(|alias| alias.trim().eq_ignore_ascii_case(&normalized))
                 })
-                .map(|metric| MetricField::new(&metric.storage_field))
+                .map(|(idx, metric)| MetricField::new(idx, &metric.storage_field))
         })
 }
