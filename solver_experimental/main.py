@@ -1,12 +1,9 @@
 import os
 import sys
 import os
-import yaml
 import time
 import argparse
-import copy
-import uuid
-import csv
+from enum import Enum
 import datetime as dt
 from itertools import combinations
 from collections import deque
@@ -32,6 +29,12 @@ from es_query import (
 INGEST_POST_TIMEOUT = float(os.getenv("INGEST_POST_TIMEOUT_SECONDS", "30"))
 
 
+class QueryBackend(Enum):
+    SKETCH = "sketch"
+    ES = "es"
+    NONE = "none"
+
+
 @dataclass
 class AppConfig:
     # Runtime configuration for data sources and loop cadence.
@@ -42,11 +45,12 @@ class AppConfig:
     batch_size: int = SCHEDULER_BATCH_SIZE
     epoch_length_s: float = 300.0
     interval: float = 10.0
+    max_reassignments: int = 10
     query_rtt_log_path: str = "fetch_tasks_rtt.csv"
     loop_rtt_log_path: str = "loop_rtt.csv"
     assignments_log_path: str = "assignments.csv"
     log_level: str = "INFO"
-    use_es: bool = False
+    query_backend: QueryBackend = QueryBackend.NONE
 
 
 def update_task_specs(running_tasks: dict[str, RunningTask], task_metrics: dict):
@@ -176,11 +180,11 @@ def assign_tasks(args: AppConfig):
     )
 
     # Initialize the solver and benchmarking timers.
-    solver = TaskScheduler(network=network, max_reassignments=10)
+    solver = TaskScheduler(network=network, max_reassignments=args.max_reassignments)
 
     # Decide whether to run the ES comparison path.
     es_available = check_es_available()
-    if not es_available and args.use_es:
+    if not es_available and args.query_backend == QueryBackend.ES:
         logger.warning("Direct ES backend can not be reached.")
 
     emulator_reachable = check_emulator_reachable(args.emulator_url)
@@ -268,18 +272,18 @@ def assign_tasks(args: AppConfig):
 
             sketch_start = time.perf_counter()
             ran_query = False
-            if running_tasks:
+            if running_tasks and args.query_backend != QueryBackend.NONE:
                 sketch_task_metrics = fetch_task_usage(
                     task_ids=list(running_tasks.keys()),
                     epoch=epoch_index - 1,
-                    use_es=args.use_es,
+                    use_es=args.query_backend == QueryBackend.ES,
                     metrics=metrics_needed,
                     log_path=args.query_rtt_log_path,
                 )
                 ran_query = True
                 logger.debug(f'Queried data: {sketch_task_metrics}')
 
-                if sketch_task_metrics and not args.use_es:
+                if sketch_task_metrics and args.query_backend != QueryBackend.NONE:
                     update_task_specs(running_tasks, sketch_task_metrics)
             else:
                 logger.debug("No running tasks to query metrics for.")
@@ -328,7 +332,7 @@ def assign_tasks(args: AppConfig):
             sk_duration_ms = sketch_query_ms + sk_solver_ms
 
             if ran_query:
-                backend = "ES" if args.use_es else "sketch"
+                backend = args.query_backend.value
                 log_record(
                     log_path=args.loop_rtt_log_path,
                     epoch=epoch_index,
@@ -416,9 +420,10 @@ if __name__ == "__main__":
     parser.add_argument("--query-rtt-log-path", type=str, default="fetch_tasks_rtt.csv")
     parser.add_argument("--loop-rtt-log-path", type=str, default="loop_rtt.csv")
     parser.add_argument("--assignments-log-path", type=str, default="assignments.csv")
-    parser.add_argument("--use-es", action="store_true", default=False)
+    parser.add_argument("--query-backend", type=QueryBackend, choices=[b for b in QueryBackend], default=QueryBackend.NONE)
     parser.add_argument("--interval", type=float, default=30.0)
     parser.add_argument("--epoch-length-s", type=float, default=300.0)
+    parser.add_argument("--max-reassignments", type=int, default=10)
     parser.add_argument("--log-level", type=str, default="INFO")
     parser.add_argument("--batch-size", type=int, default=SCHEDULER_BATCH_SIZE)
     args = parser.parse_args()

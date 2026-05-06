@@ -7,6 +7,9 @@ EPOCH_LENGTH_S=150.0
 LOG_DIR="logs/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "${LOG_DIR}"
 
+export ES_INDEX_NAME="cluster-metrics"
+export SKETCH_SERVER_URL="http://localhost:10101"
+
 uv run emulate_telemetry.py \
     --epoch-length-s "${EPOCH_LENGTH_S}" \
     --log-level "DEBUG" \
@@ -34,5 +37,6 @@ uv run main.py \
     --log-level "INFO" \
     --query-rtt-log-path "${LOG_DIR}/query_rtt.csv" \
     --loop-rtt-log-path "${LOG_DIR}/loop_rtt.csv" \
-    --assignments-log-path "${LOG_DIR}/assignments.csv" 
-    # --use-es 
+    --assignments-log-path "${LOG_DIR}/assignments.csv" \
+    --query-backend "none" \
+    --max-reassignments 0

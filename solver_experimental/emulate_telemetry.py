@@ -154,7 +154,7 @@ async def send_records(records: list[dict], refresh: str | None = None) -> None:
             posts = []
             for record in _split_records(records, 1000):
                 logger.trace(f"Sending record: {record}")
-                posts.append(client.post(SERVER_URL, json=record, timeout=TIMEOUT))
+                posts.append(client.post(f'{SERVER_URL}/{ES_INDEX_NAME}', json=record, timeout=TIMEOUT))
             t0 = time.perf_counter()
             for record in asyncio.as_completed(posts):
                 try:
