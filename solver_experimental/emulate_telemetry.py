@@ -334,16 +334,12 @@ class MetricGenerator:
     """
     Generates emulated metric values using a noisy sinusoidal model.
     """
-    m: float
+    a: float
     b: float
     base_value: float = 1.0
     noise_scale: float = 0.1
-    p_scalable: float = 0
     rng: np.random.Generator = field(default_factory=lambda: np.random.default_rng())
-
-    def __post_init__(self):
-        # Randomly assign a portion of the task as scalable to resources for more realistic variability.
-        self.p_scalable = self.rng.uniform(0.1, 0.9)
+    usage_type: ResourceUsage = ResourceUsage.LIGHT
 
     @classmethod
     def create(cls, base_value: float = 1.0, rng: np.random.Generator = _RNG, usage_type: ResourceUsage = ResourceUsage.LIGHT) -> "MetricGenerator":
@@ -361,13 +357,13 @@ class MetricGenerator:
 
         # Slope of the underlying "trend" of the metric over time, which can be positive or negative for more variability.
         if usage_type == ResourceUsage.INTENSIVE:
-            m = rng.uniform(-0.3, 0.3)
-            b = rng.uniform(-0.4, 0.4)
+            a = rng.uniform(-0.8, 0.8)
+            b = rng.uniform(1, 5)
         else: # LIGHT
-            m = rng.uniform(-0.5, 0.5)
+            a = rng.uniform(-0.5, 0.5)
             b = rng.uniform(0.4, 0.6)
     
-        return cls(m=m, b=b, base_value=base_value, rng=rng)
+        return cls(a=a, b=b, base_value=base_value, rng=rng, usage_type=usage_type)
 
     def generate(self, stop: float = 1.0, start: float = 0.0, num: int = 60, max_value: float = 1.0) -> tuple[np.ndarray, float]:
         # Generate a noisy sinusoidal time series around the base value.
@@ -389,7 +385,12 @@ class MetricGenerator:
         
         t = np.linspace(start, stop, num=num)
     
-        scale_factor = self.m * t + self.b # Linear trend.
+        if self.usage_type == ResourceUsage.INTENSIVE:
+            # Oscillating trend that can exceed initial estimate for intensive tasks, with some noise.
+            scale_factor = rng.uniform(1.0, 1.6, size=len(t)) + self.a * np.sin(self.b * t)
+        else:
+            # Linear trend that stays well within initial estimate for light tasks, with some noise.
+            scale_factor = self.a * t + self.b
         noise = rng.normal(loc=0, scale=self.noise_scale, size=len(scale_factor))
         buffer = self.base_value * (scale_factor + noise)
 
@@ -397,8 +398,7 @@ class MetricGenerator:
         min_arr = np.clip(buffer - max_value, a_min=0, a_max=None) / max_value
         dt = stop - start
         # Cap the maximum penalty factor to avoid extreme duration adjustments.
-        # The 0.4 factor represents the contribution of CPU or memory (our two chosen bottleneck resources) to the runtime.
-        weight = min(round(0.4 * min_arr.mean() * dt, 3), 0.3)
+        weight = min(round(min_arr.mean() * dt, 3), 0.3)
 
         # Calculate slow down using Amdahl's law with the observed value scale. Use for duration adjustment.
         # adjust_factor = round(1 - self.p_scalable + weight * self.p_scalable, 3)
