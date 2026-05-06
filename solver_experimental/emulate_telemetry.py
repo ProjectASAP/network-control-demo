@@ -15,7 +15,7 @@ import httpx
 from fastapi import FastAPI
 import uvicorn
 import asyncio
-from contextlib import asynccontextmanager
+from enum import Enum
 
 from scheduler.entities import RunningTask, Task, Node, Edge, NetworkTopology
 from scheduler.load_info import load_nodes, load_edges
@@ -305,9 +305,13 @@ class TaskMetrics:
             cpu_usage=padded_cpu_slice, memory_usage=padded_memory_slice, network_usage=padded_network_slice
         )
 
-        # Adjust task's projected duration based on speed-up factors.
-        logger.debug(f"Duration adjust factors - CPU: {cpu_duration_factor}, Memory: {memory_duration_factor}, Network: {network_duration_factor}")
-        new_duration = self.projected_duration * max(cpu_duration_factor, memory_duration_factor, network_duration_factor)
+        # Adjust task's projected duration based on penalty factors.
+        logger.debug(f"Duration penalty factors - CPU: {cpu_duration_factor}, Memory: {memory_duration_factor}, Network: {network_duration_factor}")
+
+        penalty_weight = max(cpu_duration_factor, memory_duration_factor, network_duration_factor)
+        added_duration = penalty_weight * size_s
+        new_duration = self.projected_duration + added_duration
+
         self.projected_duration = round(new_duration, 3) # Round for nicer logging and numerical stability.
         return buffers
 
@@ -317,6 +321,12 @@ class MetricBuffers:
     cpu_usage: np.ndarray
     memory_usage: np.ndarray
     network_usage: np.ndarray
+
+
+class ResourceUsage(Enum):
+    # Describes whether a task is light, moderate, or intensive in its resource usage compared to its estimated requirements.
+    INTENSIVE = "intensive"
+    LIGHT = "light"
 
 
 @dataclass
@@ -336,39 +346,45 @@ class MetricGenerator:
         self.p_scalable = self.rng.uniform(0.1, 0.9)
 
     @classmethod
-    def create(cls, base_value: float = 1.0, rng: np.random.Generator = _RNG) -> "MetricGenerator":
+    def create(cls, base_value: float = 1.0, rng: np.random.Generator = _RNG, usage_type: ResourceUsage = ResourceUsage.LIGHT) -> "MetricGenerator":
         # Generate a noisy sinusoidal time series around the base value.
         """
         Creates a MetricGenerator with random parameters.
     
         Args:
             base_value: Base value around which to generate data.
+            rng: Random number generator.
+            usage_type: Type of resource usage for the task.
         Returns:
             A MetricGenerator instance.
         """
 
         # Slope of the underlying "trend" of the metric over time, which can be positive or negative for more variability.
-        m = rng.uniform(-0.5, 0.5)
-        b = rng.uniform(0.4, 0.6)
+        if usage_type == ResourceUsage.INTENSIVE:
+            m = rng.uniform(-0.3, 0.3)
+            b = rng.uniform(-0.4, 0.4)
+        else: # LIGHT
+            m = rng.uniform(-0.5, 0.5)
+            b = rng.uniform(0.4, 0.6)
     
         return cls(m=m, b=b, base_value=base_value, rng=rng)
 
     def generate(self, stop: float = 1.0, start: float = 0.0, num: int = 60, max_value: float = 1.0) -> tuple[np.ndarray, float]:
         # Generate a noisy sinusoidal time series around the base value.
         """
-        Generates a timeseries of emulated metric values over a specified range of the metric duration. Also returns the adjusted duration factor, the
-        multiplicative factor by which the task duration should be adjusted based on the speed-up from Amdahl's law.
-    
+        Generates a timeseries of emulated metric values over a specified range of the metric duration. Also returns the duration penalty factor, the
+        proportion of the epoch duration that should be added to the projected duration.
+
         Args:
             start: Start time (in [0, 1]) of the metric duration.
             stop: Stop time (in [0, 1]) of the metric duration.
             num: Number of samples to generate.
             max_value: Represents the nominal amount of resources allocated to the task.
         Returns:
-            Array of emulated metric values and the adjusted duration factor.
+            Array of emulated metric values and the duration penalty factor.
         """
         if self.base_value == 0:
-            return np.zeros(num), 1.0
+            return np.zeros(num), 0.0
         rng = self.rng
         
         t = np.linspace(start, stop, num=num)
@@ -380,15 +396,17 @@ class MetricGenerator:
         # Increase projected duration when usage is higher than allocated value.
         min_arr = np.clip(buffer - max_value, a_min=0, a_max=None) / max_value
         dt = stop - start
-        weight = round(1 + (min_arr.mean() * dt), 3)
+        # Cap the maximum penalty factor to avoid extreme duration adjustments.
+        # The 0.4 factor represents the contribution of CPU or memory (our two chosen bottleneck resources) to the runtime.
+        weight = min(round(0.4 * min_arr.mean() * dt, 3), 0.3)
 
         # Calculate slow down using Amdahl's law with the observed value scale. Use for duration adjustment.
-        adjust_factor = round(1 - self.p_scalable + weight * self.p_scalable, 3)
-        duration_adjust_factor = round((1 - dt) + dt * adjust_factor, 3)
+        # adjust_factor = round(1 - self.p_scalable + weight * self.p_scalable, 3)
+        # duration_adjust_factor = round((1 - dt) + dt * adjust_factor, 3)
 
         clipped_buffer = np.clip(buffer, a_min=0, a_max=max_value)
 
-        return clipped_buffer, duration_adjust_factor
+        return clipped_buffer, weight
 
 
 class TaskMetricsEmulator:
@@ -430,9 +448,20 @@ class TaskMetricsEmulator:
         seed = int.from_bytes(task.task_id.encode(), "little", signed=False) % (2**32)
         rng = np.random.default_rng(seed)
 
+        # If a task is intensive, then it is more likely to overutilize resources compared to its initial estimate, 
+        # although variability still exists. For now, limit to compute or memory bound tasks.
+        metric_generators = {}
+        for metric, initial_value in [("cpu", task.initial_cpu), ("memory", task.initial_memory)]:
+            usage_type = rng.choice([ResourceUsage.LIGHT, ResourceUsage.INTENSIVE])
+            if usage_type == ResourceUsage.INTENSIVE:
+                logger.debug(f"Task {task.task_id} is classified as INTENSIVE {metric} metric generation.")
+            else:
+                logger.debug(f"Task {task.task_id} is classified as LIGHT for {metric} metric generation.")
+            metric_generators[metric] = MetricGenerator.create(base_value=initial_value, rng=rng, usage_type=usage_type)
+
         # Generated metrics share same random generator for reproducibility and temporal consistency across metrics for a given task, but differ across tasks.
-        cpu_usage = MetricGenerator.create(base_value=task.initial_cpu, rng=rng)
-        memory_usage = MetricGenerator.create(base_value=task.initial_memory, rng=rng)
+        cpu_usage = metric_generators["cpu"]
+        memory_usage = metric_generators["memory"]
         network_usage = MetricGenerator.create(base_value=sum(task.peer_bandwidths.values()), rng=rng)
         current_time_s = get_current_time()
         return TaskMetrics(
