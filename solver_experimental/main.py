@@ -13,7 +13,7 @@ import httpx
 from dataclasses import dataclass
 from cattrs import structure, unstructure
 
-from scheduler.entities import RunningTask, Task, NetworkTopology
+from scheduler.entities import Node, RunningTask, Task, NetworkTopology
 from scheduler.load_info import load_nodes, load_edges, load_tasks, build_task_graph
 from scheduler.solver import TaskScheduler
 from config import (
@@ -53,29 +53,108 @@ class AppConfig:
     query_backend: QueryBackend = QueryBackend.NONE
 
 
-def update_task_specs(running_tasks: dict[str, RunningTask], task_metrics: dict):
+def determine_new_estimate_from_quantiles(metric_quantiles: dict[str, float], allocated: float, max_capacity: float) -> float:
+    # Placeholder for a more complex estimation update rule. For now, just return the observed metric.
+    # TODO: Hardcoded percentiles (assumes the above keys are there).
+    p50 = metric_quantiles.get(str(50))
+    p75 = metric_quantiles.get(str(75))
+    p90 = metric_quantiles.get(str(90))
+    p100 = metric_quantiles.get(str(100))
+
+    if p50 is not None and p75 is not None and p90 is not None and p100 is not None:
+        # "Majority" of observed usage is below the current allocation, so we can consider reducing it to save resources.
+        if p50 <= allocated and p75 <= allocated:
+            # If the current allocation is above the 90th percentile, we can consider reducing it to save resources.
+            return round(p50, 2)
+        else:
+            # Usage is at or above allocation, so consider increasing it but cap at node/task max_capacity.
+            new_est = round(min(allocated * 1.2, max_capacity), 2)
+            logger.debug(
+                "Increase estimate for allocated=%s up to %s (capped at max_capacity=%s)",
+                allocated,
+                new_est,
+                max_capacity,
+            )
+            return new_est
+
+    return allocated
+
+
+def determine_max_capacity(running_tasks: dict[str, RunningTask], node_info: dict[str, Node]) -> dict[str, dict[str, float]]:
+    """Determine the max capacity for each task based on node capacity and proportional allocation.
+    
+    Each task can expand up to the node's total capacity, but gets a proportional increase based on
+    its current percent of node capacity to avoid crowding out other tasks.
+    """
+    # First pass: calculate total allocated resources per node
+    node_allocations = {}
+    for task_id, rt in running_tasks.items():
+        node_id = rt.node_id
+        if node_id not in node_allocations:
+            node_allocations[node_id] = {
+                "cpu": 0.0,
+                "memory": 0.0,
+                "num_tasks": 0
+            }
+        node_allocations[node_id]["cpu"] += rt.task.initial_cpu
+        node_allocations[node_id]["memory"] += rt.task.initial_memory
+        node_allocations[node_id]["num_tasks"] += 1
+    
+    # Second pass: calculate per-task max capacity based on proportional share
+    max_capacities = {}
+    for task_id, rt in running_tasks.items():
+        node = node_info[rt.node_id]
+        node_id = rt.node_id
+        task = rt.task
+        
+        max_capacities[task_id] = {}
+        
+        # CPU: proportional share of node capacity
+        total_cpu_allocated = node_allocations[node_id]["cpu"]
+        num_tasks_on_node = node_allocations[node_id]["num_tasks"]
+        if total_cpu_allocated > 0:
+            extra_cpu = 0.9 * min(node.cpu_capacity - total_cpu_allocated, 0) / num_tasks_on_node # leave some headroom (10%) to avoid over-allocation
+            max_capacities[task_id]["cpu"] = task.initial_cpu + extra_cpu
+        else:
+            logger.warning(f"No CPU allocated on node {node_id}; using total node capacity as max for task {task_id}.")
+            max_capacities[task_id]["cpu"] = node.cpu_capacity
+        
+        # Memory: proportional share of node capacity
+        total_memory_allocated = node_allocations[node_id]["memory"]
+        if total_memory_allocated > 0:
+            extra_memory = 0.9 * min(node.memory_capacity - total_memory_allocated, 0) / num_tasks_on_node # leave some headroom (10%) to avoid over-allocation
+            max_capacities[task_id]["memory"] = task.initial_memory + extra_memory
+        else:
+            logger.warning(f"No memory allocated on node {node_id}; using total node capacity as max for task {task_id}.")
+            max_capacities[task_id]["memory"] = node.memory_capacity
+    
+    return max_capacities
+
+
+def update_task_specs(running_tasks: dict[str, RunningTask], task_metrics: dict, node_info: dict[str, Node]):
     """Update the task resource estimations (Task objects) in-place using returned metrics data."""
+    max_capacities = determine_max_capacity(running_tasks, node_info)
     try:
         for record in task_metrics:
             task_id = record["key"]
             if task_id in running_tasks:
+                running_task = running_tasks[task_id]
                 task_spec = running_tasks[task_id].task
+                task_max_caps = max_capacities[task_id]
 
                 quantiles = record['percentiles']
 
                 # Update rule. For now, just use the median of the last epoch's usage as the new estimate. Could be made more complex later.
-                new_cpu = quantiles["cpu_cores"].get("50", task_spec.initial_cpu)
-                new_memory = quantiles["memory_gb"].get("50", task_spec.initial_memory)
-
-                new_cpu = new_cpu if new_cpu is not None and new_cpu > 0 else task_spec.initial_cpu
-                new_memory = new_memory if new_memory is not None and new_memory > 0 else task_spec.initial_memory
+                new_cpu = determine_new_estimate_from_quantiles(quantiles.get("cpu_cores", {}), task_spec.initial_cpu, task_max_caps["cpu"])
+                new_memory = determine_new_estimate_from_quantiles(quantiles.get("memory_gb", {}), task_spec.initial_memory, task_max_caps["memory"])
 
                 logger.debug(
                     f"Updating task {task_id} specs: CPU {task_spec.initial_cpu:.2f} -> {new_cpu:.2f}, Memory {task_spec.initial_memory:.2f} -> {new_memory:.2f}"
                 )
 
-                task_spec.initial_cpu = new_cpu
-                task_spec.initial_memory = new_memory
+                # Have to check that we don't accidentally assign zero resource usage (might happen when we are near end of task execution --> p50 = 0).
+                task_spec.initial_cpu = new_cpu if new_cpu > 0 else task_spec.initial_cpu
+                task_spec.initial_memory = new_memory if new_memory > 0 else task_spec.initial_memory
                 # TODO: Find sensible way to handle network metrics.
     except Exception as exc:
         logger.warning(f"Failed to update task specs with metrics data: {exc}")
@@ -284,7 +363,7 @@ def assign_tasks(args: AppConfig):
                 logger.debug(f'Queried data: {sketch_task_metrics}')
 
                 if sketch_task_metrics and args.query_backend != QueryBackend.NONE:
-                    update_task_specs(running_tasks, sketch_task_metrics)
+                    update_task_specs(running_tasks, sketch_task_metrics, nodes)
             else:
                 logger.debug("No running tasks to query metrics for.")
             sketch_query_ms = (time.perf_counter() - sketch_start) * 1000.0
@@ -379,21 +458,28 @@ def assign_tasks(args: AppConfig):
                 logger.info("Could not assign tasks.")
 
             # Update running tasks to reflect new assignments for the next iteration.
-            running_tasks = assignments
-
-            # Push assignments to emulator immediately so next query sees the metrics.
-            if emulator_reachable:
-                running_tasks_payload = unstructure(
-                    list(assignments.values()), list[RunningTask]
-                )
-                _post_with_retry(
-                    client,
-                    "/ingest",
-                    running_tasks_payload,
-                )
-                logger.debug(
-                    "Pushed {} assignments to emulator before next task arrival",
-                    len(assignments),
+            # Only replace the tracked running tasks if the solver returned an optimal solution.
+            if solver_status == "Optimal":
+                running_tasks = assignments
+                # Push assignments to emulator immediately so next query sees the metrics.
+                if emulator_reachable and assignments:
+                    running_tasks_payload = unstructure(
+                        list(assignments.values()), list[RunningTask]
+                    )
+                    _post_with_retry(
+                        client,
+                        "/ingest",
+                        running_tasks_payload,
+                    )
+                    logger.debug(
+                        "Pushed {} assignments to emulator before next task arrival",
+                        len(assignments),
+                    )
+            else:
+                logger.warning(
+                    "Solver did not return an optimal solution (status=%s); keeping previous running tasks (%d)",
+                    solver_status,
+                    len(running_tasks),
                 )
 
             epoch_index += 1

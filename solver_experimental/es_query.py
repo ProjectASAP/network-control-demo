@@ -28,7 +28,7 @@ def fetch_task_usage(
     client: httpx.Client | None = None,
     use_es: bool = False,
     metrics: list[str] = ["cpu_cores", "memory_gb", "network_mbps"], 
-    percentiles: list[int] = [0, 50, 90, 100],
+    percentiles: list[int] = [0, 50, 75, 90, 100],
     log_path: str = "fetch_tasks_rtt.csv",
 ) -> dict[str, float] | None:
     """
