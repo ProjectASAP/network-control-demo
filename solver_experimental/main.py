@@ -46,6 +46,7 @@ class AppConfig:
     epoch_length_s: float = 300.0
     interval: float = 10.0
     max_reassignments: int = 10
+    retry_limit: int = 200
     query_rtt_log_path: str = "fetch_tasks_rtt.csv"
     loop_rtt_log_path: str = "loop_rtt.csv"
     assignments_log_path: str = "assignments.csv"
@@ -63,7 +64,7 @@ def determine_new_estimate_from_quantiles(metric_quantiles: dict[str, float], al
 
     if p50 is not None and p75 is not None and p90 is not None and p100 is not None:
         # "Majority" of observed usage is below the current allocation, so we can consider reducing it to save resources.
-        if p50 <= allocated and p75 <= allocated:
+        if p50 < allocated and p75 < allocated:
             # If the current allocation is above the 90th percentile, we can consider reducing it to save resources.
             return round(p50, 2)
         else:
@@ -429,7 +430,7 @@ def assign_tasks(args: AppConfig):
                     retry_counts.pop(task_id, None)
             for task_id in list(leftover_tasks.keys()):
                 retry_counts[task_id] = retry_counts.get(task_id, 0) + 1
-                if retry_counts[task_id] >= 200:
+                if retry_counts[task_id] >= args.retry_limit:
                     failed_tasks[task_id] = leftover_tasks.pop(task_id)
                     logger.warning(
                         "Task {} exceeded retry limit; moving to failed list.",
@@ -512,6 +513,7 @@ if __name__ == "__main__":
     parser.add_argument("--max-reassignments", type=int, default=10)
     parser.add_argument("--log-level", type=str, default="INFO")
     parser.add_argument("--batch-size", type=int, default=SCHEDULER_BATCH_SIZE)
+    parser.add_argument("--retry-limit", type=int, default=200)
     args = parser.parse_args()
     logger.remove()
     logger.add(sys.stderr, level=args.log_level)
