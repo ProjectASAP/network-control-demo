@@ -63,7 +63,7 @@ The main Python package containing the task scheduler, query engine, telemetry e
 | `main.py` | Orchestrator: loads topology, queries metrics, runs solver in batch loop, logs results |
 | `config.py` | Env-var-based config (`SKETCH_URL`, `ES_URL`, `ES_API_KEY`, `TIME_RANGE_MS`, etc.) |
 | `emulate_telemetry.py` | FastAPI server that generates and sends synthetic metrics to ES + Sketch server |
-| `es_query.py` | ES/Sketch query builders, metric comparison, `NodeMetricsSnapshot` |
+| `es_query.py` | ES/Sketch query builders, ES batch normalization for the controller, metric comparison, `NodeMetricsSnapshot` |
 | `logging_utils.py` | CSV logging helpers (`log_rtt`, `log_e2e`, `log_node_metric_comparisons`) |
 | `bench_queries.py` | Query RTT benchmark suite with plotting |
 | `analyze_logs.py` | Server log analysis |
@@ -210,6 +210,7 @@ cd solver_experimental && uv run pytest python_solver/tests/
 - Two solver implementations exist: **PuLP** (`scheduler/solver.py`) and **OR-Tools** (`python_solver/`). The OR-Tools version is more mature with migration penalties and reassignment limits. The OR-Tools solver supports configurable backends via `solver_backend` parameter: **CBC** (default), **SCIP**, and **GLPK**
 - The telemetry emulator (`emulate_telemetry.py`) runs as a FastAPI sidecar, sending identical data to both ES and Sketch server for consistency comparison
 - Benchmark scripts measure both **latency** (RTT) and **correctness** (metric value comparison between backends)
+- The controller's ES path now reads batch query responses from Elasticsearch into the same `[{"key", "percentiles"}]` shape used by the sketch backend, and it filters ES metrics on the mapped `task` and `epoch` fields directly
 
 ## Known Issues
 

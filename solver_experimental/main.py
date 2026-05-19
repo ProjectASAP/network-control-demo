@@ -69,12 +69,12 @@ def determine_new_estimate_from_quantiles(metric_quantiles: dict[str, float], al
             return round(p50, 2)
         else:
             # Usage is at or above allocation, so consider increasing it but cap at node/task max_capacity.
-            new_est = round(min(allocated * 1.2, max_capacity), 2)
+            new_est = min(round(allocated * 1.2, 2), max_capacity)
             logger.debug(
-                "Increase estimate for allocated=%s up to %s (capped at max_capacity=%s)",
-                allocated,
-                new_est,
-                max_capacity,
+                "Increase estimate for allocated={allocated} up to {new_est} (capped at max_capacity={max_capacity})",
+                allocated=allocated,
+                new_est=new_est,
+                max_capacity=max_capacity,
             )
             return new_est
 
@@ -114,7 +114,7 @@ def determine_max_capacity(running_tasks: dict[str, RunningTask], node_info: dic
         total_cpu_allocated = node_allocations[node_id]["cpu"]
         num_tasks_on_node = node_allocations[node_id]["num_tasks"]
         if total_cpu_allocated > 0:
-            extra_cpu = 0.9 * min(node.cpu_capacity - total_cpu_allocated, 0) / num_tasks_on_node # leave some headroom (10%) to avoid over-allocation
+            extra_cpu = 0.9 * max(node.cpu_capacity - total_cpu_allocated, 0) / num_tasks_on_node # leave some headroom (10%) to avoid over-allocation
             max_capacities[task_id]["cpu"] = task.initial_cpu + extra_cpu
         else:
             logger.warning(f"No CPU allocated on node {node_id}; using total node capacity as max for task {task_id}.")
@@ -123,7 +123,7 @@ def determine_max_capacity(running_tasks: dict[str, RunningTask], node_info: dic
         # Memory: proportional share of node capacity
         total_memory_allocated = node_allocations[node_id]["memory"]
         if total_memory_allocated > 0:
-            extra_memory = 0.9 * min(node.memory_capacity - total_memory_allocated, 0) / num_tasks_on_node # leave some headroom (10%) to avoid over-allocation
+            extra_memory = 0.9 * max(node.memory_capacity - total_memory_allocated, 0) / num_tasks_on_node # leave some headroom (10%) to avoid over-allocation
             max_capacities[task_id]["memory"] = task.initial_memory + extra_memory
         else:
             logger.warning(f"No memory allocated on node {node_id}; using total node capacity as max for task {task_id}.")
@@ -132,18 +132,25 @@ def determine_max_capacity(running_tasks: dict[str, RunningTask], node_info: dic
     return max_capacities
 
 
-def update_task_specs(running_tasks: dict[str, RunningTask], task_metrics: dict, node_info: dict[str, Node]):
+def update_task_specs(
+    running_tasks: dict[str, RunningTask],
+    task_metrics: list[dict[str, object]],
+    node_info: dict[str, Node],
+):
     """Update the task resource estimations (Task objects) in-place using returned metrics data."""
     max_capacities = determine_max_capacity(running_tasks, node_info)
     try:
         for record in task_metrics:
-            task_id = record["key"]
+            if not isinstance(record, dict):
+                continue
+            task_id = record.get("key")
+            quantiles = record.get("percentiles")
+            if not isinstance(task_id, str) or not isinstance(quantiles, dict):
+                continue
             if task_id in running_tasks:
                 running_task = running_tasks[task_id]
-                task_spec = running_tasks[task_id].task
+                task_spec = running_task.task
                 task_max_caps = max_capacities[task_id]
-
-                quantiles = record['percentiles']
 
                 # Update rule. For now, just use the median of the last epoch's usage as the new estimate. Could be made more complex later.
                 new_cpu = determine_new_estimate_from_quantiles(quantiles.get("cpu_cores", {}), task_spec.initial_cpu, task_max_caps["cpu"])

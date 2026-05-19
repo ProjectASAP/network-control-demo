@@ -30,7 +30,7 @@ def fetch_task_usage(
     metrics: list[str] = ["cpu_cores", "memory_gb", "network_mbps"], 
     percentiles: list[int] = [0, 50, 75, 90, 100],
     log_path: str = "fetch_tasks_rtt.csv",
-) -> dict[str, float] | None:
+) -> list[dict[str, object]] | None:
     """
     Fetch task-level usage metrics and return a dict of metric values.
     """
@@ -77,8 +77,9 @@ def fetch_task_metrics(
     use_es: bool, 
     metrics: list[str], 
     percentiles: list[int] 
-) -> tuple[dict[str, float], float]:
+) -> tuple[list[dict[str, object]], float]:
     server = "ES" if use_es else "sketch"
+    logger.debug(f"Fetching metrics {metrics} for tasks {task_ids} from {server} at epoch {epoch} with percentiles {percentiles}")
     try:
         if use_es:
             data, elapsed_ms = query_es_tasks(
@@ -106,10 +107,10 @@ def fetch_task_metrics(
             )
     except Exception as e:
         logger.warning(f"{server} batch query failed: {e}")
-        return {}, 0.0
+        return [], 0.0
     
     logger.debug(f"{server} batch query took {elapsed_ms:.1f} ms")
-    return data.get("results", {}), elapsed_ms
+    return data.get("results", []), elapsed_ms
 
 
 def query_server_batch(
@@ -136,6 +137,7 @@ def query_server_batch(
         timeout=(connect_timeout, read_timeout),
     )
     resp.raise_for_status()
+    logger.debug(f"Sketch response: {resp.json()}")
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
     return resp.json(), elapsed_ms
 
@@ -161,12 +163,12 @@ def query_es_tasks(
     
     headers = es_headers(api_key)
     url = f"{es_url}/{es_index}/_search"
-    results: dict[str, dict[str, object]] = {}
+    results: list[dict[str, object]] = []
     t0 = time.perf_counter()
 
     aggs = {}
     for metric in metrics:
-        aggs[metric] = {"percentiles": {"field": metric, "percents": percentiles}}
+        aggs[metric] = {"percentiles": {"field": metric, "percents": percentiles, "tdigest": {"compression": 1000}}}
 
     for tid in tasks:
         payload = {
@@ -174,7 +176,7 @@ def query_es_tasks(
             "query": {
                 "bool": {
                     "filter": [
-                        {"term": {TASK_LABEL: tid}},
+                        {"term": {f"{TASK_LABEL}.keyword": tid}},
                         {"term": {"epoch": epoch}},
                     ]
                 }
@@ -188,9 +190,57 @@ def query_es_tasks(
             timeout=(connect_timeout, read_timeout),
         )
         resp.raise_for_status()
-        results[tid] = resp.json()
+        logger.debug(f"ES response: {resp.json()}")
+        results.append(_normalize_es_batch_result(tid, resp.json(), metrics, percentiles))
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
-    return results, elapsed_ms
+    return {"results": results}, elapsed_ms
+
+
+def _extract_percentile_values(agg: object) -> dict[str, object]:
+    if not isinstance(agg, dict):
+        return {}
+    values = agg.get("values")
+    if isinstance(values, dict):
+        return values
+    value = agg.get("value")
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def _pick_percentile(values: dict[str, object], percentile: int) -> float | None:
+    for key in (str(percentile), f"{float(percentile):.1f}", float(percentile), percentile):
+        if key in values:
+            raw_value = values[key]
+            if raw_value is None:
+                return None
+            try:
+                return float(raw_value)  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def _normalize_es_batch_result(
+    task_id: str,
+    response: dict,
+    metrics: list[str],
+    percentiles: list[int],
+) -> dict[str, object]:
+    aggregations = response.get("aggregations", {}) if isinstance(response, dict) else {}
+    normalized_percentiles: dict[str, dict[str, float | None]] = {}
+
+    for metric in metrics:
+        metric_values = _extract_percentile_values(aggregations.get(metric, {}))
+        normalized_percentiles[metric] = {
+            f"{percentile}": _pick_percentile(metric_values, percentile)
+            for percentile in percentiles
+        }
+
+    return {
+        "key": task_id,
+        "percentiles": normalized_percentiles,
+    }
 
 
 def _get_agg_value(container: dict, key: str) -> float | None:

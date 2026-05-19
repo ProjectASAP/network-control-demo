@@ -41,9 +41,9 @@ indices:
         aliases: ["networkmbps", "network-mbps"]
         storage_field: "network_mbps"
     key_fields:
-      - "cluster"
+      - "task"
     ingest_field_mapping:
-      key_field: "cluster"
+      key_field: "task"
       epoch_field: "epoch"
       metric_fields:
         cpu_cores: "cpu_cores"
