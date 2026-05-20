@@ -23,6 +23,9 @@ uv run main.py --node-path dummy_data/nodes.jsonl --edge-path dummy_data/edges.j
 # Telemetry emulator only (FastAPI on :8000)
 uv run emulate_telemetry.py
 
+# Greedy placement baseline on scheduler inputs
+uv run run_greedy_baseline.py --task-count 30 --node-count 30
+
 # Benchmarks
 uv run bench_queries.py
 
@@ -47,11 +50,13 @@ solver_experimental/
 ├── logging_utils.py           # CSV logging: RTT, e2e, metric comparisons
 ├── bench_queries.py           # Query RTT benchmark suite
 ├── analyze_logs.py            # Server log analysis
+├── run_greedy_baseline.py     # Greedy first-fit placement baseline
 ├── run_main.sh                # Shell entry point
 │
 ├── scheduler/                 # PuLP-based task scheduler
 │   ├── entities.py            # Core types: Node, Edge, Task, RunningTask, NetworkTopology
 │   ├── solver.py              # TaskScheduler: ILP formulation with PuLP
+│   ├── greedy_solver.py       # GreedyTaskScheduler: first-fit baseline
 │   └── load_info.py           # Loads nodes/edges/tasks from CSV or JSONL
 │
 ├── query_engine_utils/        # Query abstraction layer
@@ -144,6 +149,18 @@ PuLP CBC-based integer linear program:
 
 Tasks whose peer group is incomplete (not all peers present) are filtered out via `get_valid_task_graph()`.
 
+## Greedy Baseline (`scheduler/greedy_solver.py`)
+
+`GreedyTaskScheduler` is a deterministic first-fit baseline over the same `Node`, `Edge`, and `Task` JSONL/CSV inputs as the PuLP scheduler. It orders tasks by configurable policy (`input`, `arrival`, or `largest`) and places each task on the first feasible node while respecting residual CPU, memory, and shortest-path bandwidth constraints to already assigned peer tasks.
+
+Run it with:
+
+```bash
+uv run run_greedy_baseline.py --task-count 30 --node-count 30
+```
+
+Because the current task schema has no accuracy/timeliness fields, `--task-order largest` is the default proxy for paper-style descending requirement order.
+
 ## Telemetry Emulator (`emulate_telemetry.py`)
 
 FastAPI server on `127.0.0.1:8000`:
@@ -205,14 +222,14 @@ uv run pytest python_solver/tests/
 
 No tests for the PuLP scheduler (`scheduler/`) currently.
 
-## Two Solvers
+## Solver Implementations
 
-| | PuLP (`scheduler/solver.py`) | OR-Tools (`python_solver/`) |
-|---|---|---|
-| Used by | `main.py` (active) | Standalone / examples |
-| Formulation | Minimize reassignments, maximize placements | Similar + migration penalties |
-| Path routing | Single path per node pair (TODO: multi-path) | Flow variables |
-| Status | Active, integrated with query/ingest pipeline | More mature formulation, not wired into main loop |
+| | PuLP (`scheduler/solver.py`) | Greedy (`scheduler/greedy_solver.py`) | OR-Tools (`python_solver/`) |
+|---|---|---|---|
+| Used by | `main.py` (active) | `run_greedy_baseline.py` | Standalone / examples |
+| Formulation | Minimize reassignments, maximize placements | First-fit heuristic | Similar + migration penalties |
+| Path routing | Single path per node pair (TODO: multi-path) | Shortest path to already assigned peers | Flow variables |
+| Status | Active, integrated with query/ingest pipeline | Baseline script, not wired into query loop | More mature formulation, not wired into main loop |
 
 ## Known Issues
 

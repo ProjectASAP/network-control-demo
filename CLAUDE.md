@@ -67,12 +67,14 @@ The main Python package containing the task scheduler, query engine, telemetry e
 | `logging_utils.py` | CSV logging helpers (`log_rtt`, `log_e2e`, `log_node_metric_comparisons`) |
 | `bench_queries.py` | Query RTT benchmark suite with plotting |
 | `analyze_logs.py` | Server log analysis |
+| `run_greedy_baseline.py` | Greedy first-fit placement baseline using the scheduler node/edge/task inputs |
 
 #### `scheduler/` — Task scheduling core
 
 - `entities.py` — Data types: `Node`, `Edge`, `Task`, `RunningTask`, `TaskCommunication`, `NetworkTopology` (networkx)
 - `load_info.py` — Loads nodes/edges/tasks from CSV or JSONL, builds task graph
 - `solver.py` — `TaskScheduler` using PuLP ILP: placement constraints, capacity, link capacity, migration budget; objective = maximize priority
+- `greedy_solver.py` — `GreedyTaskScheduler`: first-fit baseline over the same node/edge/task data model, with configurable task and node ordering
 
 #### `python_solver/` — OR-Tools solver (more mature, independent)
 
@@ -181,6 +183,8 @@ docker run -p 10101:10101 network-control-server:latest
 
 # Solver only (assumes server + ES running)
 cd solver_experimental && bash run_main.sh
+# Greedy placement baseline on scheduler dummy data
+cd solver_experimental && uv run run_greedy_baseline.py --task-count 30 --node-count 30
 
 # RTT benchmarks (local server)
 bash scripts/run_rtt_sweep_all.sh
