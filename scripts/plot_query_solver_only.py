@@ -143,6 +143,54 @@ def plot_query_solver_split(csv_path: Path, out_path: Path, backend: str) -> Non
     print(f"Saved: {out_path}")
 
 
+def plot_query_only(csv_path: Path, out_path: Path, backend: str) -> None:
+    """Single bar chart comparing query time only (no solver), log y-axis."""
+    rows = load_csv(csv_path)
+
+    TITLE_FS = 17
+    LABEL_FS = 15
+    TICK_FS = 13
+    LEGEND_FS = 13
+
+    epochs = [int(r["epoch"]) for r in rows]
+    s_query = [float(r["server_query_ms"]) for r in rows]
+    e_query = [float(r["es_query_ms"]) for r in rows]
+
+    x = np.arange(len(epochs))
+    bar_w = 0.35
+
+    fig, ax_q = plt.subplots(figsize=(7.2, 4.4))
+
+    ax_q.bar(x - bar_w / 2, s_query, bar_w, label="Approximate Query", color="#2a9d8f")
+    ax_q.bar(x + bar_w / 2, e_query, bar_w, label="Elastic Search Query", color="#f28e2b")
+    ax_q.set_xlabel("Epoch", fontsize=LABEL_FS)
+    ax_q.set_ylabel("Query Time (ms)", fontsize=LABEL_FS)
+    ax_q.set_yscale("log")
+    ax_q.grid(axis="y", alpha=0.3)
+    ax_q.tick_params(axis="both", labelsize=TICK_FS)
+    ax_q.set_title(
+        "Query Time Comparison\n"
+        "Approximate VS Exact",
+        fontsize=TITLE_FS,
+        pad=14,
+    )
+    ax_q.set_xticks(x)
+    ax_q.set_xticklabels([str(e) for e in epochs])
+
+    ax_q.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.18),
+        ncol=2,
+        fontsize=LEGEND_FS,
+        frameon=False,
+    )
+
+    plt.tight_layout(rect=[0, 0.06, 1, 0.97])
+    plt.savefig(out_path, dpi=220)
+    plt.close(fig)
+    print(f"Saved: {out_path}")
+
+
 def plot_query_solver_logy(csv_path: Path, out_path: Path, backend: str) -> None:
     rows = load_csv(csv_path)
 
@@ -209,6 +257,11 @@ if __name__ == "__main__":
     plot_query_solver_split(
         data_dir / "rtt_results_epoch_full_ortools_cbc_30nodes.csv",
         plot_dir / "rtt_epoch_query_solver_split_ortools_cbc_30nodes.png",
+        "CBC",
+    )
+    plot_query_only(
+        data_dir / "rtt_results_epoch_full_ortools_cbc_30nodes.csv",
+        plot_dir / "rtt_epoch_query_only_ortools_cbc_30nodes.png",
         "CBC",
     )
     plot_query_solver_logy(

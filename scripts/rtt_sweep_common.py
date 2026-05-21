@@ -361,7 +361,7 @@ def start_server(log_path: Path | None = None, truncate_log: bool = False) -> su
         mode = "w" if truncate_log else "a"
         stdout_target = open(log_path, mode, encoding="utf-8")
     proc = subprocess.Popen(
-        ["cargo", "run"],
+        ["cargo", "run", "--release"],
         cwd=server_dir,
         stdout=stdout_target or subprocess.PIPE,
         stderr=subprocess.STDOUT,
