@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Two per-epoch query latency bar charts (sketch vs ES), with cross-run error bars.
+"""Per-epoch query latency bar charts with cross-run error bars.
 
-Plot A: Approximate Query vs Elastic Search Query             (ES default compression)
-Plot B: Approximate Query vs Elastic Search Query (compression 1000)
+Three plots:
+  A) all three: Approximate / Elastic Search / Elastic Search (compression 1000)
+  B) Approximate vs Elastic Search          (ES default compression; not labeled as such)
+  C) Approximate vs Elastic Search (compression 1000)
 
-Style matches scripts/plot_query_solver_only.py::plot_query_only — log y, 2 bars per epoch.
+Style matches scripts/plot_query_solver_only.py::plot_query_only — log y bars.
 """
 
 from __future__ import annotations
@@ -26,27 +28,29 @@ TICK_FS = 13
 LEGEND_FS = 13
 
 
-def plot_pair(by_epoch, epochs, n_runs, es_key, es_label, out_path: Path) -> None:
+def _bar_with_err(ax, x, mean, std, label, color, bar_w):
+    ax.bar(
+        x, mean, bar_w,
+        yerr=std, label=label, color=color,
+        capsize=3, edgecolor="black", linewidth=0.4,
+        error_kw={"linewidth": 1, "ecolor": "black"},
+    )
+
+
+def plot_chart(by_epoch, epochs, n_runs, series, out_path: Path) -> None:
+    """`series` is a list of (label, csv_key, color) tuples."""
     x = np.arange(len(epochs))
-    bar_w = 0.35
+    n = len(series)
+    bar_w = 0.78 / n if n > 2 else 0.35
+    offsets = (np.arange(n) - (n - 1) / 2) * bar_w
 
-    fig, ax = plt.subplots(figsize=(7.2, 4.6))
+    fig, ax = plt.subplots(figsize=(7.6 if n <= 2 else 8.4, 4.8))
+    for (label, key, color), off in zip(series, offsets):
+        mean = np.array([np.mean(by_epoch[e][key]) for e in epochs])
+        std  = np.array([np.std(by_epoch[e][key], ddof=1) for e in epochs])
+        _bar_with_err(ax, x + off, mean, std, label, color, bar_w)
 
-    s_mean = np.array([np.mean(by_epoch[e]["server"]) for e in epochs])
-    s_std  = np.array([np.std(by_epoch[e]["server"], ddof=1) for e in epochs])
-    e_mean = np.array([np.mean(by_epoch[e][es_key]) for e in epochs])
-    e_std  = np.array([np.std(by_epoch[e][es_key], ddof=1) for e in epochs])
-
-    ax.bar(x - bar_w / 2, s_mean, bar_w, yerr=s_std,
-           label="Approximate Query", color="#2a9d8f",
-           capsize=3, edgecolor="black", linewidth=0.4,
-           error_kw={"linewidth": 1, "ecolor": "black"})
-    ax.bar(x + bar_w / 2, e_mean, bar_w, yerr=e_std,
-           label=es_label, color="#f28e2b",
-           capsize=3, edgecolor="black", linewidth=0.4,
-           error_kw={"linewidth": 1, "ecolor": "black"})
-
-    ax.set_xlabel("Epoch", fontsize=LABEL_FS)
+    ax.set_xlabel("Epoch", fontsize=LABEL_FS, labelpad=8)
     ax.set_ylabel("Query Time (ms)", fontsize=LABEL_FS)
     ax.set_yscale("log")
     ax.grid(axis="y", alpha=0.3, which="major")
@@ -59,16 +63,15 @@ def plot_pair(by_epoch, epochs, n_runs, es_key, es_label, out_path: Path) -> Non
     ax.set_xticks(x)
     ax.set_xticklabels([str(e) for e in epochs])
 
-    ax.legend(
+    legend = ax.legend(
         loc="upper center",
-        bbox_to_anchor=(0.5, -0.18),
+        bbox_to_anchor=(0.5, -0.22),
         ncol=1,
         fontsize=LEGEND_FS,
         frameon=False,
     )
 
-    plt.tight_layout(rect=[0, 0.12, 1, 0.97])
-    plt.savefig(out_path, dpi=220)
+    plt.savefig(out_path, dpi=220, bbox_inches="tight", bbox_extra_artists=[legend])
     plt.close(fig)
     print(f"Saved: {out_path}")
 
@@ -76,6 +79,8 @@ def plot_pair(by_epoch, epochs, n_runs, es_key, es_label, out_path: Path) -> Non
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--csv", type=str, default="data/multi_run_epoch_benchmark.csv")
+    parser.add_argument("--out-all", type=str,
+                        default="plots/multi_run_query_latency_all.png")
     parser.add_argument("--out-default", type=str,
                         default="plots/multi_run_query_latency_default.png")
     parser.add_argument("--out-large", type=str,
@@ -95,14 +100,26 @@ def main() -> None:
     epochs = sorted(by_epoch.keys())
     n_runs = len(by_epoch[epochs[0]]["server"])
 
+    out_all = REPO_ROOT / args.out_all
     out_default = REPO_ROOT / args.out_default
     out_large = REPO_ROOT / args.out_large
-    out_default.parent.mkdir(parents=True, exist_ok=True)
+    out_all.parent.mkdir(parents=True, exist_ok=True)
 
-    plot_pair(by_epoch, epochs, n_runs, "es_default",
-              "Elastic Search Query", out_default)
-    plot_pair(by_epoch, epochs, n_runs, "es_large",
-              "Elastic Search Query (compression 1000)", out_large)
+    plot_chart(by_epoch, epochs, n_runs, [
+        ("Approximate Query",                       "server",     "#2a9d8f"),
+        ("Elastic Search Query",                    "es_default", "#f28e2b"),
+        ("Elastic Search Query (compression 1000)", "es_large",   "#b07aa1"),
+    ], out_all)
+
+    plot_chart(by_epoch, epochs, n_runs, [
+        ("Approximate Query",    "server",     "#2a9d8f"),
+        ("Elastic Search Query", "es_default", "#f28e2b"),
+    ], out_default)
+
+    plot_chart(by_epoch, epochs, n_runs, [
+        ("Approximate Query",                       "server",   "#2a9d8f"),
+        ("Elastic Search Query (compression 1000)", "es_large", "#b07aa1"),
+    ], out_large)
 
 
 if __name__ == "__main__":
