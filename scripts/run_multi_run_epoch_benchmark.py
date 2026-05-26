@@ -331,6 +331,10 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--queries-dir", type=str, default="data/multi_run_epoch_benchmark_queries",
                         help="Directory for per-epoch JSON sidecars with raw query results.")
+    parser.add_argument("--max-pending-tasks", type=int, default=None,
+                        help="If set, pending pool is rolled up to this many tasks each epoch "
+                             "(remaining tasks are held in an untouched reserve and pulled in as "
+                             "earlier ones get assigned).")
     return parser.parse_args()
 
 
@@ -379,7 +383,15 @@ def run_single(
         )
 
         # Per-run task state.
-        pending_task_ids: List[str] = sorted(context["tasks"].keys())
+        all_task_ids: List[str] = sorted(context["tasks"].keys())
+        if args.max_pending_tasks is not None:
+            untouched_task_ids: List[str] = list(all_task_ids)
+            pending_task_ids: List[str] = []
+            while len(pending_task_ids) < args.max_pending_tasks and untouched_task_ids:
+                pending_task_ids.append(untouched_task_ids.pop(0))
+        else:
+            untouched_task_ids = []
+            pending_task_ids = list(all_task_ids)
         completed_task_ids: set[str] = set()
         running_tasks: Dict[str, object] = {}
 
@@ -428,6 +440,10 @@ def run_single(
             es_default_usage = dyn._extract_es_usage(es_default_json)
             es_large_usage = dyn._extract_es_usage(es_large_json)
 
+            # Warmup solve (not measured): equalizes lazy-import / page-cache / first-build
+            # costs so the three measured solves below are on equal footing.
+            _ = solver_pass(server_usage, assets, context, args, pending_task_ids)
+
             server_sr = solver_pass(server_usage, assets, context, args, pending_task_ids)
             es_default_sr = solver_pass(es_default_usage, assets, context, args, pending_task_ids)
             es_large_sr = solver_pass(es_large_usage, assets, context, args, pending_task_ids)
@@ -450,6 +466,9 @@ def run_single(
                 running_tasks = dict(active)
             running_tasks.update(new_running)
             pending_task_ids = list(server_sr.unassigned_task_ids)
+            if args.max_pending_tasks is not None:
+                while len(pending_task_ids) < args.max_pending_tasks and untouched_task_ids:
+                    pending_task_ids.append(untouched_task_ids.pop(0))
 
             if is_warmup:
                 continue

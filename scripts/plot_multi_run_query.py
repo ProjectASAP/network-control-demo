@@ -37,7 +37,9 @@ def _bar_with_err(ax, x, mean, std, label, color, bar_w):
     )
 
 
-def plot_chart(by_epoch, epochs, n_runs, series, out_path: Path) -> None:
+def plot_chart(by_epoch, epochs, n_runs, series, out_path: Path,
+               ylabel: str = "Query Time (ms)",
+               title_prefix: str = "Query Time Comparison") -> None:
     """`series` is a list of (label, csv_key, color) tuples."""
     x = np.arange(len(epochs))
     n = len(series)
@@ -51,12 +53,12 @@ def plot_chart(by_epoch, epochs, n_runs, series, out_path: Path) -> None:
         _bar_with_err(ax, x + off, mean, std, label, color, bar_w)
 
     ax.set_xlabel("Epoch", fontsize=LABEL_FS, labelpad=8)
-    ax.set_ylabel("Query Time (ms)", fontsize=LABEL_FS)
+    ax.set_ylabel(ylabel, fontsize=LABEL_FS)
     ax.set_yscale("log")
     ax.grid(axis="y", alpha=0.3, which="major")
     ax.tick_params(axis="both", labelsize=TICK_FS)
     ax.set_title(
-        f"Query Time Comparison\nApproximate VS Exact (mean ± std, n={n_runs} runs)",
+        f"{title_prefix}\nApproximate VS Exact (mean ± std, n={n_runs} runs)",
         fontsize=TITLE_FS,
         pad=14,
     )
@@ -85,6 +87,12 @@ def main() -> None:
                         default="plots/multi_run_query_latency_default.png")
     parser.add_argument("--out-large", type=str,
                         default="plots/multi_run_query_latency_large.png")
+    parser.add_argument("--out-solver-all", type=str,
+                        default="plots/multi_run_solver_latency_all.png")
+    parser.add_argument("--out-solver-default", type=str,
+                        default="plots/multi_run_solver_latency_default.png")
+    parser.add_argument("--out-solver-large", type=str,
+                        default="plots/multi_run_solver_latency_large.png")
     args = parser.parse_args()
 
     csv_path = REPO_ROOT / args.csv
@@ -96,6 +104,9 @@ def main() -> None:
             by_epoch[ep]["server"].append(float(r["server_query_ms"]))
             by_epoch[ep]["es_default"].append(float(r["es_default_query_ms"]))
             by_epoch[ep]["es_large"].append(float(r["es_large_query_ms"]))
+            by_epoch[ep]["server_solver"].append(float(r["server_solver_ms"]))
+            by_epoch[ep]["es_default_solver"].append(float(r["es_default_solver_ms"]))
+            by_epoch[ep]["es_large_solver"].append(float(r["es_large_solver_ms"]))
 
     epochs = sorted(by_epoch.keys())
     n_runs = len(by_epoch[epochs[0]]["server"])
@@ -120,6 +131,30 @@ def main() -> None:
         ("Approximate Query",                       "server",   "#2a9d8f"),
         ("Elastic Search Query (compression 1000)", "es_large", "#b07aa1"),
     ], out_large)
+
+    # Solver plots (same format, solver_ms columns).
+    out_solver_all = REPO_ROOT / args.out_solver_all
+    out_solver_default = REPO_ROOT / args.out_solver_default
+    out_solver_large = REPO_ROOT / args.out_solver_large
+
+    plot_chart(by_epoch, epochs, n_runs, [
+        ("Approximate Solver",                       "server_solver",     "#2a9d8f"),
+        ("Elastic Search Solver",                    "es_default_solver", "#f28e2b"),
+        ("Elastic Search Solver (compression 1000)", "es_large_solver",   "#b07aa1"),
+    ], out_solver_all,
+        ylabel="Solver Time (ms)", title_prefix="Solver Time Comparison")
+
+    plot_chart(by_epoch, epochs, n_runs, [
+        ("Approximate Solver",    "server_solver",     "#2a9d8f"),
+        ("Elastic Search Solver", "es_default_solver", "#f28e2b"),
+    ], out_solver_default,
+        ylabel="Solver Time (ms)", title_prefix="Solver Time Comparison")
+
+    plot_chart(by_epoch, epochs, n_runs, [
+        ("Approximate Solver",                       "server_solver",   "#2a9d8f"),
+        ("Elastic Search Solver (compression 1000)", "es_large_solver", "#b07aa1"),
+    ], out_solver_large,
+        ylabel="Solver Time (ms)", title_prefix="Solver Time Comparison")
 
 
 if __name__ == "__main__":
