@@ -214,6 +214,30 @@ async def active_tasks():
     return result
 
 
+@app.post("/generate")
+async def generate(assignments: list[dict]):
+    """Generate telemetry records from assignments without ingesting to backends."""
+    running_tasks = structure(assignments, list[RunningTask])
+    logger.debug(f"Generating records for assignments: {running_tasks}")
+
+    running_tasks_map: dict[str, RunningTask] = {}
+    if running_tasks:
+        running_tasks_map = {rt.task.task_id: rt for rt in running_tasks}
+        emulator.emulate_metrics(running_tasks=running_tasks_map)
+    else:
+        logger.warning("No running tasks provided for generation.")
+
+    records = list(emulator.create_metrics_records())
+
+    global global_epoch
+    global_epoch += 1
+    logger.info(
+        f"Advanced to epoch {global_epoch}. Generated {len(records)} records from {len(running_tasks_map)} running tasks."
+    )
+
+    return {"records": records, "epoch": global_epoch - 1}
+
+
 @app.post("/ingest")
 async def ingest(assignments: list[dict]):
     # Receive task assignments and update the emulator state.
@@ -428,6 +452,7 @@ class TaskMetricsEmulator:
     def create_task_metrics(self, task: Task) -> TaskMetrics:
         # Generate a full-duration timeseries for a new task deterministically based on task id.
         seed = int.from_bytes(task.task_id.encode(), "little", signed=False) % (2**32)
+        seed = (seed + SEED) % (2**32)
         rng = np.random.default_rng(seed)
 
         # Generated metrics share same random generator for reproducibility and temporal consistency across metrics for a given task, but differ across tasks.
@@ -579,8 +604,14 @@ if __name__ == "__main__":
     parser.add_argument("--es-ingest-log-path", type=str, default=None)
     parser.add_argument("--no-sketch-ingest", action='store_true')
     parser.add_argument("--no-es-ingest", action='store_true')
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Override the global random seed (default: 42).")
 
     args = parser.parse_args()
+
+    if args.seed is not None:
+        SEED = args.seed
+        _RNG = np.random.default_rng(SEED)
 
     # Start the FastAPI telemetry emulator.
     emulator = TaskMetricsEmulator.create_emulator(epoch_length_s=args.epoch_length_s, data_rate=args.data_rate)

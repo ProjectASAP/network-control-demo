@@ -536,9 +536,17 @@ def query_es_nodes(
     connect_timeout: float,
     read_timeout: float,
     epoch: int | None = None,
+    tdigest_compression: int | None = None,
 ) -> Tuple[dict, float]:
     headers = es_headers(api_key)
     url = f"{es_url}/{es_index}/_search"
+
+    def _pct_agg(field: str) -> dict:
+        spec: dict = {"field": field, "percents": [0, 50, 90, 100]}
+        if tdigest_compression is not None:
+            spec["tdigest"] = {"compression": tdigest_compression}
+        return {"percentiles": spec}
+
     results: Dict[str, Dict[str, object]] = {}
     t0 = time.perf_counter()
     for node in nodes:
@@ -557,9 +565,9 @@ def query_es_nodes(
             "size": 0,
             "query": query,
             "aggs": {
-                "cpu_pct": {"percentiles": {"field": "cpu", "percents": [0, 50, 90, 100]}},
-                "mem_pct": {"percentiles": {"field": "mem", "percents": [0, 50, 90, 100]}},
-                "net_pct": {"percentiles": {"field": "net", "percents": [0, 50, 90, 100]}},
+                "cpu_pct": _pct_agg("cpu"),
+                "mem_pct": _pct_agg("mem"),
+                "net_pct": _pct_agg("net"),
                 "cpu_sum": {"sum": {"field": "cpu"}},
                 "mem_sum": {"sum": {"field": "mem"}},
                 "net_sum": {"sum": {"field": "net"}},
