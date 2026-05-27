@@ -528,6 +528,22 @@ def query_server_batch(
     return resp.json(), elapsed_ms
 
 
+def clear_es_cache(
+    es_url: str,
+    es_index: str,
+    api_key: str | None,
+    connect_timeout: float,
+    read_timeout: float,
+) -> None:
+    """Drop the request, query, and fielddata caches for `es_index`."""
+    headers = es_headers(api_key)
+    url = f"{es_url}/{es_index}/_cache/clear"
+    resp = requests.post(
+        url, headers=headers, timeout=(connect_timeout, read_timeout)
+    )
+    resp.raise_for_status()
+
+
 def query_es_nodes(
     es_url: str,
     es_index: str,
@@ -537,9 +553,12 @@ def query_es_nodes(
     read_timeout: float,
     epoch: int | None = None,
     tdigest_compression: int | None = None,
+    request_cache: bool = True,
 ) -> Tuple[dict, float]:
     headers = es_headers(api_key)
     url = f"{es_url}/{es_index}/_search"
+    if not request_cache:
+        url = f"{url}?request_cache=false"
 
     def _pct_agg(field: str) -> dict:
         spec: dict = {"field": field, "percents": [0, 50, 90, 100]}

@@ -2,12 +2,10 @@
 """ES query / (query + solver) ratio across ingest row counts.
 
 Reads:
-  - data/es_ingest_query_sweep_summary.csv   -> per-rows query latency (min/p50/max)
-  - data/solver_p50_30tasks.csv              -> solver p50 baseline (30 tasks)
+  - data/es_ingest_query_sweep_summary.csv -> per-rows query and solver latency
 
-Output: single-line ratio plot, x=rows (log), y=query_p50 / (query_p50 + solver_p50).
-Error bars use min/max query latencies combined with the fixed solver p50.
-Plot style mirrors scripts/plot_multi_run_query_ratio.py for consistency.
+Output: bar plot, x=rows (log spacing), y=query_p50 / (query_p50 + solver_p50).
+Error bars use min/max query latencies combined with the per-row-count solver p50.
 """
 
 from __future__ import annotations
@@ -38,27 +36,16 @@ def _read_sweep_summary(path: Path) -> List[Dict[str, float]]:
                 "query_p50": float(r["median_query_ms"]),
                 "query_min": float(r["min_query_ms"]),
                 "query_max": float(r["max_query_ms"]),
+                "solver_p50": float(r["median_solver_ms"]),
             })
     rows.sort(key=lambda x: x["rows"])
     return rows
-
-
-def _read_solver_p50(path: Path) -> float:
-    """Pull the `p50` row from the summary block written by run_solver_p50_30tasks.py."""
-    with open(path) as f:
-        for line in f:
-            parts = [p.strip() for p in line.split(",")]
-            if parts and parts[0] == "p50":
-                return float(parts[1])
-    raise RuntimeError(f"No p50 row found in {path}")
 
 
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--summary-csv", type=str,
                    default="data/es_ingest_query_sweep_summary.csv")
-    p.add_argument("--solver-csv", type=str,
-                   default="data/solver_p50_30tasks.csv")
     p.add_argument("--out", type=str,
                    default="plots/es_sweep_query_ratio.png")
     p.add_argument("--task-count", type=int, default=30,
@@ -66,16 +53,16 @@ def main() -> None:
     args = p.parse_args()
 
     sweep = _read_sweep_summary(REPO_ROOT / args.summary_csv)
-    solver_p50 = _read_solver_p50(REPO_ROOT / args.solver_csv)
 
     rows = np.array([s["rows"] for s in sweep])
     q_p50 = np.array([s["query_p50"] for s in sweep])
     q_min = np.array([s["query_min"] for s in sweep])
     q_max = np.array([s["query_max"] for s in sweep])
+    s_p50 = np.array([s["solver_p50"] for s in sweep])
 
-    ratio_p50 = q_p50 / (q_p50 + solver_p50)
-    ratio_min = q_min / (q_min + solver_p50)
-    ratio_max = q_max / (q_max + solver_p50)
+    ratio_p50 = q_p50 / (q_p50 + s_p50)
+    ratio_min = q_min / (q_min + s_p50)
+    ratio_max = q_max / (q_max + s_p50)
     err_lo = ratio_p50 - ratio_min
     err_hi = ratio_max - ratio_p50
 
@@ -102,8 +89,8 @@ def main() -> None:
     ax.tick_params(axis="both", labelsize=TICK_FS)
     ax.set_title(
         "Query Share of Query+Solver Time\n"
-        f"Elastic Search (solver p50 = {solver_p50:.0f} ms, "
-        f"{args.task_count} tasks)",
+        f"Elastic Search ({args.task_count} tasks, "
+        f"solver p50 range = {s_p50.min():.0f}-{s_p50.max():.0f} ms)",
         fontsize=TITLE_FS,
         pad=14,
     )
@@ -123,7 +110,7 @@ def main() -> None:
     plt.savefig(out, dpi=220, bbox_inches="tight", bbox_extra_artists=[legend])
     plt.close(fig)
     print(f"Saved: {out}")
-    print(f"solver_p50_ms = {solver_p50:.2f}")
+    print(f"solver_p50_ms per rows = {[f'{v:.1f}' for v in s_p50]}")
     print(f"ratios (p50): {[f'{r:.3f}' for r in ratio_p50]}")
 
 
