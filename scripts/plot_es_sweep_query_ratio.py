@@ -60,9 +60,9 @@ def main() -> None:
     q_max = np.array([s["query_max"] for s in sweep])
     s_p50 = np.array([s["solver_p50"] for s in sweep])
 
-    ratio_p50 = q_p50 / (q_p50 + s_p50)
-    ratio_min = q_min / (q_min + s_p50)
-    ratio_max = q_max / (q_max + s_p50)
+    ratio_p50 = q_p50 / (q_p50 + s_p50) * 100
+    ratio_min = q_min / (q_min + s_p50) * 100
+    ratio_max = q_max / (q_max + s_p50) * 100
     err_lo = ratio_p50 - ratio_min
     err_hi = ratio_max - ratio_p50
 
@@ -83,8 +83,8 @@ def main() -> None:
     )
 
     ax.set_xlabel("Rows Ingested", fontsize=LABEL_FS, labelpad=8)
-    ax.set_ylabel("Query / (Query + Solver)", fontsize=LABEL_FS)
-    ax.set_ylim(0, 1)
+    ax.set_ylabel("Query / (Query + Solver) (%)", fontsize=LABEL_FS)
+    ax.set_ylim(0, 100)
     ax.grid(axis="y", alpha=0.3)
     ax.tick_params(axis="both", labelsize=TICK_FS)
     ax.set_title(
@@ -111,7 +111,7 @@ def main() -> None:
     plt.close(fig)
     print(f"Saved: {out}")
     print(f"solver_p50_ms per rows = {[f'{v:.1f}' for v in s_p50]}")
-    print(f"ratios (p50): {[f'{r:.3f}' for r in ratio_p50]}")
+    print(f"ratios (p50, %): {[f'{r:.1f}' for r in ratio_p50]}")
 
 
 if __name__ == "__main__":

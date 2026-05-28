@@ -55,7 +55,7 @@ def plot_chart(by_epoch, epochs, n_runs, series, out_path: Path) -> None:
         for e in epochs:
             q = np.array(by_epoch[e][f"{prefix}_query_ms"], dtype=float)
             s = np.array(by_epoch[e][f"{prefix}_solver_ms"], dtype=float)
-            ratio = q / (q + s)
+            ratio = q / (q + s) * 100
             ratios_by_epoch.append(ratio)
         mean = np.array([r.mean() for r in ratios_by_epoch])
         std = np.array(
@@ -64,8 +64,8 @@ def plot_chart(by_epoch, epochs, n_runs, series, out_path: Path) -> None:
         _bar_with_err(ax, x + off, mean, std, label, color, bar_w)
 
     ax.set_xlabel("Epoch", fontsize=LABEL_FS, labelpad=8)
-    ax.set_ylabel("Query / (Query + Solver)", fontsize=LABEL_FS)
-    ax.set_ylim(0, 1)
+    ax.set_ylabel("Query / (Query + Solver) (%)", fontsize=LABEL_FS)
+    ax.set_ylim(0, 100)
     ax.grid(axis="y", alpha=0.3, which="major")
     ax.tick_params(axis="both", labelsize=TICK_FS)
     ax.set_title(
