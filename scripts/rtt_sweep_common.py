@@ -10,7 +10,7 @@ import signal
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Tuple
 
 import requests
 
@@ -583,6 +583,126 @@ def query_es_nodes(
         results[node] = resp.json()
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
     return results, elapsed_ms
+
+
+def query_server_batch_custom(
+    server_url: str,
+    nodes: List[str],
+    connect_timeout: float,
+    read_timeout: float,
+    *,
+    aggs: List[str],
+    percents: List[float] | None = None,
+    fields: List[str] | None = None,
+) -> Tuple[dict, float, dict[str, Any]]:
+    url = f"{server_url}/cluster-metrics/_batch"
+    payload: dict[str, Any] = {
+        "keys": nodes,
+        "fields": fields or ["cpu_cores", "memory_gb", "network_mbps"],
+        "aggs": aggs,
+    }
+    if "percentiles" in aggs:
+        payload["percents"] = percents or [0, 50, 90, 100]
+    t0 = time.perf_counter()
+    resp = requests.post(
+        url,
+        json=payload,
+        timeout=(connect_timeout, read_timeout),
+    )
+    resp.raise_for_status()
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+    body = resp.json()
+    metadata = {
+        "request_payload": payload,
+        "x_server_timing_ms": resp.headers.get("X-Server-Timing"),
+        "body_timing": body.get("_timing"),
+    }
+    return body, elapsed_ms, metadata
+
+
+def query_es_nodes_custom(
+    es_url: str,
+    es_index: str,
+    api_key: str | None,
+    nodes: List[str],
+    connect_timeout: float,
+    read_timeout: float,
+    *,
+    aggs: List[str],
+    percents: List[float] | None = None,
+    fields: List[str] | None = None,
+    epoch: int | None = None,
+    tdigest_compression: int | None = None,
+    request_cache: bool | None = None,
+) -> Tuple[dict, float, dict[str, Any]]:
+    headers = es_headers(api_key)
+    url = f"{es_url}/{es_index}/_search"
+    metric_fields = fields or ["cpu", "mem", "net"]
+    pct_values = percents or [0, 50, 90, 100]
+    results: Dict[str, Dict[str, object]] = {}
+    request_payloads: Dict[str, dict] = {}
+    per_node_metadata: Dict[str, dict] = {}
+
+    def _pct_agg(field: str) -> dict:
+        spec: dict = {"field": field, "percents": pct_values}
+        if tdigest_compression is not None:
+            spec["tdigest"] = {"compression": tdigest_compression}
+        return {"percentiles": spec}
+
+    t0 = time.perf_counter()
+    for node in nodes:
+        if epoch is None:
+            query = {"term": {"node": node}}
+        else:
+            query = {
+                "bool": {
+                    "filter": [
+                        {"term": {"node": node}},
+                        {"term": {"epoch": epoch}},
+                    ]
+                }
+            }
+        payload_aggs: Dict[str, dict] = {}
+        if "percentiles" in aggs:
+            for metric_field in metric_fields:
+                payload_aggs[f"{metric_field}_pct"] = _pct_agg(metric_field)
+        if "sum" in aggs:
+            for metric_field in metric_fields:
+                payload_aggs[f"{metric_field}_sum"] = {"sum": {"field": metric_field}}
+        payload = {
+            "size": 0,
+            "query": query,
+            "aggs": payload_aggs,
+        }
+        params = None
+        if request_cache is not None:
+            params = {"request_cache": str(request_cache).lower()}
+        request_payloads[node] = payload
+        node_t0 = time.perf_counter()
+        resp = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            params=params,
+            timeout=(connect_timeout, read_timeout),
+        )
+        resp.raise_for_status()
+        node_elapsed_ms = (time.perf_counter() - node_t0) * 1000.0
+        body = resp.json()
+        results[node] = body
+        per_node_metadata[node] = {
+            "elapsed_ms": node_elapsed_ms,
+            "took_ms": body.get("took"),
+            "request_payload": payload,
+            "request_cache": request_cache,
+        }
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+    metadata = {
+        "request_cache": request_cache,
+        "request_payloads": request_payloads,
+        "per_node": per_node_metadata,
+    }
+    return results, elapsed_ms, metadata
 
 
 # ---------------------------------------------------------------------------
