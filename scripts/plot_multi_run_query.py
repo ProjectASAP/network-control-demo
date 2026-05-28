@@ -25,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 TITLE_FS = 17
 LABEL_FS = 15
 TICK_FS = 13
-LEGEND_FS = 13
+LEGEND_FS = 12
 
 
 def _bar_with_err(ax, x, mean, std, label, color, bar_w):
@@ -68,7 +68,7 @@ def plot_chart(by_epoch, epochs, n_runs, series, out_path: Path,
     legend = ax.legend(
         loc="upper center",
         bbox_to_anchor=(0.5, -0.22),
-        ncol=1,
+        ncol=3,
         fontsize=LEGEND_FS,
         frameon=False,
     )
