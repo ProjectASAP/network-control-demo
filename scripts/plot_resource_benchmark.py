@@ -12,10 +12,12 @@ clean, non-redundant figure set into plots/resource/:
                               (ES ingestion is compression-independent, so its
                                default/large variants are identical by nature)
 
-  Sketch-server-only absolute footprint (linear y from 0, value labels,
-  cumulative-rows annotation) -- "adding a sketch server costs little":
-    sketch_cpu_query.png / sketch_cpu_ingestion.png
-    sketch_memory_query.png / sketch_memory_ingestion.png
+  Sketch-server-only absolute footprint -- "adding a sketch server costs little":
+    sketch_query.png / sketch_ingestion.png -- per-context CPU+RSS stacked pair
+    sketch_cpu.png    -- horizontal pair: ingestion CPU | query CPU (log y)
+    sketch_memory.png -- horizontal pair: memory after ingestion | during query
+    sketch_resource.png -- 1x2 combined: CPU (log) | memory, ingestion vs query
+                           bars grouped per epoch
 
 ES RSS is intentionally NOT plotted as a memory baseline: it is just ES's fixed
 pre-allocated JVM heap (-Xms=-Xmx), so it reflects provisioning, not usage.
@@ -210,11 +212,13 @@ def plot_headline(rows: List[dict], col: str, series: List[Tuple[str, str, str]]
 # Sketch-server-only absolute footprint (the meaningful resource story)
 # ---------------------------------------------------------------------------
 
-def _draw_sketch_metric(ax, rows: List[dict], col: str, ylabel: str, title: str) -> int:
+def _draw_sketch_metric(ax, rows: List[dict], col: str, ylabel: str, title: str,
+                        font_scale: float = 1.0, log_y: bool = False) -> int:
     """Draw one sketch-server-only metric vs epoch on `ax`. Returns n_runs.
 
-    Absolute value, linear axis from 0; x tick labels carry the cumulative
-    ingested rows so the "stays tiny/bounded as data grows" point is explicit.
+    Absolute value; x tick labels carry the cumulative ingested rows so the
+    "stays tiny/bounded as data grows" point is explicit. Linear axis from 0
+    by default, or log axis with `log_y=True`.
     """
     srv = [r for r in rows if r["backend"] == "server"]
     if not srv:
@@ -232,18 +236,28 @@ def _draw_sketch_metric(ax, rows: List[dict], col: str, ylabel: str, title: str)
 
     ax.bar(epochs, means, 0.6, yerr=stds, color=SERVER_COLOR, capsize=3,
            edgecolor="black", linewidth=0.4, error_kw={"linewidth": 1, "ecolor": "black"})
-    ymax = max(m + s for m, s in zip(means, stds)) * 1.18
-    pad = ymax * 0.02
-    for e, m, s in zip(epochs, means, stds):
-        ax.text(e, m + s + pad, f"{m:.1f}", ha="center", va="bottom", fontsize=9)
-    ax.set_ylim(0, ymax)
-    ax.set_ylabel(ylabel, fontsize=BAR_LABEL_FS)
-    ax.set_xlabel("Epoch", fontsize=BAR_LABEL_FS, labelpad=6)
+    if log_y:
+        ax.set_yscale("log")
+        ymax = max(m + s for m, s in zip(means, stds)) * 3.0
+        ymin = max(min(m for m in means if m > 0) * 0.5, 1e-3)
+        ax.set_ylim(ymin, ymax)
+        for e, m, s in zip(epochs, means, stds):
+            ax.text(e, (m + s) * 1.10, f"{m:.1f}", ha="center", va="bottom",
+                    fontsize=9 * font_scale)
+    else:
+        ymax = max(m + s for m, s in zip(means, stds)) * 1.18
+        pad = ymax * 0.02
+        for e, m, s in zip(epochs, means, stds):
+            ax.text(e, m + s + pad, f"{m:.1f}", ha="center", va="bottom",
+                    fontsize=9 * font_scale)
+        ax.set_ylim(0, ymax)
+    ax.set_ylabel(ylabel, fontsize=BAR_LABEL_FS * font_scale)
+    ax.set_xlabel("Epoch", fontsize=BAR_LABEL_FS * font_scale, labelpad=6)
     ax.set_xticks(epochs)
-    ax.set_xticklabels([str(e) for e in epochs], fontsize=BAR_TICK_FS)
-    ax.tick_params(axis="y", labelsize=BAR_TICK_FS)
-    ax.set_title(title, fontsize=BAR_TITLE_FS - 2, pad=8)
-    ax.grid(axis="y", alpha=0.3)
+    ax.set_xticklabels([str(e) for e in epochs], fontsize=BAR_TICK_FS * font_scale)
+    ax.tick_params(axis="y", labelsize=BAR_TICK_FS * font_scale)
+    ax.set_title(title, fontsize=(BAR_TITLE_FS - 2) * font_scale, pad=8)
+    ax.grid(axis="y", alpha=0.3, which="major")
     return n_runs
 
 
@@ -266,6 +280,168 @@ def plot_sketch_pair(top: dict, bottom: dict, suptitle: str, out_path: Path) -> 
     print(f"[plot] wrote {out_path}")
 
 
+INGEST_COLOR = "#264653"
+
+
+def _draw_sketch_two_series(ax, ingest: dict, query: dict, ylabel: str,
+                            title: str, font_scale: float = 1.0,
+                            log_y: bool = False, show_legend: bool = True) -> int:
+    """Grouped sketch-server-only bars: one bar for ingestion, one for query
+    per epoch. Both inputs are dicts with keys `rows` and `col`. Returns n_runs.
+    """
+    def collect(rows: List[dict], col: str) -> Dict[int, List[float]]:
+        d: Dict[int, List[float]] = defaultdict(list)
+        for r in rows:
+            if r["backend"] != "server":
+                continue
+            v = _fnum(r.get(col, ""))
+            if not math.isnan(v):
+                d[int(r["epoch"])].append(v)
+        return d
+
+    ing_by = collect(ingest["rows"], ingest["col"])
+    qry_by = collect(query["rows"], query["col"])
+    epochs = sorted(set(ing_by) | set(qry_by))
+    if not epochs:
+        ax.set_visible(False)
+        return 0
+
+    def series(by: Dict[int, List[float]]):
+        means = np.array([float(np.mean(by[e])) if by.get(e) else np.nan for e in epochs])
+        stds = np.array([float(np.std(by[e], ddof=1)) if len(by.get(e, [])) > 1 else 0.0
+                         for e in epochs])
+        return means, stds
+
+    ing_mean, ing_std = series(ing_by)
+    qry_mean, qry_std = series(qry_by)
+    n_runs = max(len(ing_by[epochs[0]]) if ing_by.get(epochs[0]) else 0,
+                 len(qry_by[epochs[0]]) if qry_by.get(epochs[0]) else 0)
+
+    x = np.arange(len(epochs))
+    bar_w = 0.32
+    gap = 0.04  # small gap between the two bars within an epoch group
+    off = bar_w / 2 + gap / 2
+    ax.bar(x - off, ing_mean, bar_w, yerr=ing_std, label="Ingestion",
+           color=INGEST_COLOR, capsize=3, edgecolor="black", linewidth=0.4,
+           error_kw={"linewidth": 1, "ecolor": "black"})
+    ax.bar(x + off, qry_mean, bar_w, yerr=qry_std, label="Query",
+           color=SERVER_COLOR, capsize=3, edgecolor="black", linewidth=0.4,
+           error_kw={"linewidth": 1, "ecolor": "black"})
+
+    # Value labels are rotated vertical so adjacent ingestion / query labels in
+    # the same epoch group never overlap horizontally.
+    label_fs = 9 * font_scale
+
+    def label_above(xs, means, stds, mult, pad):
+        for xi, m, s in zip(xs, means, stds):
+            if not np.isnan(m):
+                ax.text(xi, (m + s) * mult if log_y else m + s + pad,
+                        f"{m:.1f}", ha="center", va="bottom", rotation=90,
+                        fontsize=label_fs)
+
+    if log_y:
+        ax.set_yscale("log")
+        positives = [v for v in np.concatenate([ing_mean, qry_mean]) if v > 0]
+        top = max((m + s) for m, s in zip(np.concatenate([ing_mean, qry_mean]),
+                                            np.concatenate([ing_std, qry_std]))
+                  if not np.isnan(m))
+        ax.set_ylim(min(positives) * 0.4, top * 8.0)
+        label_above(x - off, ing_mean, ing_std, 1.15, 0)
+        label_above(x + off, qry_mean, qry_std, 1.15, 0)
+    else:
+        top = np.nanmax(np.concatenate([ing_mean + ing_std, qry_mean + qry_std]))
+        ax.set_ylim(0, top * 1.30)
+        pad = top * 0.02
+        label_above(x - off, ing_mean, ing_std, 0, pad)
+        label_above(x + off, qry_mean, qry_std, 0, pad)
+
+    ax.set_ylabel(ylabel, fontsize=BAR_LABEL_FS * font_scale)
+    ax.set_xlabel("Epoch", fontsize=BAR_LABEL_FS * font_scale, labelpad=6)
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(e) for e in epochs], fontsize=BAR_TICK_FS * font_scale)
+    ax.tick_params(axis="y", labelsize=BAR_TICK_FS * font_scale)
+    ax.set_title(title, fontsize=(BAR_TITLE_FS - 2) * min(font_scale, 2.2), pad=12)
+    ax.grid(axis="y", alpha=0.3, which="major")
+    if show_legend:
+        ax.legend(fontsize=BAR_LEGEND_FS * font_scale, frameon=False, loc="best")
+    return n_runs
+
+
+def plot_sketch_resource(ingest_cpu: dict, query_cpu: dict,
+                         ingest_mem: dict, query_mem: dict,
+                         suptitle: str, out_path: Path) -> None:
+    """Two-panel sketch-server-only figure: CPU (log y) on the left, memory on
+    the right; each panel groups ingestion vs query bars per epoch.
+    """
+    font_scale = 2.0
+    fig, axes = plt.subplots(2, 1, figsize=(16, 13))
+    n_top = _draw_sketch_two_series(
+        axes[0], ingest=ingest_cpu, query=query_cpu,
+        ylabel="CPU time (all threads, ms)", title="CPU",
+        font_scale=font_scale, log_y=True, show_legend=False)
+    n_bot = _draw_sketch_two_series(
+        axes[1], ingest=ingest_mem, query=query_mem,
+        ylabel="Whole-process RSS (MB)", title="Memory",
+        font_scale=font_scale, log_y=False, show_legend=False)
+    n = max(n_top, n_bot)
+    fig.suptitle(f"{suptitle}  (mean ± std, n={n} runs)",
+                 fontsize=BAR_TITLE_FS * font_scale, y=0.99)
+    # Single shared legend centered below both panels.
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, fontsize=BAR_LEGEND_FS * font_scale,
+               frameon=False, loc="lower center", ncol=2,
+               bbox_to_anchor=(0.5, -0.01))
+    fig.tight_layout(rect=(0, 0.04, 1, 0.96))
+    plt.savefig(out_path, dpi=220, bbox_inches="tight", pad_inches=0.3)
+    plt.close(fig)
+    print(f"[plot] wrote {out_path}")
+
+
+def plot_sketch_horizontal_pair(left: dict, right: dict,
+                                suptitle: str, out_path: Path,
+                                log_y: bool = False) -> None:
+    """Sketch-server-only 1x2 footprint: two panels side by side.
+
+    Each panel spec is a dict with keys rows, col, ylabel, title.
+    """
+    font_scale = 2.0
+    fig, axes = plt.subplots(1, 2, figsize=(26, 10))
+    n = 0
+    for ax, spec in ((axes[0], left), (axes[1], right)):
+        n = _draw_sketch_metric(ax, font_scale=font_scale, log_y=log_y, **spec) or n
+    fig.suptitle(f"{suptitle}  (mean ± std, n={n} runs)",
+                 fontsize=BAR_TITLE_FS * font_scale)
+    fig.tight_layout()
+    fig.subplots_adjust(wspace=0.28)
+    plt.savefig(out_path, dpi=220, bbox_inches="tight", pad_inches=0.3)
+    plt.close(fig)
+    print(f"[plot] wrote {out_path}")
+
+
+def plot_sketch_quad(top_left: dict, top_right: dict,
+                     bottom_left: dict, bottom_right: dict,
+                     suptitle: str, out_path: Path) -> None:
+    """Sketch-server-only 2x2 footprint: CPU on top row, memory on bottom row;
+    ingestion in the left column, query in the right column.
+
+    Each panel spec is a dict with keys rows, col, ylabel, title.
+    """
+    font_scale = 2.0
+    fig, axes = plt.subplots(2, 2, figsize=(26, 17))
+    panels = ((axes[0, 0], top_left), (axes[0, 1], top_right),
+              (axes[1, 0], bottom_left), (axes[1, 1], bottom_right))
+    n = 0
+    for ax, spec in panels:
+        n = _draw_sketch_metric(ax, font_scale=font_scale, **spec) or n
+    fig.suptitle(f"{suptitle}  (mean ± std, n={n} runs)",
+                 fontsize=BAR_TITLE_FS * font_scale, y=0.995)
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    fig.subplots_adjust(wspace=0.28, hspace=0.42)
+    plt.savefig(out_path, dpi=220, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[plot] wrote {out_path}")
+
+
 # ---------------------------------------------------------------------------
 # Expected output set (used to prune stale files the script no longer produces)
 # ---------------------------------------------------------------------------
@@ -274,7 +450,8 @@ EXPECTED_STEMS = (
     ["query_cpu_headline", "ingestion_cpu_headline"]
     + [f"query_cpu_bars_{v}" for v in ("all", "default", "large")]
     + [f"ingestion_cpu_bars_{v}" for v in ("all", "default", "large")]
-    + ["sketch_query", "sketch_ingestion"]
+    + ["sketch_query", "sketch_ingestion", "sketch_cpu", "sketch_memory",
+       "sketch_resource"]
 )
 
 
@@ -347,6 +524,38 @@ def main() -> None:
             bottom={"rows": rows, "col": "rss_idle_mb",
                     "ylabel": "Whole-process RSS (MB)", "title": "Memory after ingestion"},
             suptitle="Approximate Layer resource usage during ingestion", out_path=out_dir / "sketch_ingestion.png")
+
+    # --- combined horizontal views: one figure for CPU (log scale), one for memory ---
+    if ing_rows:
+        plot_sketch_horizontal_pair(
+            left={"rows": ing_rows, "col": "ingest_cpu_ms",
+                  "ylabel": "Ingestion CPU time per epoch (all threads, ms)",
+                  "title": "CPU during ingestion"},
+            right={"rows": rows, "col": "cpu_per_query_ms",
+                   "ylabel": "CPU time per query (all threads, ms)",
+                   "title": "CPU during query"},
+            suptitle="Approximate Layer CPU usage",
+            out_path=out_dir / "sketch_cpu.png", log_y=True)
+    plot_sketch_horizontal_pair(
+        left={"rows": rows, "col": "rss_idle_mb",
+              "ylabel": "Whole-process RSS (MB)",
+              "title": "Memory after ingestion"},
+        right={"rows": rows, "col": "rss_mean_mb",
+               "ylabel": "Whole-process RSS (MB)",
+               "title": "Memory during query"},
+        suptitle="Approximate Layer memory usage",
+        out_path=out_dir / "sketch_memory.png")
+
+    # --- combined two-panel resource figure: CPU (log) | memory, each with
+    #     ingestion vs query bars grouped per epoch ---
+    if ing_rows:
+        plot_sketch_resource(
+            ingest_cpu={"rows": ing_rows, "col": "ingest_cpu_ms"},
+            query_cpu={"rows": rows, "col": "cpu_per_query_ms"},
+            ingest_mem={"rows": rows, "col": "rss_idle_mb"},
+            query_mem={"rows": rows, "col": "rss_mean_mb"},
+            suptitle="Approximate Layer resource usage",
+            out_path=out_dir / "sketch_resource.png")
 
     if not args.no_prune:
         prune_stale(out_dir)
