@@ -127,7 +127,7 @@ def query_server_batch(
     payload = {
         "keys": task_ids,
         "fields": metrics,
-        "aggs": ["percentiles"],
+        "aggs": ["percentiles", "avg"],
         "percents": percentiles,
     }
     t0 = time.perf_counter()
@@ -168,7 +168,9 @@ def query_es_tasks(
 
     aggs = {}
     for metric in metrics:
-        aggs[metric] = {"percentiles": {"field": metric, "percents": percentiles, "tdigest": {"compression": 1000}}}
+        # use distinct agg names so we can request multiple agg types for the same field
+        aggs[f"{metric}_percentiles"] = {"percentiles": {"field": metric, "percents": percentiles, "tdigest": {"compression": 100}}}
+        aggs[f"{metric}_avg"] = {"avg": {"field": metric}}
 
     for tid in tasks:
         payload = {
@@ -229,17 +231,22 @@ def _normalize_es_batch_result(
 ) -> dict[str, object]:
     aggregations = response.get("aggregations", {}) if isinstance(response, dict) else {}
     normalized_percentiles: dict[str, dict[str, float | None]] = {}
+    normalized_averages: dict[str, float | None] = {}
 
     for metric in metrics:
-        metric_values = _extract_percentile_values(aggregations.get(metric, {}))
+        metric_values = _extract_percentile_values(aggregations.get(f"{metric}_percentiles", {}))
         normalized_percentiles[metric] = {
             f"{percentile}": _pick_percentile(metric_values, percentile)
             for percentile in percentiles
         }
+        # extract avg aggregation if present
+        avg_val = _get_agg_value(aggregations, f"{metric}_avg")
+        normalized_averages[metric] = avg_val
 
     return {
         "key": task_id,
         "percentiles": normalized_percentiles,
+        "avg": normalized_averages,
     }
 
 

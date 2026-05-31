@@ -156,6 +156,11 @@ def update_task_specs(
                 new_cpu = determine_new_estimate_from_quantiles(quantiles.get("cpu_cores", {}), task_spec.initial_cpu, task_max_caps["cpu"])
                 new_memory = determine_new_estimate_from_quantiles(quantiles.get("memory_gb", {}), task_spec.initial_memory, task_max_caps["memory"])
 
+                # If percentiles do not return a value (e.g., keeps existing estimate), try to use the average as a fallback if available.
+                averages = record.get("avg", {}) if isinstance(record.get("avg", {}), dict) else {}
+                new_cpu = averages.get("cpu_cores", task_spec.initial_cpu) if new_cpu == task_spec.initial_cpu else new_cpu # type: ignore
+                new_memory = averages.get("memory_gb", task_spec.initial_memory) if new_memory == task_spec.initial_memory else new_memory # type: ignore
+
                 logger.debug(
                     f"Updating task {task_id} specs: CPU {task_spec.initial_cpu:.2f} -> {new_cpu:.2f}, Memory {task_spec.initial_memory:.2f} -> {new_memory:.2f}"
                 )
@@ -478,6 +483,7 @@ def assign_tasks(args: AppConfig):
                         client,
                         "/ingest",
                         running_tasks_payload,
+                        retries=1,
                     )
                     logger.debug(
                         "Pushed {} assignments to emulator before next task arrival",

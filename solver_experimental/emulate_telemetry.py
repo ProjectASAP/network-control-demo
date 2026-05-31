@@ -608,11 +608,18 @@ if __name__ == "__main__":
     parser.add_argument("--es-ingest-log-path", type=str, default=None)
     parser.add_argument("--no-sketch-ingest", action='store_true')
     parser.add_argument("--no-es-ingest", action='store_true')
+    parser.add_argument("--node-path", type=str, default=None)
+    parser.add_argument("--edge-path", type=str, default=None)
 
     args = parser.parse_args()
 
     # Start the FastAPI telemetry emulator.
-    emulator = TaskMetricsEmulator.create_emulator(epoch_length_s=args.epoch_length_s, data_rate=args.data_rate)
+    emulator = TaskMetricsEmulator.create_emulator(
+        node_path=args.node_path or "dummy_data/nodes.jsonl", 
+        edge_path=args.edge_path or "dummy_data/edges.jsonl",
+        epoch_length_s=args.epoch_length_s, 
+        data_rate=args.data_rate
+    )
 
     EPOCH_LENGTH_S = args.epoch_length_s
 
