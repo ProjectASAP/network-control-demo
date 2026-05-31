@@ -97,7 +97,7 @@ async fn root_handler(State(state): State<AppState>) -> Json<RootResponse<'stati
         .unwrap_or_else(|| "cluster-metrics".to_string());
     let search_path = state.runtime_config.search_path_for(&default_index);
     Json(RootResponse {
-        message: "Portable single-node metrics server. Supports local percentiles and sum aggregations over configured keys; unsupported features are either forwarded upstream or rejected based on runtime config.",
+        message: "Portable single-node metrics server. Supports local percentiles, sum, and avg aggregations over configured keys; unsupported features are either forwarded upstream or rejected based on runtime config.",
         examples: [
             Box::leak(
                 format!(
@@ -107,7 +107,7 @@ async fn root_handler(State(state): State<AppState>) -> Json<RootResponse<'stati
             ),
             Box::leak(
                 format!(
-                    "POST {search_path} {{\"size\":0,\"query\":{{\"bool\":{{\"filter\":[{{\"term\":{{\"cluster\":\"N001\"}}}}]}}}},\"aggs\":{{\"mem_sum\":{{\"sum\":{{\"field\":\"memory_gb\"}}}}}}}}"
+                    "POST {search_path} {{\"size\":0,\"query\":{{\"bool\":{{\"filter\":[{{\"term\":{{\"cluster\":\"N001\"}}}}]}}}},\"aggs\":{{\"mem_avg\":{{\"avg\":{{\"field\":\"memory_gb\"}}}}}}}}"
                 )
                 .into_boxed_str(),
             ),
@@ -121,7 +121,7 @@ async fn healthz_handler(State(state): State<AppState>) -> Json<Value> {
         "status": "ok",
         "config_loaded": true,
         "upstream_enabled": state.runtime_config.is_upstream_enabled(),
-        "registered_aggregations": ["percentiles", "sum"],
+        "registered_aggregations": ["percentiles", "sum", "avg"],
     }))
 }
 
@@ -765,6 +765,7 @@ async fn batch_query_handler(
                 key: key.clone(),
                 percentiles: None,
                 sum: None,
+                avg: None,
             };
             let context = super::types::QueryContext {
                 index_name: Some(index_name),
@@ -832,6 +833,31 @@ async fn batch_query_handler(
                         }
                         if !field_sum.is_empty() {
                             result.sum = Some(field_sum);
+                        }
+                    }
+                    "avg" => {
+                        let mut field_avg = HashMap::new();
+                        for field in fields.iter() {
+                            let plan = super::types::LocalAggregationPlan {
+                                name: field.clone(),
+                                kind: super::types::AggregationKind::Avg(
+                                    super::types::AvgAggregation {
+                                        field: field.clone(),
+                                    },
+                                ),
+                            };
+                            if let Some(value) =
+                                state
+                                    .aggregation_engine
+                                    .evaluate(&state, store.as_ref(), &context, &plan)?
+                            {
+                                if let Some(value) = value.get("value").and_then(Value::as_f64) {
+                                    field_avg.insert(field.clone(), value);
+                                }
+                            }
+                        }
+                        if !field_avg.is_empty() {
+                            result.avg = Some(field_avg);
                         }
                     }
                     _ => {}

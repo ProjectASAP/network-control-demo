@@ -13,8 +13,9 @@ use serde_json::Value;
 use crate::config::ServerRuntimeConfig;
 
 use super::types::{
-    AggregationKind, AppState, LocalAggregationPlan, PercentileAggregation, QueryContext,
-    QueryExecutionPlan, RequestPlanner, SearchRequest, SumAggregation, UnsupportedFeature,
+    AggregationKind, AppState, AvgAggregation, LocalAggregationPlan, PercentileAggregation,
+    QueryContext, QueryExecutionPlan, RequestPlanner, SearchRequest, SumAggregation,
+    UnsupportedFeature,
 };
 
 pub struct DefaultRequestPlanner;
@@ -68,6 +69,15 @@ impl RequestPlanner for DefaultRequestPlanner {
                         continue;
                     };
                     Some(("sum", AggregationKind::Sum(SumAggregation { field })))
+                }
+                Aggregation::Avg(avg) => {
+                    let inner = &avg.avg;
+                    Some((
+                        "avg",
+                        AggregationKind::Avg(AvgAggregation {
+                            field: inner.field.clone(),
+                        }),
+                    ))
                 }
                 _ => None,
             };

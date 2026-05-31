@@ -56,6 +56,22 @@ impl AggregationEngine for SketchAggregationEngine {
                 let value = store.cumulative_value(&key, &field)?;
                 Ok(Some(json!({ "key": key, "value": value })))
             }
+            AggregationKind::Avg(avg) => {
+                let index_name = context
+                    .index_name
+                    .as_deref()
+                    .ok_or_else(|| "query index is required".to_string())?;
+                let field = metric_field_for_name(&state.runtime_config, index_name, &avg.field)
+                    .ok_or_else(|| format!("unsupported avg field: {}", avg.field))?;
+                let key = context
+                    .key
+                    .clone()
+                    .ok_or_else(|| "avg key is required".to_string())?;
+                let Some(value) = store.average_value(&key, &field)? else {
+                    return Ok(None);
+                };
+                Ok(Some(json!({ "key": key, "value": value })))
+            }
         }
     }
 
@@ -71,6 +87,11 @@ impl AggregationEngine for SketchAggregationEngine {
                 supports_search: true,
                 supports_batch: true,
             }),
+            "avg" => Some(AggregationRegistration {
+                name: "avg",
+                supports_search: true,
+                supports_batch: true,
+            }),
             _ => None,
         }
     }
@@ -79,10 +100,12 @@ impl AggregationEngine for SketchAggregationEngine {
         vec![
             "aggregations.percentiles".to_string(),
             "aggregations.sum".to_string(),
+            "aggregations.avg".to_string(),
             "query.bool.filter.term".to_string(),
             "size=0".to_string(),
             "batch.percentiles".to_string(),
             "batch.sum".to_string(),
+            "batch.avg".to_string(),
         ]
     }
 }

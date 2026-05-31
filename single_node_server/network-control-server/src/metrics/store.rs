@@ -15,6 +15,7 @@ pub trait MetricStore: Send + Sync {
     /// `metric_index`, so the hot loop avoids HashMap lookups and string allocations.
     fn insert_sample(&self, key: &str, metrics: &[(usize, f64)]) -> Result<(), String>;
     fn cumulative_value(&self, key: &str, field: &MetricField) -> Result<f64, String>;
+    fn average_value(&self, key: &str, field: &MetricField) -> Result<Option<f64>, String>;
     fn query_percentiles(
         &self,
         key: &str,
@@ -47,6 +48,7 @@ pub struct PerKeyData {
 pub struct MetricData {
     pub kll: RwLock<KLL>,
     pub cumulative: RwLock<f64>,
+    pub count: RwLock<u64>,
 }
 
 impl RangeKeyCatalog {
@@ -184,6 +186,13 @@ impl MetricStore for InMemoryKeyStore {
                     .map_err(|_| format!("failed to lock cumulative for idx {}", idx))?;
                 *cum += value;
             }
+            {
+                let mut count = metric_data
+                    .count
+                    .write()
+                    .map_err(|_| format!("failed to lock count for idx {}", idx))?;
+                *count += 1;
+            }
         }
 
         Ok(())
@@ -202,6 +211,28 @@ impl MetricStore for InMemoryKeyStore {
             .read()
             .map_err(|_| format!("failed to lock cumulative for {}", field.as_storage_field()))?;
         Ok(*value)
+    }
+
+    fn average_value(&self, key: &str, field: &MetricField) -> Result<Option<f64>, String> {
+        let keyed_data = self
+            .get_key_data(key)?
+            .ok_or_else(|| format!("avg statistics for key '{}' not found", key))?;
+        let metric_data = keyed_data
+            .metrics
+            .get(field.idx())
+            .ok_or_else(|| format!("unknown metric '{}'", field.as_storage_field()))?;
+        let cumulative = metric_data
+            .cumulative
+            .read()
+            .map_err(|_| format!("failed to lock cumulative for {}", field.as_storage_field()))?;
+        let count = metric_data
+            .count
+            .read()
+            .map_err(|_| format!("failed to lock count for {}", field.as_storage_field()))?;
+        if *count == 0 {
+            return Ok(None);
+        }
+        Ok(Some(*cumulative / *count as f64))
     }
 
     fn query_percentiles(
@@ -254,6 +285,13 @@ impl MetricStore for InMemoryKeyStore {
                         .map_err(|_| format!("failed to lock cumulative for idx {}", idx))?;
                     *cum = 0.0;
                 }
+                {
+                    let mut count = metric_data
+                        .count
+                        .write()
+                        .map_err(|_| format!("failed to lock count for idx {}", idx))?;
+                    *count = 0;
+                }
             }
         }
         Ok(())
@@ -278,6 +316,7 @@ impl PerKeyData {
             metrics.push(MetricData {
                 kll: RwLock::new(KLL::default()),
                 cumulative: RwLock::new(0.0),
+                count: RwLock::new(0),
             });
         }
         Self { metrics }
@@ -294,7 +333,9 @@ fn build_metric_idx(metric_names: &[String]) -> HashMap<String, usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::format_key_index;
+    use crate::metrics::MetricField;
+
+    use super::{format_key_index, InMemoryKeyStore, MetricStore};
 
     #[test]
     fn formats_simple_and_zero_padded_indices() {
@@ -312,5 +353,20 @@ mod tests {
         assert!(format_key_index("N{abc}", 7).is_err());
         assert!(format_key_index("N{:x}", 7).is_err());
         assert!(format_key_index("N{}-{}", 7).is_err());
+    }
+
+    #[test]
+    fn computes_average_and_resets_on_clear() {
+        let store = InMemoryKeyStore::new(&["cpu_cores".to_string()]);
+        let field = MetricField::new(0, "cpu_cores");
+
+        store.insert_sample("N001", &[(0, 2.0)]).unwrap();
+        store.insert_sample("N001", &[(0, 4.0)]).unwrap();
+
+        assert_eq!(store.average_value("N001", &field).unwrap(), Some(3.0));
+
+        store.clear_all().unwrap();
+
+        assert_eq!(store.average_value("N001", &field).unwrap(), None);
     }
 }

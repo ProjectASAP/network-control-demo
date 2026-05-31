@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use elasticsearch_dsl_ast::{Document, Search};
+use elasticsearch_dsl_ast::Search;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -65,6 +65,13 @@ pub(crate) struct SumAggregation {
     pub(crate) field: String,
 }
 
+/// Engine-side description of a standard ES `avg` aggregation request,
+/// extracted from the typed DSL during planning.
+#[derive(Debug, Clone)]
+pub(crate) struct AvgAggregation {
+    pub(crate) field: String,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct MetricsQuery {
     pub(crate) quantiles: Vec<String>,
@@ -84,6 +91,7 @@ pub(crate) struct BatchQueryResult {
     pub(crate) key: String,
     pub(crate) percentiles: Option<HashMap<String, HashMap<String, f64>>>,
     pub(crate) sum: Option<HashMap<String, f64>>,
+    pub(crate) avg: Option<HashMap<String, f64>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -183,6 +191,7 @@ fn parse_f64_array(obj: &serde_json::Map<String, Value>, field: &str) -> Result<
 pub(crate) enum AggregationKind {
     Percentiles(PercentileAggregation),
     Sum(SumAggregation),
+    Avg(AvgAggregation),
 }
 
 #[derive(Clone, Debug)]
