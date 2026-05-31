@@ -39,10 +39,10 @@ import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-TITLE_FS = 17
-LABEL_FS = 15
-TICK_FS = 13
-LEGEND_FS = 13
+TITLE_FS = 30
+LABEL_FS = 27
+TICK_FS = 24
+LEGEND_FS = 22
 
 EPS = 1e-9
 
@@ -201,10 +201,13 @@ def _series_from(per_run_values: dict[str, dict[int, list[float]]],
 
 def _shared_legend(fig, axes_with_handles):
     handles, labels = axes_with_handles.get_legend_handles_labels()
+    if len(handles) == 3:
+        handles = [handles[0], handles[2], handles[1]]
+        labels = [labels[0], labels[2], labels[1]]
     fig.legend(
         handles, labels,
         loc="lower center",
-        ncol=len(BACKENDS),
+        ncol=2,
         fontsize=LEGEND_FS,
         frameon=False,
         bbox_to_anchor=(0.5, -0.04),
@@ -233,7 +236,7 @@ def plot_grid(errors, runs, epochs, out_path: Path,
               percentiles=PERCENTILES, log=False,
               agg=np.mean, agg_label="Mean"):
     fig, axes = plt.subplots(len(METRICS), len(percentiles),
-                             figsize=(5.2 * len(percentiles), 3.6 * len(METRICS)),
+                             figsize=(6.6 * len(percentiles), 4.4 * len(METRICS)),
                              sharex=True, squeeze=False)
 
     for i, metric in enumerate(METRICS):
@@ -243,14 +246,15 @@ def plot_grid(errors, runs, epochs, out_path: Path,
             series = _series_from(per_run, epochs)
             _grouped_bar(
                 ax, epochs, series,
-                ylabel=f"{agg_label} rel. error (%)" if j == 0 else "",
+                ylabel="",
                 title=f"{METRIC_LABELS[metric]} - p{pct}",
                 log=log,
             )
 
+    fig.supylabel(f"{agg_label} rel. error (%)", fontsize=LABEL_FS)
     _shared_legend(fig, axes[0, 0])
     fig.suptitle(
-        f"{agg_label} Rel. Error vs Ground Truth "
+        f"{agg_label} Rel. Error vs Ground Truth\n"
         f"(per-run {agg_label.lower()} over 30 nodes; mean +- std across n={len(runs)} runs)",
         fontsize=TITLE_FS, y=1.01,
     )
@@ -269,7 +273,7 @@ def plot_per_metric(errors, runs, epochs, out_dir: Path,
     """
     for metric in METRICS:
         fig, axes = plt.subplots(1, len(percentiles),
-                                 figsize=(5.2 * len(percentiles), 4.0),
+                                 figsize=(6.6 * len(percentiles), 5.2),
                                  squeeze=False)
         for j, pct in enumerate(percentiles):
             ax = axes[0, j]
@@ -284,11 +288,11 @@ def plot_per_metric(errors, runs, epochs, out_dir: Path,
 
         _shared_legend(fig, axes[0, 0])
         fig.suptitle(
-            f"{METRIC_LABELS[metric]} -- {agg_label} Rel. Error "
+            f"{METRIC_LABELS[metric]} -- {agg_label} Rel. Error\n"
             f"(per-run {agg_label.lower()} over 30 nodes; mean +- std across n={len(runs)} runs)",
             fontsize=TITLE_FS - 1, y=1.02,
         )
-        fig.tight_layout(rect=[0, 0.08, 1, 0.95])
+        fig.tight_layout(rect=[0, 0.20, 1, 0.92])
         out_path = out_dir / filename_template.format(short=METRIC_SHORT[metric])
         fig.savefig(out_path, dpi=220, bbox_inches="tight")
         plt.close(fig)
@@ -301,7 +305,7 @@ def plot_per_metric(errors, runs, epochs, out_dir: Path,
 
 def plot_sum(errors, runs, epochs, out_path: Path, log=True):
     fig, axes = plt.subplots(1, len(METRICS),
-                             figsize=(5.2 * len(METRICS), 4.4),
+                             figsize=(6.6 * len(METRICS), 5.0),
                              sharey=True)
 
     for i, metric in enumerate(METRICS):
@@ -323,10 +327,10 @@ def plot_sum(errors, runs, epochs, out_path: Path, log=True):
 
     _shared_legend(fig, axes[0])
     fig.suptitle(
-        f"Sum Accuracy vs Ground Truth (mean +- std, n={len(runs)} runs)",
+        f"Sum Accuracy vs Ground Truth\n(mean +- std, n={len(runs)} runs)",
         fontsize=TITLE_FS, y=1.02,
     )
-    fig.tight_layout(rect=[0, 0.06, 1, 0.97])
+    fig.tight_layout(rect=[0, 0.20, 1, 0.94])
     fig.savefig(out_path, dpi=220, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved: {out_path}")

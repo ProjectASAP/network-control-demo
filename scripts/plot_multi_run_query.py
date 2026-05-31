@@ -22,10 +22,10 @@ import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-TITLE_FS = 17
-LABEL_FS = 15
-TICK_FS = 13
-LEGEND_FS = 12
+TITLE_FS = 19
+LABEL_FS = 17
+TICK_FS = 15
+LEGEND_FS = 14
 
 
 def _bar_with_err(ax, x, mean, std, label, color, bar_w):
@@ -46,7 +46,7 @@ def plot_chart(by_epoch, epochs, n_runs, series, out_path: Path,
     bar_w = 0.78 / n if n > 2 else 0.35
     offsets = (np.arange(n) - (n - 1) / 2) * bar_w
 
-    fig, ax = plt.subplots(figsize=(7.6 if n <= 2 else 8.4, 4.8))
+    fig, ax = plt.subplots(figsize=(7.6 if n <= 2 else 8.4, 3.2))
     for (label, key, color), off in zip(series, offsets):
         mean = np.array([np.mean(by_epoch[e][key]) for e in epochs])
         std  = np.array([np.std(by_epoch[e][key], ddof=1) for e in epochs])
@@ -58,7 +58,7 @@ def plot_chart(by_epoch, epochs, n_runs, series, out_path: Path,
     ax.grid(axis="y", alpha=0.3, which="major")
     ax.tick_params(axis="both", labelsize=TICK_FS)
     ax.set_title(
-        f"{title_prefix}\nApproximate VS Exact (mean ± std, n={n_runs} runs)",
+        f"{title_prefix}\nApproximate Layer vs Elastic Search\n(mean ± std, n={n_runs} runs)",
         fontsize=TITLE_FS,
         pad=14,
     )
