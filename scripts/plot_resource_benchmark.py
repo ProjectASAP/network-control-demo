@@ -328,16 +328,17 @@ def _draw_sketch_two_series(ax, ingest: dict, query: dict, ylabel: str,
            color=SERVER_COLOR, capsize=3, edgecolor="black", linewidth=0.4,
            error_kw={"linewidth": 1, "ecolor": "black"})
 
-    # Value labels are rotated vertical so adjacent ingestion / query labels in
-    # the same epoch group never overlap horizontally.
+    # Value labels are slanted (45°) rather than fully vertical so they read
+    # more naturally; ha="left" anchors each label at its bar and lets the text
+    # run up-and-to-the-right, keeping adjacent ingestion / query labels apart.
     label_fs = 9 * font_scale
 
     def label_above(xs, means, stds, mult, pad):
         for xi, m, s in zip(xs, means, stds):
             if not np.isnan(m):
                 ax.text(xi, (m + s) * mult if log_y else m + s + pad,
-                        f"{m:.1f}", ha="center", va="bottom", rotation=90,
-                        fontsize=label_fs)
+                        f"{m:.1f}", ha="left", va="bottom", rotation=45,
+                        rotation_mode="anchor", fontsize=label_fs)
 
     if log_y:
         ax.set_yscale("log")
