@@ -192,9 +192,9 @@ def plot_headline(rows: List[dict], col: str, series: List[Tuple[str, str, str]]
     ax.bar(xs, means, 0.6, yerr=stds, color=[c for _, _, c in present], capsize=4,
            edgecolor="black", linewidth=0.5, error_kw={"linewidth": 1, "ecolor": "black"})
     ax.set_yscale("log")
-    ax.set_ylim(top=max(means) * 2.2)
-    for x, m in zip(xs, means):
-        ax.text(x, m * 1.05, _label_ms(m), ha="center", va="bottom", fontsize=11)
+    ax.set_ylim(top=max(m + s for m, s in zip(means, stds)) * 2.4)
+    for x, m, s in zip(xs, means, stds):
+        ax.text(x, (m + s) * 1.08, _label_ms(m), ha="center", va="bottom", fontsize=11)
     ax.set_xticks(xs)
     ax.set_xticklabels([lbl for _, lbl, _ in present], fontsize=BAR_TICK_FS, rotation=10, ha="right")
     ax.set_ylabel(ylabel, fontsize=BAR_LABEL_FS)
@@ -232,9 +232,11 @@ def _draw_sketch_metric(ax, rows: List[dict], col: str, ylabel: str, title: str)
 
     ax.bar(epochs, means, 0.6, yerr=stds, color=SERVER_COLOR, capsize=3,
            edgecolor="black", linewidth=0.4, error_kw={"linewidth": 1, "ecolor": "black"})
-    for e, m in zip(epochs, means):
-        ax.text(e, m, f"{m:.1f}", ha="center", va="bottom", fontsize=9)
-    ax.set_ylim(0, max(means) * 1.35)
+    ymax = max(m + s for m, s in zip(means, stds)) * 1.18
+    pad = ymax * 0.02
+    for e, m, s in zip(epochs, means, stds):
+        ax.text(e, m + s + pad, f"{m:.1f}", ha="center", va="bottom", fontsize=9)
+    ax.set_ylim(0, ymax)
     ax.set_ylabel(ylabel, fontsize=BAR_LABEL_FS)
     ax.set_xlabel("Epoch", fontsize=BAR_LABEL_FS, labelpad=6)
     ax.set_xticks(epochs)
@@ -337,14 +339,14 @@ def main() -> None:
              "ylabel": "CPU time per query (all threads, ms)", "title": "CPU during query"},
         bottom={"rows": rows, "col": "rss_mean_mb",
                 "ylabel": "Whole-process RSS (MB)", "title": "Memory during query"},
-        suptitle="Sketch resource usage during query", out_path=out_dir / "sketch_query.png")
+        suptitle="Approximate Layer resource usage during query", out_path=out_dir / "sketch_query.png")
     if ing_rows:
         plot_sketch_pair(
             top={"rows": ing_rows, "col": "ingest_cpu_ms",
                  "ylabel": "Ingestion CPU time per epoch (all threads, ms)", "title": "CPU during ingestion"},
             bottom={"rows": rows, "col": "rss_idle_mb",
                     "ylabel": "Whole-process RSS (MB)", "title": "Memory after ingestion"},
-            suptitle="Sketch resource usage during ingestion", out_path=out_dir / "sketch_ingestion.png")
+            suptitle="Approximate Layer resource usage during ingestion", out_path=out_dir / "sketch_ingestion.png")
 
     if not args.no_prune:
         prune_stale(out_dir)
