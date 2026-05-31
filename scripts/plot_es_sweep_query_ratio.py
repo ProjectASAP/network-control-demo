@@ -74,7 +74,6 @@ def main() -> None:
     ax.bar(
         x, ratio_p50, bar_w,
         yerr=[err_lo, err_hi],
-        label="Elastic Search",
         color="#f28e2b",
         capsize=3,
         edgecolor="black",
@@ -88,26 +87,16 @@ def main() -> None:
     ax.grid(axis="y", alpha=0.3)
     ax.tick_params(axis="both", labelsize=TICK_FS)
     ax.set_title(
-        "Query Share of Query+Solver Time\n"
-        f"Elastic Search ({args.task_count} tasks, "
-        f"solver p50 range = {s_p50.min():.0f}-{s_p50.max():.0f} ms)",
+        "Query bottleneck in edge resource allocation",
         fontsize=TITLE_FS,
         pad=14,
     )
     ax.set_xticks(x)
     ax.set_xticklabels([f"{r:,}" for r in rows], rotation=30, ha="right")
 
-    legend = ax.legend(
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.28),
-        ncol=1,
-        fontsize=LEGEND_FS,
-        frameon=False,
-    )
-
     out = REPO_ROOT / args.out
     out.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(out, dpi=220, bbox_inches="tight", bbox_extra_artists=[legend])
+    plt.savefig(out, dpi=220, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved: {out}")
     print(f"solver_p50_ms per rows = {[f'{v:.1f}' for v in s_p50]}")
