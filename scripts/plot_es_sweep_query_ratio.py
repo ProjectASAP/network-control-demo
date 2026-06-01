@@ -74,7 +74,7 @@ def main() -> None:
     ax.bar(
         x, ratio_p50, bar_w,
         yerr=[err_lo, err_hi],
-        label="Elasticsearch",
+        label="Elasticsearch (Query)",
         color="#f28e2b",
         capsize=3,
         edgecolor="black",
