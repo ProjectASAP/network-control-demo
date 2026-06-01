@@ -74,6 +74,7 @@ def main() -> None:
     ax.bar(
         x, ratio_p50, bar_w,
         yerr=[err_lo, err_hi],
+        label="Elasticsearch",
         color="#f28e2b",
         capsize=3,
         edgecolor="black",
@@ -87,12 +88,18 @@ def main() -> None:
     ax.grid(axis="y", alpha=0.3)
     ax.tick_params(axis="both", labelsize=TICK_FS)
     ax.set_title(
-        "Query bottleneck in edge resource allocation",
+        "Query Bottleneck in Edge Resource Allocation",
         fontsize=TITLE_FS,
         pad=14,
     )
     ax.set_xticks(x)
     ax.set_xticklabels([f"{r:,}" for r in rows], rotation=30, ha="right")
+
+    ax.legend(
+        loc="upper left",
+        fontsize=LEGEND_FS,
+        frameon=False,
+    )
 
     out = REPO_ROOT / args.out
     out.parent.mkdir(parents=True, exist_ok=True)
