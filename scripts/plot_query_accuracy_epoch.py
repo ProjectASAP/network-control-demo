@@ -211,6 +211,9 @@ def _shared_legend(fig, axes_with_handles):
         fontsize=LEGEND_FS,
         frameon=False,
         bbox_to_anchor=(0.5, -0.04),
+        columnspacing=1.0,
+        handletextpad=0.4,
+        handlelength=1.2,
     )
 
 
