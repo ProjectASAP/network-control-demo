@@ -58,7 +58,7 @@ def plot_chart(by_epoch, epochs, n_runs, series, out_path: Path,
     ax.grid(axis="y", alpha=0.3, which="major")
     ax.tick_params(axis="both", labelsize=TICK_FS)
     ax.set_title(
-        f"{title_prefix}\nApproximate Layer vs Elastic Search\n(mean ± std, n={n_runs} runs)",
+        f"{title_prefix}\nApproximate Layer vs Elasticsearch\n(mean ± std, n={n_runs} runs)",
         fontsize=TITLE_FS,
         pad=14,
     )
@@ -118,18 +118,18 @@ def main() -> None:
 
     plot_chart(by_epoch, epochs, n_runs, [
         ("Approximate Query",                       "server",     "#2a9d8f"),
-        ("Elastic Search Query",                    "es_default", "#f28e2b"),
-        ("Elastic Search Query (compression 1000)", "es_large",   "#b07aa1"),
+        ("Elasticsearch Query",                    "es_default", "#f28e2b"),
+        ("Elasticsearch Query (compression 1000)", "es_large",   "#b07aa1"),
     ], out_all)
 
     plot_chart(by_epoch, epochs, n_runs, [
         ("Approximate Query",    "server",     "#2a9d8f"),
-        ("Elastic Search Query", "es_default", "#f28e2b"),
+        ("Elasticsearch Query", "es_default", "#f28e2b"),
     ], out_default)
 
     plot_chart(by_epoch, epochs, n_runs, [
         ("Approximate Query",                       "server",   "#2a9d8f"),
-        ("Elastic Search Query (compression 1000)", "es_large", "#b07aa1"),
+        ("Elasticsearch Query (compression 1000)", "es_large", "#b07aa1"),
     ], out_large)
 
     # Solver plots (same format, solver_ms columns).
@@ -139,20 +139,20 @@ def main() -> None:
 
     plot_chart(by_epoch, epochs, n_runs, [
         ("Approximate Solver",                       "server_solver",     "#2a9d8f"),
-        ("Elastic Search Solver",                    "es_default_solver", "#f28e2b"),
-        ("Elastic Search Solver (compression 1000)", "es_large_solver",   "#b07aa1"),
+        ("Elasticsearch Solver",                    "es_default_solver", "#f28e2b"),
+        ("Elasticsearch Solver (compression 1000)", "es_large_solver",   "#b07aa1"),
     ], out_solver_all,
         ylabel="Solver Time (ms)", title_prefix="Solver Time Comparison")
 
     plot_chart(by_epoch, epochs, n_runs, [
         ("Approximate Solver",    "server_solver",     "#2a9d8f"),
-        ("Elastic Search Solver", "es_default_solver", "#f28e2b"),
+        ("Elasticsearch Solver", "es_default_solver", "#f28e2b"),
     ], out_solver_default,
         ylabel="Solver Time (ms)", title_prefix="Solver Time Comparison")
 
     plot_chart(by_epoch, epochs, n_runs, [
         ("Approximate Solver",                       "server_solver",   "#2a9d8f"),
-        ("Elastic Search Solver (compression 1000)", "es_large_solver", "#b07aa1"),
+        ("Elasticsearch Solver (compression 1000)", "es_large_solver", "#b07aa1"),
     ], out_solver_large,
         ylabel="Solver Time (ms)", title_prefix="Solver Time Comparison")
 

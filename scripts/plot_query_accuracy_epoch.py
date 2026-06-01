@@ -39,10 +39,10 @@ import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-TITLE_FS = 30
-LABEL_FS = 27
-TICK_FS = 24
-LEGEND_FS = 22
+TITLE_FS = 34
+LABEL_FS = 30
+TICK_FS = 27
+LEGEND_FS = 26
 
 EPS = 1e-9
 
@@ -61,8 +61,8 @@ PERCENTILES = ["50", "90", "100"]
 PERCENTILES_NO_P100 = ["50", "90"]
 BACKENDS = [
     ("server",     "Approximate (Sketch)",                       "#2a9d8f"),
-    ("es_default", "Elastic Search (default compression)",       "#f28e2b"),
-    ("es_large",   "Elastic Search (compression 1000)",          "#b07aa1"),
+    ("es_default", "Elasticsearch (default compression)",       "#f28e2b"),
+    ("es_large",   "Elasticsearch (compression 1000)",          "#b07aa1"),
 ]
 
 FNAME_RE = re.compile(r"run(\d+)_epoch(\d+)\.json$")
@@ -273,7 +273,7 @@ def plot_per_metric(errors, runs, epochs, out_dir: Path,
     """
     for metric in METRICS:
         fig, axes = plt.subplots(1, len(percentiles),
-                                 figsize=(6.6 * len(percentiles), 5.2),
+                                 figsize=(6.6 * len(percentiles), 7.0),
                                  squeeze=False)
         for j, pct in enumerate(percentiles):
             ax = axes[0, j]
@@ -292,7 +292,7 @@ def plot_per_metric(errors, runs, epochs, out_dir: Path,
             f"(per-run {agg_label.lower()} over 30 nodes; mean +- std across n={len(runs)} runs)",
             fontsize=TITLE_FS - 1, y=1.02,
         )
-        fig.tight_layout(rect=[0, 0.20, 1, 0.92])
+        fig.tight_layout(rect=[0, 0.14, 1, 0.94])
         out_path = out_dir / filename_template.format(short=METRIC_SHORT[metric])
         fig.savefig(out_path, dpi=220, bbox_inches="tight")
         plt.close(fig)
