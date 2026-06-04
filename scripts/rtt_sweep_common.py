@@ -528,63 +528,6 @@ def query_server_batch(
     return resp.json(), elapsed_ms
 
 
-def query_es_nodes(
-    es_url: str,
-    es_index: str,
-    api_key: str | None,
-    nodes: List[str],
-    connect_timeout: float,
-    read_timeout: float,
-    epoch: int | None = None,
-    tdigest_compression: int | None = None,
-) -> Tuple[dict, float]:
-    headers = es_headers(api_key)
-    url = f"{es_url}/{es_index}/_search"
-
-    def _pct_agg(field: str) -> dict:
-        spec: dict = {"field": field, "percents": [0, 50, 90, 100]}
-        if tdigest_compression is not None:
-            spec["tdigest"] = {"compression": tdigest_compression}
-        return {"percentiles": spec}
-
-    results: Dict[str, Dict[str, object]] = {}
-    t0 = time.perf_counter()
-    for node in nodes:
-        if epoch is None:
-            query = {"term": {"node": node}}
-        else:
-            query = {
-                "bool": {
-                    "filter": [
-                        {"term": {"node": node}},
-                        {"term": {"epoch": epoch}},
-                    ]
-                }
-            }
-        payload = {
-            "size": 0,
-            "query": query,
-            "aggs": {
-                "cpu_pct": _pct_agg("cpu"),
-                "mem_pct": _pct_agg("mem"),
-                "net_pct": _pct_agg("net"),
-                "cpu_sum": {"sum": {"field": "cpu"}},
-                "mem_sum": {"sum": {"field": "mem"}},
-                "net_sum": {"sum": {"field": "net"}},
-            },
-        }
-        resp = requests.post(
-            url,
-            headers=headers,
-            json=payload,
-            timeout=(connect_timeout, read_timeout),
-        )
-        resp.raise_for_status()
-        results[node] = resp.json()
-    elapsed_ms = (time.perf_counter() - t0) * 1000.0
-    return results, elapsed_ms
-
-
 def query_server_batch_custom(
     server_url: str,
     nodes: List[str],
@@ -703,6 +646,82 @@ def query_es_nodes_custom(
         "per_node": per_node_metadata,
     }
     return results, elapsed_ms, metadata
+
+
+def clear_es_cache(
+    es_url: str,
+    es_index: str,
+    api_key: str | None,
+    connect_timeout: float,
+    read_timeout: float,
+) -> None:
+    """Drop the request, query, and fielddata caches for `es_index`."""
+    headers = es_headers(api_key)
+    url = f"{es_url}/{es_index}/_cache/clear"
+    resp = requests.post(
+        url, headers=headers, timeout=(connect_timeout, read_timeout)
+    )
+    resp.raise_for_status()
+
+
+def query_es_nodes(
+    es_url: str,
+    es_index: str,
+    api_key: str | None,
+    nodes: List[str],
+    connect_timeout: float,
+    read_timeout: float,
+    epoch: int | None = None,
+    tdigest_compression: int | None = None,
+    request_cache: bool = True,
+) -> Tuple[dict, float]:
+    headers = es_headers(api_key)
+    url = f"{es_url}/{es_index}/_search"
+    if not request_cache:
+        url = f"{url}?request_cache=false"
+
+    def _pct_agg(field: str) -> dict:
+        spec: dict = {"field": field, "percents": [0, 50, 90, 100]}
+        if tdigest_compression is not None:
+            spec["tdigest"] = {"compression": tdigest_compression}
+        return {"percentiles": spec}
+
+    results: Dict[str, Dict[str, object]] = {}
+    t0 = time.perf_counter()
+    for node in nodes:
+        if epoch is None:
+            query = {"term": {"node": node}}
+        else:
+            query = {
+                "bool": {
+                    "filter": [
+                        {"term": {"node": node}},
+                        {"term": {"epoch": epoch}},
+                    ]
+                }
+            }
+        payload = {
+            "size": 0,
+            "query": query,
+            "aggs": {
+                "cpu_pct": _pct_agg("cpu"),
+                "mem_pct": _pct_agg("mem"),
+                "net_pct": _pct_agg("net"),
+                "cpu_sum": {"sum": {"field": "cpu"}},
+                "mem_sum": {"sum": {"field": "mem"}},
+                "net_sum": {"sum": {"field": "net"}},
+            },
+        }
+        resp = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=(connect_timeout, read_timeout),
+        )
+        resp.raise_for_status()
+        results[node] = resp.json()
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+    return results, elapsed_ms
 
 
 # ---------------------------------------------------------------------------
