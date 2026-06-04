@@ -1,1 +1,0 @@
-timestamp_utc,epoch,server_query_ms,server_solver_ms,server_total_ms,es_query_ms,es_solver_ms,es_total_ms,solver_task_count,solver_node_count,query_node_count,all_nodes_count,all_tasks_count
