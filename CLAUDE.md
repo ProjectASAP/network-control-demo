@@ -119,12 +119,18 @@ uv run main.py --node-path dummy_data/nodes.jsonl --edge-path dummy_data/edges.j
 | `scripts/run_rtt_sweep_epoch_full.py` | Epoch-based sweep: ingest + query + solver timing for both backends (PuLP) |
 | `scripts/run_rtt_sweep_epoch_full_ortools.py` | Same as above but using OR-Tools solver instead of PuLP; supports `--solver-backend {CBC,SCIP,GLPK}` |
 | `scripts/run_dynamic_epoch_benchmark.py` | Dynamic epoch benchmark using emulator-generated task telemetry + padding to target rows/epoch; measures ingest/query/solver for Sketch vs ES |
+| `scripts/run_es_ingest_query_sweep.py` | ES-only ingest/query sweep over exponentially increasing row counts; writes detail + summary CSVs and a plot |
+| `scripts/run_sketch_ingest_query_sweep.py` | Sketch-server-only ingest/query sweep over exponentially increasing row counts using the release binary; writes detail + summary CSVs and a plot |
 | `scripts/rtt_sweep_common.py` | Shared helpers for RTT sweeps |
+| `scripts/proc_monitor.py` | OS-level (`/proc`) resource measurement: resolve sketch/ES PIDs, read CPU ticks (utime+stime) + whole-process RSS (VmRSS/VmHWM), background `ResourceSampler`, `taskset` CPU pinning. Run `--selftest` to print resolved PIDs/counters |
+| `scripts/run_resource_benchmark.py` | Resource (CPU + whole-process RSS) benchmark mirroring the latency experiment: `--runs` x `--epochs` at `--rows-per-epoch` (default 1M). Sketch vs ES, measured symmetrically via `/proc` in the same window as latency. Per measurement point uses ADAPTIVE repeats (queries until the wall window reaches `--min-measure-seconds`) so CPU accumulates above jiffy granularity for both backends. Pins client/server/ES to disjoint cores; subtracts idle CPU baseline; restarts the server per run; writes summary CSV + ingestion CSV + per-(run,epoch,backend) raw JSON sidecars |
+| `scripts/plot_resource_benchmark.py` | Plots from the resource benchmark (auto-prunes files it no longer produces; `--no-prune` to keep). Headline CPU comparisons with readable value labels (`query_cpu_headline.png`, `ingestion_cpu_headline.png`); query-comparison-style per-epoch grouped bar trios `query_cpu_bars_*` / `ingestion_cpu_bars_*` (ingestion is compression-independent → its default/large are identical); and combined sketch-server-only resource panels `sketch_query.png` / `sketch_ingestion.png` (CPU + whole-process RSS side by side, absolute, with cumulative-rows annotation). ES RSS is intentionally NOT plotted as a memory baseline — it is just ES's fixed pre-allocated JVM heap, not actual usage. CPU is labelled "CPU time (all threads)" since it sums over threads and can exceed wall latency |
 | `scripts/plot_query_rtt.py` | Plot query RTT logs |
 | `scripts/plot_epoch_cumulative.py` | Plot cumulative epoch RTT |
 | `scripts/plot_solver_comparison.py` | Plot solver comparison graphs |
 | `scripts/run_rtt_sweep_all.sh` | Runs all three RTT sweeps with `data/` + `plots/` + `logs/` defaults |
 | `scripts/run_dynamic_epoch_benchmark_all.sh` | Runs dynamic epoch benchmark across solver backends (e.g., CBC/SCIP) with standard `data/` + `plots/` + `logs/` outputs |
+| `scripts/run_resource_benchmark_all.sh` | Runs the resource benchmark (selftest → benchmark → plots) with standard `data/` + `plots/resource/` + `logs/` outputs; honors `RUNS`/`DATA_VOLUMES`/`REPEATS`/`*_CORES` env overrides |
 
 ### Benchmark output convention
 
@@ -194,8 +200,17 @@ python3 scripts/run_rtt_sweep_epoch_full.py --run-solver
 python3 scripts/run_rtt_sweep_epoch_full_ortools.py --run-solver                        # default: CBC
 python3 scripts/run_rtt_sweep_epoch_full_ortools.py --run-solver --solver-backend SCIP  # SCIP backend
 python3 scripts/run_rtt_sweep_epoch_full_ortools.py --run-solver --solver-backend GLPK  # GLPK backend
+python3 scripts/run_es_ingest_query_sweep.py
+python3 scripts/run_sketch_ingest_query_sweep.py
 python3 scripts/run_dynamic_epoch_benchmark.py --solver-backend SCIP --max-epochs 50 --rows-per-epoch 1000000
 bash scripts/run_dynamic_epoch_benchmark_all.sh
+
+# Resource benchmark (CPU + whole-process RSS via /proc). ES must already be running.
+python3 scripts/proc_monitor.py --selftest                       # verify PID resolution
+bash scripts/run_resource_benchmark_all.sh                       # full: 10 runs x 10 epochs x 1M, plots (~4h)
+python3 scripts/run_resource_benchmark.py \
+  --runs 1 --epochs 2 --rows-per-epoch 30000 --min-repeats 5 --min-measure-seconds 0.5 \
+  --warmup 1 --idle-seconds 1                                    # quick smoke
 ```
 
 ### Tests
@@ -211,7 +226,10 @@ cd solver_experimental && uv run pytest python_solver/tests/
 - The telemetry emulator (`emulate_telemetry.py`) runs as a FastAPI sidecar, sending identical data to both ES and Sketch server for consistency comparison
 - Benchmark scripts measure both **latency** (RTT) and **correctness** (metric value comparison between backends)
 - The controller's ES path now reads batch query responses from Elasticsearch into the same `[{"key", "percentiles"}]` shape used by the sketch backend, and it filters ES metrics on the mapped `task` and `epoch` fields directly
+- **Resource benchmark methodology** (`run_resource_benchmark.py`): CPU and whole-process RSS are read externally from `/proc` (symmetric for both backends — no ES-internal instrumentation, which would distort latency), so latency + CPU + RSS are captured in the *same* run. CPU uses `utime+stime` deltas at window boundaries (process-wide, all threads); idle baseline is subtracted; client/server/ES are pinned to disjoint cores via `taskset`; ES `request_cache` is disabled and warmups discarded. The experiment mirrors the latency benchmark (N runs x M epochs at 1M rows/epoch); the sketch server is restarted per run (KLL state accumulates across that run's epochs) and ES is reset per run with each epoch's query filtered to that epoch. Note CPU time can exceed query latency: it is summed across all worker threads, so a parallelized query reports more CPU-time than wall-clock latency. Caveat: ES RSS is dominated by its fixed JVM heap (`-Xms=-Xmx≈31GB`), so RSS reflects provisioning, not per-query memory — the headline claim is reduced per-query **compute**, not provisioning (ES is not removed).
 
 ## Known Issues
 
+- **Resource benchmark CPU resolution.** `/proc` CPU accounting is in jiffies (`CLK_TCK`, typically 100 → 10ms granularity). Per-query CPU is therefore only meaningful when accumulated over many queries; a single query may register 0 ticks. The benchmark uses ADAPTIVE repeats (`--min-measure-seconds`, default 1.0s; bounded by `--min-repeats`/`--max-repeats`) so the cheap sketch query runs many times and the expensive ES query fewer — both reach `cpu_busy_ticks` well above ~10. Inspect that column if results look quantized.
+- **Resource benchmark requires exclusive port 10101.** The benchmark starts/stops its own pinned sketch server; kill any pre-existing server on 10101 first (as `evaluate_demo.sh` does). ES must be running under the same uid so `taskset` can set its affinity without root.
 - **Ingested metric usage can exceed node capacity.** Synthetic metrics generated during benchmarks may produce cumulative usage values (CPU, memory) that exceed a node's declared capacity. The PuLP solver handles this gracefully (`max(capacity - used, 0.0)`), but the OR-Tools solver raises a `ValueError` on over-subscribed nodes. The OR-Tools sweep script (`run_rtt_sweep_epoch_full_ortools.py`) works around this by clamping `used_cpu`/`used_memory` to the node's capacity before solving. A proper fix would be to either cap the synthetic metric generation or add clamping inside the OR-Tools solver itself.

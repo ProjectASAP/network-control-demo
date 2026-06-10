@@ -275,7 +275,9 @@ def _extract_server_usage(server_json: dict) -> Dict[str, Dict[str, float]]:
         node_id = item.get("key")
         if not node_id:
             continue
-        cumulative = item.get("cumulative") or {}
+        # Server now returns cumulative values under the "sum" key (was
+        # "cumulative" before commit f16475d switched the agg to sum).
+        cumulative = item.get("sum") or item.get("cumulative") or {}
         usage[str(node_id)] = {
             "cpu": float(cumulative.get("cpu_cores", 0.0) or 0.0),
             "memory": float(cumulative.get("memory_gb", 0.0) or 0.0),
@@ -560,15 +562,26 @@ def main() -> None:
             es_solver_ms = 0.0
             if args.run_solver and assets is not None and solver_context is not None:
                 backend = args.solver_backend
-                print(f"  running OR-Tools ({backend}) solver on server metrics ...")
+                es_usage = _extract_es_usage(es_json)
                 server_usage = _extract_server_usage(server_json)
-                server_sr = run_solver_for_usage(server_usage, assets, solver_context, solver_backend=backend)
-                server_solver_ms = server_sr.elapsed_ms
+
+                # Warmup solve (discarded). The preceding 1M-row ingest/query
+                # phase evicts the solver + OR-Tools/CBC working set from CPU
+                # cache, so whichever timed solve runs first pays a ~2x cold
+                # penalty. A throwaway solve repopulates that state, making the
+                # two timed solves below both "warm" and comparable regardless
+                # of order. (The model structure is identical for ES/server, so
+                # warming with either usage gives neither side an advantage.)
+                print(f"  warmup OR-Tools ({backend}) solver (discarded) ...")
+                run_solver_for_usage(es_usage, assets, solver_context, solver_backend=backend)
 
                 print(f"  running OR-Tools ({backend}) solver on ES metrics ...")
-                es_usage = _extract_es_usage(es_json)
                 es_sr = run_solver_for_usage(es_usage, assets, solver_context, solver_backend=backend)
                 es_solver_ms = es_sr.elapsed_ms
+
+                print(f"  running OR-Tools ({backend}) solver on server metrics ...")
+                server_sr = run_solver_for_usage(server_usage, assets, solver_context, solver_backend=backend)
+                server_solver_ms = server_sr.elapsed_ms
 
             # --- TOTALS ---
             server_total_ms = server_ingest_ms + server_query_ms + server_solver_ms
