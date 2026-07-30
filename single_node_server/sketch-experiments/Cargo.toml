@@ -12,5 +12,5 @@ name = "raw-vs-kll"
 path = "src/raw_vs_kll.rs"
 
 [dependencies]
-asap_sketchlib = { path = "/users/yuanyc/asap_sketchlib" }
+asap_sketchlib = "0.2.2"
 rand = "0.9"

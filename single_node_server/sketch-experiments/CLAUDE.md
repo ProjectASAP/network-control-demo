@@ -8,7 +8,7 @@
 
 A standalone Rust sandbox for testing random ideas that could potentially be used by `network-control-server`. Each experiment is an independent binary — no library crate, no shared state between experiments.
 
-**Key constraint:** This project must remain fully independent from `network-control-server`. They share the `sketchlib-rust` dependency but have no code-level coupling. Changes here must never affect `network-control-server`.
+**Key constraint:** This project must remain fully independent from `network-control-server`. They share the `asap_sketchlib` dependency but have no code-level coupling. Changes here must never affect `network-control-server`.
 
 ## Project Structure
 
@@ -25,7 +25,7 @@ sketch-experiments/
 
 | Crate | Purpose |
 |---|---|
-| `sketchlib-rust` (local: `/users/yuanyc/sketchlib-rust`) | KLL sketches and other sketch data structures |
+| `asap_sketchlib` (crates.io, `0.2.2`) | KLL sketches and other sketch data structures |
 | `rand` | Random number generation for simulations |
 
 ## Adding a New Experiment

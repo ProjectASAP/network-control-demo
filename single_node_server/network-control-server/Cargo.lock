@@ -20,6 +20,8 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 [[package]]
 name = "asap_sketchlib"
 version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d71e22a03cabb3fbbde6078a6ce493d4c21d007b895ad1d32ae986cfa7b1ac65"
 dependencies = [
  "bytes",
  "prost",
@@ -223,6 +225,7 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 [[package]]
 name = "elasticsearch-dsl-ast"
 version = "0.1.0"
+source = "git+https://github.com/ProjectASAP/elasticsearch-dsl-ast#f1e1e3565be1c04d64ba0234def1d3b1042838e9"
 dependencies = [
  "chrono",
  "num-traits",

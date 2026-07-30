@@ -36,8 +36,8 @@ An Axum-based HTTP server that ingests cluster metrics and serves aggregated que
 - **Query**: `src/server/query.rs` — percentile and cumulative aggregation queries against sketches
 - **Types**: `src/server/types.rs` — `AppState`, request/response types
 - **Upstream**: `src/server/upstream.rs` — forwards queries to Elasticsearch
-- **External dep**: `asap_sketchlib` (local path: `/users/yuanyc/asap_sketchlib`)
-- **Docker**: `Dockerfile` (multi-stage build) + `docker-build.sh` (vendors `asap_sketchlib` into build context)
+- **External deps**: `asap_sketchlib = "0.2.2"` (crates.io) and `elasticsearch-dsl-ast` (git: `ProjectASAP/elasticsearch-dsl-ast`, rev pinned in `Cargo.lock`). No local path dependencies — a fresh clone builds standalone.
+- **Docker**: `Dockerfile` + `docker-build.sh` are stale (they vendor `asap_sketchlib` and never copy `elasticsearch-dsl-ast`); the Docker build path does not currently work
 
 **Build & run:**
 ```bash
@@ -171,7 +171,7 @@ Usage: `bash evaluate_demo.sh [NODE_QUERY_LIMIT]`
 - Rust toolchain (for `single_node_server`)
 - Python 3.13+ with `uv` package manager (for `solver_experimental`)
 - Elasticsearch instance (for comparison benchmarks)
-- Local `sketchlib-rust` crate at `/users/yuanyc/sketchlib-rust`
+- Network access on first build (crates.io + github.com) to fetch `asap_sketchlib` and `elasticsearch-dsl-ast`
 
 ### Quick start
 ```bash
@@ -221,7 +221,7 @@ cd solver_experimental && uv run pytest python_solver/tests/
 
 ## Architecture Notes
 
-- The Rust server uses **KLL sketches** (from `sketchlib-rust`) for approximate quantile queries, providing O(1) query time vs ES's full scan
+- The Rust server uses **KLL sketches** (from `asap_sketchlib`) for approximate quantile queries, providing O(1) query time vs ES's full scan
 - Two solver implementations exist: **PuLP** (`scheduler/solver.py`) and **OR-Tools** (`python_solver/`). The OR-Tools version is more mature with migration penalties and reassignment limits. The OR-Tools solver supports configurable backends via `solver_backend` parameter: **CBC** (default), **SCIP**, and **GLPK**
 - The telemetry emulator (`emulate_telemetry.py`) runs as a FastAPI sidecar, sending identical data to both ES and Sketch server for consistency comparison
 - Benchmark scripts measure both **latency** (RTT) and **correctness** (metric value comparison between backends)

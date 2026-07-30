@@ -51,8 +51,11 @@ Unsupported features are either forwarded to upstream Elasticsearch when fallbac
   - `NCS_TIMING_CSV_PATH`
 - `--timing` still forces timing on.
 
-## Verification Note
+## Dependencies
 
-`cargo fmt` was run locally.
+No local path dependencies — a fresh `git clone` builds standalone.
 
-`cargo check` could not be completed in this environment because crates.io access is blocked and dependency resolution for Rust crates fails without network access.
+- `asap_sketchlib = "0.2.2"` — from crates.io. Only `KLL` is used (`Default`, `update`, `quantile`, `clear`), default features only.
+- `elasticsearch-dsl-ast` — git dependency on `https://github.com/ProjectASAP/elasticsearch-dsl-ast` (public); the rev is pinned in `Cargo.lock`.
+
+Note: `Dockerfile` and `docker-build.sh` are stale — they still vendor `asap_sketchlib` via `.docker-deps` and never copy `elasticsearch-dsl-ast`, so the Docker build path does not work. Local `cargo build` is the supported path.
