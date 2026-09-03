@@ -1,0 +1,300 @@
+{"task_id": "T0000", "arrival_offset_s": 0, "duration_s": 742.616, "initial_cpu": 0.397575, "initial_memory": 3.705796, "peer_bandwidths": {}}
+{"task_id": "T0001", "arrival_offset_s": 0, "duration_s": 750.387, "initial_cpu": 0.574659, "initial_memory": 0.85194, "peer_bandwidths": {}}
+{"task_id": "T0002", "arrival_offset_s": 0, "duration_s": 420.174, "initial_cpu": 0.593762, "initial_memory": 1.367423, "peer_bandwidths": {}}
+{"task_id": "T0003", "arrival_offset_s": 0, "duration_s": 269.303, "initial_cpu": 0.345388, "initial_memory": 2.831669, "peer_bandwidths": {}}
+{"task_id": "T0004", "arrival_offset_s": 0, "duration_s": 658.597, "initial_cpu": 0.09689, "initial_memory": 0.905699, "peer_bandwidths": {}}
+{"task_id": "T0005", "arrival_offset_s": 0, "duration_s": 863.442, "initial_cpu": 0.401832, "initial_memory": 2.706462, "peer_bandwidths": {}}
+{"task_id": "T0006", "arrival_offset_s": 0, "duration_s": 715.495, "initial_cpu": 0.391176, "initial_memory": 1.951886, "peer_bandwidths": {}}
+{"task_id": "T0007", "arrival_offset_s": 0, "duration_s": 744.767, "initial_cpu": 0.363774, "initial_memory": 1.056246, "peer_bandwidths": {"T0238": 0.3034}}
+{"task_id": "T0008", "arrival_offset_s": 0, "duration_s": 679.556, "initial_cpu": 0.679775, "initial_memory": 1.323038, "peer_bandwidths": {}}
+{"task_id": "T0009", "arrival_offset_s": 0, "duration_s": 793.919, "initial_cpu": 0.134199, "initial_memory": 1.003244, "peer_bandwidths": {}}
+{"task_id": "T0010", "arrival_offset_s": 0, "duration_s": 522.746, "initial_cpu": 0.313313, "initial_memory": 0.852825, "peer_bandwidths": {}}
+{"task_id": "T0011", "arrival_offset_s": 0, "duration_s": 341.49, "initial_cpu": 0.10862, "initial_memory": 0.732436, "peer_bandwidths": {}}
+{"task_id": "T0012", "arrival_offset_s": 0, "duration_s": 679.039, "initial_cpu": 0.268532, "initial_memory": 1.909499, "peer_bandwidths": {"T0077": 0.1517}}
+{"task_id": "T0013", "arrival_offset_s": 0, "duration_s": 491.318, "initial_cpu": 0.862219, "initial_memory": 3.103638, "peer_bandwidths": {}}
+{"task_id": "T0014", "arrival_offset_s": 0, "duration_s": 519.508, "initial_cpu": 0.31871, "initial_memory": 1.5111, "peer_bandwidths": {}}
+{"task_id": "T0015", "arrival_offset_s": 0, "duration_s": 703.563, "initial_cpu": 0.468756, "initial_memory": 2.696355, "peer_bandwidths": {"T0178": 0.1517}}
+{"task_id": "T0016", "arrival_offset_s": 0, "duration_s": 615.678, "initial_cpu": 0.196111, "initial_memory": 1.538684, "peer_bandwidths": {}}
+{"task_id": "T0017", "arrival_offset_s": 0, "duration_s": 596.424, "initial_cpu": 0.264646, "initial_memory": 2.167976, "peer_bandwidths": {}}
+{"task_id": "T0018", "arrival_offset_s": 0, "duration_s": 427.838, "initial_cpu": 0.446032, "initial_memory": 3.007341, "peer_bandwidths": {}}
+{"task_id": "T0019", "arrival_offset_s": 0, "duration_s": 592.903, "initial_cpu": 0.686278, "initial_memory": 1.044394, "peer_bandwidths": {}}
+{"task_id": "T0020", "arrival_offset_s": 0, "duration_s": 534.331, "initial_cpu": 0.208389, "initial_memory": 1.259737, "peer_bandwidths": {}}
+{"task_id": "T0021", "arrival_offset_s": 0, "duration_s": 577.343, "initial_cpu": 0.456574, "initial_memory": 2.230575, "peer_bandwidths": {}}
+{"task_id": "T0022", "arrival_offset_s": 0, "duration_s": 298.884, "initial_cpu": 0.346902, "initial_memory": 1.585634, "peer_bandwidths": {}}
+{"task_id": "T0023", "arrival_offset_s": 0, "duration_s": 852.756, "initial_cpu": 0.880022, "initial_memory": 2.263865, "peer_bandwidths": {}}
+{"task_id": "T0024", "arrival_offset_s": 0, "duration_s": 555.07, "initial_cpu": 0.464482, "initial_memory": 0.374524, "peer_bandwidths": {}}
+{"task_id": "T0025", "arrival_offset_s": 0, "duration_s": 703.164, "initial_cpu": 0.687053, "initial_memory": 0.731472, "peer_bandwidths": {}}
+{"task_id": "T0026", "arrival_offset_s": 0, "duration_s": 182.85, "initial_cpu": 0.458772, "initial_memory": 1.033442, "peer_bandwidths": {}}
+{"task_id": "T0027", "arrival_offset_s": 0, "duration_s": 859.505, "initial_cpu": 0.888196, "initial_memory": 2.110055, "peer_bandwidths": {}}
+{"task_id": "T0028", "arrival_offset_s": 0, "duration_s": 683.857, "initial_cpu": 0.773776, "initial_memory": 0.662563, "peer_bandwidths": {}}
+{"task_id": "T0029", "arrival_offset_s": 0, "duration_s": 670.06, "initial_cpu": 0.824177, "initial_memory": 1.071706, "peer_bandwidths": {}}
+{"task_id": "T0030", "arrival_offset_s": 0, "duration_s": 482.046, "initial_cpu": 0.57092, "initial_memory": 2.05626, "peer_bandwidths": {"T0291": 0.4551}}
+{"task_id": "T0031", "arrival_offset_s": 0, "duration_s": 221.794, "initial_cpu": 0.178767, "initial_memory": 1.250021, "peer_bandwidths": {}}
+{"task_id": "T0032", "arrival_offset_s": 0, "duration_s": 434.363, "initial_cpu": 0.690814, "initial_memory": 1.48103, "peer_bandwidths": {"T0267": 0.3034}}
+{"task_id": "T0033", "arrival_offset_s": 0, "duration_s": 452.748, "initial_cpu": 0.610316, "initial_memory": 1.097088, "peer_bandwidths": {}}
+{"task_id": "T0034", "arrival_offset_s": 0, "duration_s": 701.211, "initial_cpu": 0.964972, "initial_memory": 1.718421, "peer_bandwidths": {}}
+{"task_id": "T0035", "arrival_offset_s": 0, "duration_s": 271.261, "initial_cpu": 0.736197, "initial_memory": 0.607093, "peer_bandwidths": {}}
+{"task_id": "T0036", "arrival_offset_s": 0, "duration_s": 745.456, "initial_cpu": 0.590496, "initial_memory": 2.54008, "peer_bandwidths": {}}
+{"task_id": "T0037", "arrival_offset_s": 0, "duration_s": 201.325, "initial_cpu": 1.031272, "initial_memory": 1.946552, "peer_bandwidths": {}}
+{"task_id": "T0038", "arrival_offset_s": 0, "duration_s": 236.466, "initial_cpu": 0.479707, "initial_memory": 1.589705, "peer_bandwidths": {}}
+{"task_id": "T0039", "arrival_offset_s": 0, "duration_s": 580.618, "initial_cpu": 1.044083, "initial_memory": 1.297531, "peer_bandwidths": {}}
+{"task_id": "T0040", "arrival_offset_s": 0, "duration_s": 552.918, "initial_cpu": 1.091453, "initial_memory": 0.828881, "peer_bandwidths": {}}
+{"task_id": "T0041", "arrival_offset_s": 0, "duration_s": 425.636, "initial_cpu": 0.092339, "initial_memory": 1.08556, "peer_bandwidths": {}}
+{"task_id": "T0042", "arrival_offset_s": 0, "duration_s": 722.004, "initial_cpu": 0.128962, "initial_memory": 0.686379, "peer_bandwidths": {}}
+{"task_id": "T0043", "arrival_offset_s": 0, "duration_s": 405.208, "initial_cpu": 0.736371, "initial_memory": 1.843689, "peer_bandwidths": {}}
+{"task_id": "T0044", "arrival_offset_s": 0, "duration_s": 531.914, "initial_cpu": 0.010325, "initial_memory": 0.932927, "peer_bandwidths": {}}
+{"task_id": "T0045", "arrival_offset_s": 0, "duration_s": 568.163, "initial_cpu": 0.483814, "initial_memory": 1.187122, "peer_bandwidths": {}}
+{"task_id": "T0046", "arrival_offset_s": 0, "duration_s": 560.957, "initial_cpu": 1.143207, "initial_memory": 1.633662, "peer_bandwidths": {"T0290": 0.1517}}
+{"task_id": "T0047", "arrival_offset_s": 0, "duration_s": 657.842, "initial_cpu": 0.90718, "initial_memory": 1.035921, "peer_bandwidths": {}}
+{"task_id": "T0048", "arrival_offset_s": 0, "duration_s": 279.018, "initial_cpu": 1.027726, "initial_memory": 2.026379, "peer_bandwidths": {}}
+{"task_id": "T0049", "arrival_offset_s": 0, "duration_s": 314.153, "initial_cpu": 0.679617, "initial_memory": 1.120813, "peer_bandwidths": {}}
+{"task_id": "T0050", "arrival_offset_s": 0, "duration_s": 788.021, "initial_cpu": 0.524692, "initial_memory": 2.069906, "peer_bandwidths": {"T0086": 0.7585}}
+{"task_id": "T0051", "arrival_offset_s": 0, "duration_s": 261.377, "initial_cpu": 0.37111, "initial_memory": 1.855168, "peer_bandwidths": {}}
+{"task_id": "T0052", "arrival_offset_s": 0, "duration_s": 868.038, "initial_cpu": 0.766835, "initial_memory": 1.762021, "peer_bandwidths": {}}
+{"task_id": "T0053", "arrival_offset_s": 0, "duration_s": 543.673, "initial_cpu": 0.400762, "initial_memory": 2.140998, "peer_bandwidths": {}}
+{"task_id": "T0054", "arrival_offset_s": 0, "duration_s": 515.533, "initial_cpu": 1.330789, "initial_memory": 0.49959, "peer_bandwidths": {}}
+{"task_id": "T0055", "arrival_offset_s": 0, "duration_s": 872.866, "initial_cpu": 0.593422, "initial_memory": 0.393062, "peer_bandwidths": {}}
+{"task_id": "T0056", "arrival_offset_s": 0, "duration_s": 851.95, "initial_cpu": 1.061378, "initial_memory": 2.20936, "peer_bandwidths": {}}
+{"task_id": "T0057", "arrival_offset_s": 0, "duration_s": 645.491, "initial_cpu": 0.534518, "initial_memory": 0.556528, "peer_bandwidths": {}}
+{"task_id": "T0058", "arrival_offset_s": 0, "duration_s": 751.035, "initial_cpu": 0.490736, "initial_memory": 1.374912, "peer_bandwidths": {}}
+{"task_id": "T0059", "arrival_offset_s": 0, "duration_s": 798.645, "initial_cpu": 0.807222, "initial_memory": 1.820702, "peer_bandwidths": {}}
+{"task_id": "T0060", "arrival_offset_s": 0, "duration_s": 681.828, "initial_cpu": 0.365622, "initial_memory": 1.900453, "peer_bandwidths": {"T0125": 0.1517}}
+{"task_id": "T0061", "arrival_offset_s": 0, "duration_s": 365.744, "initial_cpu": 0.924272, "initial_memory": 2.333785, "peer_bandwidths": {}}
+{"task_id": "T0062", "arrival_offset_s": 0, "duration_s": 463.675, "initial_cpu": 0.22243, "initial_memory": 1.871804, "peer_bandwidths": {}}
+{"task_id": "T0063", "arrival_offset_s": 0, "duration_s": 417.465, "initial_cpu": 0.735558, "initial_memory": 1.154236, "peer_bandwidths": {}}
+{"task_id": "T0064", "arrival_offset_s": 0, "duration_s": 674.635, "initial_cpu": 0.333594, "initial_memory": 2.273822, "peer_bandwidths": {}}
+{"task_id": "T0065", "arrival_offset_s": 0, "duration_s": 550.477, "initial_cpu": 0.485054, "initial_memory": 1.442002, "peer_bandwidths": {}}
+{"task_id": "T0066", "arrival_offset_s": 0, "duration_s": 352.886, "initial_cpu": 0.738698, "initial_memory": 1.501036, "peer_bandwidths": {}}
+{"task_id": "T0067", "arrival_offset_s": 0, "duration_s": 896.489, "initial_cpu": 0.080577, "initial_memory": 0.982401, "peer_bandwidths": {}}
+{"task_id": "T0068", "arrival_offset_s": 0, "duration_s": 396.389, "initial_cpu": 0.415635, "initial_memory": 2.356585, "peer_bandwidths": {}}
+{"task_id": "T0069", "arrival_offset_s": 0, "duration_s": 232.386, "initial_cpu": 0.564884, "initial_memory": 1.629648, "peer_bandwidths": {}}
+{"task_id": "T0070", "arrival_offset_s": 0, "duration_s": 208.826, "initial_cpu": 0.119364, "initial_memory": 0.099115, "peer_bandwidths": {"T0097": 0.4551}}
+{"task_id": "T0071", "arrival_offset_s": 0, "duration_s": 403.468, "initial_cpu": 1.384704, "initial_memory": 1.595096, "peer_bandwidths": {}}
+{"task_id": "T0072", "arrival_offset_s": 0, "duration_s": 815.606, "initial_cpu": 1.047278, "initial_memory": 0.392368, "peer_bandwidths": {}}
+{"task_id": "T0073", "arrival_offset_s": 0, "duration_s": 807.06, "initial_cpu": 0.671911, "initial_memory": 2.212534, "peer_bandwidths": {}}
+{"task_id": "T0074", "arrival_offset_s": 0, "duration_s": 452.306, "initial_cpu": 0.617041, "initial_memory": 0.439662, "peer_bandwidths": {}}
+{"task_id": "T0075", "arrival_offset_s": 0, "duration_s": 609.236, "initial_cpu": 1.297279, "initial_memory": 2.047613, "peer_bandwidths": {}}
+{"task_id": "T0076", "arrival_offset_s": 0, "duration_s": 424.303, "initial_cpu": 0.193825, "initial_memory": 1.073683, "peer_bandwidths": {}}
+{"task_id": "T0077", "arrival_offset_s": 0, "duration_s": 245.956, "initial_cpu": 0.261585, "initial_memory": 2.04228, "peer_bandwidths": {}}
+{"task_id": "T0078", "arrival_offset_s": 0, "duration_s": 547.089, "initial_cpu": 0.864429, "initial_memory": 1.350792, "peer_bandwidths": {}}
+{"task_id": "T0079", "arrival_offset_s": 0, "duration_s": 222.365, "initial_cpu": 0.515689, "initial_memory": 2.426176, "peer_bandwidths": {}}
+{"task_id": "T0080", "arrival_offset_s": 0, "duration_s": 520.778, "initial_cpu": 0.902531, "initial_memory": 0.870669, "peer_bandwidths": {}}
+{"task_id": "T0081", "arrival_offset_s": 0, "duration_s": 798.58, "initial_cpu": 1.073959, "initial_memory": 1.271551, "peer_bandwidths": {"T0274": 0.3034}}
+{"task_id": "T0082", "arrival_offset_s": 0, "duration_s": 729.262, "initial_cpu": 0.297091, "initial_memory": 2.355756, "peer_bandwidths": {}}
+{"task_id": "T0083", "arrival_offset_s": 0, "duration_s": 480.053, "initial_cpu": 0.740293, "initial_memory": 0.766666, "peer_bandwidths": {}}
+{"task_id": "T0084", "arrival_offset_s": 0, "duration_s": 303.554, "initial_cpu": 0.761044, "initial_memory": 1.589315, "peer_bandwidths": {"T0176": 0.3034}}
+{"task_id": "T0085", "arrival_offset_s": 0, "duration_s": 833.49, "initial_cpu": 0.09342, "initial_memory": 2.094484, "peer_bandwidths": {}}
+{"task_id": "T0086", "arrival_offset_s": 0, "duration_s": 474.511, "initial_cpu": 0.625234, "initial_memory": 1.401534, "peer_bandwidths": {}}
+{"task_id": "T0087", "arrival_offset_s": 0, "duration_s": 315.362, "initial_cpu": 0.778318, "initial_memory": 1.721004, "peer_bandwidths": {}}
+{"task_id": "T0088", "arrival_offset_s": 0, "duration_s": 776.134, "initial_cpu": 0.510421, "initial_memory": 1.231385, "peer_bandwidths": {}}
+{"task_id": "T0089", "arrival_offset_s": 0, "duration_s": 459.813, "initial_cpu": 0.420559, "initial_memory": 1.128396, "peer_bandwidths": {}}
+{"task_id": "T0090", "arrival_offset_s": 0, "duration_s": 739.602, "initial_cpu": 0.054193, "initial_memory": 1.124503, "peer_bandwidths": {}}
+{"task_id": "T0091", "arrival_offset_s": 0, "duration_s": 802.88, "initial_cpu": 1.083341, "initial_memory": 0.856168, "peer_bandwidths": {}}
+{"task_id": "T0092", "arrival_offset_s": 0, "duration_s": 854.418, "initial_cpu": 0.853329, "initial_memory": 0.31021, "peer_bandwidths": {}}
+{"task_id": "T0093", "arrival_offset_s": 0, "duration_s": 720.088, "initial_cpu": 0.346108, "initial_memory": 0.60295, "peer_bandwidths": {}}
+{"task_id": "T0094", "arrival_offset_s": 0, "duration_s": 615.937, "initial_cpu": 0.527097, "initial_memory": 2.005075, "peer_bandwidths": {}}
+{"task_id": "T0095", "arrival_offset_s": 0, "duration_s": 843.405, "initial_cpu": 0.517704, "initial_memory": 1.463818, "peer_bandwidths": {}}
+{"task_id": "T0096", "arrival_offset_s": 0, "duration_s": 311.499, "initial_cpu": 0.15355, "initial_memory": 1.491144, "peer_bandwidths": {}}
+{"task_id": "T0097", "arrival_offset_s": 0, "duration_s": 409.913, "initial_cpu": 0.196065, "initial_memory": 1.441236, "peer_bandwidths": {}}
+{"task_id": "T0098", "arrival_offset_s": 0, "duration_s": 608.854, "initial_cpu": 0.165731, "initial_memory": 0.764585, "peer_bandwidths": {}}
+{"task_id": "T0099", "arrival_offset_s": 0, "duration_s": 812.08, "initial_cpu": 0.61811, "initial_memory": 0.919792, "peer_bandwidths": {}}
+{"task_id": "T0100", "arrival_offset_s": 0, "duration_s": 544.294, "initial_cpu": 0.604309, "initial_memory": 0.555102, "peer_bandwidths": {"T0101": 0.9102}}
+{"task_id": "T0101", "arrival_offset_s": 0, "duration_s": 816.135, "initial_cpu": 0.54108, "initial_memory": 0.747827, "peer_bandwidths": {}}
+{"task_id": "T0102", "arrival_offset_s": 0, "duration_s": 875.73, "initial_cpu": 0.403819, "initial_memory": 1.500347, "peer_bandwidths": {}}
+{"task_id": "T0103", "arrival_offset_s": 0, "duration_s": 486.658, "initial_cpu": 0.429103, "initial_memory": 3.110359, "peer_bandwidths": {}}
+{"task_id": "T0104", "arrival_offset_s": 0, "duration_s": 883.941, "initial_cpu": 0.413946, "initial_memory": 0.544623, "peer_bandwidths": {}}
+{"task_id": "T0105", "arrival_offset_s": 0, "duration_s": 322.863, "initial_cpu": 0.517676, "initial_memory": 0.631169, "peer_bandwidths": {}}
+{"task_id": "T0106", "arrival_offset_s": 0, "duration_s": 854.333, "initial_cpu": 0.990012, "initial_memory": 0.998486, "peer_bandwidths": {}}
+{"task_id": "T0107", "arrival_offset_s": 0, "duration_s": 853.881, "initial_cpu": 0.289281, "initial_memory": 0.082519, "peer_bandwidths": {}}
+{"task_id": "T0108", "arrival_offset_s": 0, "duration_s": 488.522, "initial_cpu": 0.618004, "initial_memory": 0.883039, "peer_bandwidths": {}}
+{"task_id": "T0109", "arrival_offset_s": 0, "duration_s": 244.187, "initial_cpu": 0.495207, "initial_memory": 1.4517, "peer_bandwidths": {}}
+{"task_id": "T0110", "arrival_offset_s": 0, "duration_s": 596.433, "initial_cpu": 0.349224, "initial_memory": 1.034486, "peer_bandwidths": {}}
+{"task_id": "T0111", "arrival_offset_s": 0, "duration_s": 893.13, "initial_cpu": 0.79402, "initial_memory": 0.770588, "peer_bandwidths": {}}
+{"task_id": "T0112", "arrival_offset_s": 0, "duration_s": 812.88, "initial_cpu": 0.755275, "initial_memory": 2.384076, "peer_bandwidths": {"T0098": 0.1517}}
+{"task_id": "T0113", "arrival_offset_s": 0, "duration_s": 457.368, "initial_cpu": 0.518675, "initial_memory": 3.393947, "peer_bandwidths": {}}
+{"task_id": "T0114", "arrival_offset_s": 0, "duration_s": 727.459, "initial_cpu": 0.48982, "initial_memory": 1.012766, "peer_bandwidths": {}}
+{"task_id": "T0115", "arrival_offset_s": 0, "duration_s": 588.274, "initial_cpu": 0.727813, "initial_memory": 1.448765, "peer_bandwidths": {}}
+{"task_id": "T0116", "arrival_offset_s": 0, "duration_s": 628.462, "initial_cpu": 0.625128, "initial_memory": 0.92232, "peer_bandwidths": {}}
+{"task_id": "T0117", "arrival_offset_s": 0, "duration_s": 586.285, "initial_cpu": 0.651318, "initial_memory": 1.917402, "peer_bandwidths": {}}
+{"task_id": "T0118", "arrival_offset_s": 0, "duration_s": 640.44, "initial_cpu": 0.771385, "initial_memory": 2.099925, "peer_bandwidths": {}}
+{"task_id": "T0119", "arrival_offset_s": 0, "duration_s": 257.991, "initial_cpu": 0.65123, "initial_memory": 0.288191, "peer_bandwidths": {}}
+{"task_id": "T0120", "arrival_offset_s": 0, "duration_s": 518.619, "initial_cpu": 1.290109, "initial_memory": 1.566669, "peer_bandwidths": {"T0056": 0.6068}}
+{"task_id": "T0121", "arrival_offset_s": 0, "duration_s": 870.337, "initial_cpu": 0.31551, "initial_memory": 1.524809, "peer_bandwidths": {}}
+{"task_id": "T0122", "arrival_offset_s": 0, "duration_s": 739.866, "initial_cpu": 0.546425, "initial_memory": 0.288955, "peer_bandwidths": {}}
+{"task_id": "T0123", "arrival_offset_s": 0, "duration_s": 779.687, "initial_cpu": 0.159036, "initial_memory": 3.046558, "peer_bandwidths": {}}
+{"task_id": "T0124", "arrival_offset_s": 0, "duration_s": 528.017, "initial_cpu": 0.553272, "initial_memory": 0.713488, "peer_bandwidths": {}}
+{"task_id": "T0125", "arrival_offset_s": 0, "duration_s": 448.215, "initial_cpu": 0.485718, "initial_memory": 1.409663, "peer_bandwidths": {}}
+{"task_id": "T0126", "arrival_offset_s": 0, "duration_s": 818.565, "initial_cpu": 0.424629, "initial_memory": 1.575061, "peer_bandwidths": {}}
+{"task_id": "T0127", "arrival_offset_s": 0, "duration_s": 704.311, "initial_cpu": 0.796991, "initial_memory": 0.849626, "peer_bandwidths": {}}
+{"task_id": "T0128", "arrival_offset_s": 0, "duration_s": 323.627, "initial_cpu": 0.394399, "initial_memory": 1.141551, "peer_bandwidths": {}}
+{"task_id": "T0129", "arrival_offset_s": 0, "duration_s": 603.485, "initial_cpu": 0.539359, "initial_memory": 0.558651, "peer_bandwidths": {}}
+{"task_id": "T0130", "arrival_offset_s": 0, "duration_s": 184.178, "initial_cpu": 0.592215, "initial_memory": 2.753374, "peer_bandwidths": {"T0021": 1.2136}}
+{"task_id": "T0131", "arrival_offset_s": 0, "duration_s": 647.644, "initial_cpu": 0.742007, "initial_memory": 1.943638, "peer_bandwidths": {}}
+{"task_id": "T0132", "arrival_offset_s": 0, "duration_s": 472.046, "initial_cpu": 0.782994, "initial_memory": 2.66427, "peer_bandwidths": {}}
+{"task_id": "T0133", "arrival_offset_s": 0, "duration_s": 604.677, "initial_cpu": 0.371693, "initial_memory": 0.381432, "peer_bandwidths": {}}
+{"task_id": "T0134", "arrival_offset_s": 0, "duration_s": 771.746, "initial_cpu": 0.752184, "initial_memory": 2.26197, "peer_bandwidths": {}}
+{"task_id": "T0135", "arrival_offset_s": 0, "duration_s": 688.73, "initial_cpu": 1.089671, "initial_memory": 1.173697, "peer_bandwidths": {}}
+{"task_id": "T0136", "arrival_offset_s": 0, "duration_s": 239.468, "initial_cpu": 1.483009, "initial_memory": 1.644242, "peer_bandwidths": {"T0193": 0.4551}}
+{"task_id": "T0137", "arrival_offset_s": 0, "duration_s": 327.708, "initial_cpu": 1.267206, "initial_memory": 1.772894, "peer_bandwidths": {}}
+{"task_id": "T0138", "arrival_offset_s": 0, "duration_s": 495.853, "initial_cpu": 0.479704, "initial_memory": 3.280465, "peer_bandwidths": {}}
+{"task_id": "T0139", "arrival_offset_s": 0, "duration_s": 237.149, "initial_cpu": 0.405805, "initial_memory": 1.091716, "peer_bandwidths": {"T0192": 0.4551}}
+{"task_id": "T0140", "arrival_offset_s": 0, "duration_s": 471.17, "initial_cpu": 0.434918, "initial_memory": 1.340491, "peer_bandwidths": {}}
+{"task_id": "T0141", "arrival_offset_s": 0, "duration_s": 573.812, "initial_cpu": 0.287684, "initial_memory": 0.944398, "peer_bandwidths": {}}
+{"task_id": "T0142", "arrival_offset_s": 0, "duration_s": 556.021, "initial_cpu": 0.918595, "initial_memory": 1.473318, "peer_bandwidths": {}}
+{"task_id": "T0143", "arrival_offset_s": 0, "duration_s": 896.673, "initial_cpu": 0.632568, "initial_memory": 0.494699, "peer_bandwidths": {}}
+{"task_id": "T0144", "arrival_offset_s": 0, "duration_s": 234.697, "initial_cpu": 0.625005, "initial_memory": 0.477044, "peer_bandwidths": {}}
+{"task_id": "T0145", "arrival_offset_s": 0, "duration_s": 473.444, "initial_cpu": 0.285803, "initial_memory": 2.797055, "peer_bandwidths": {}}
+{"task_id": "T0146", "arrival_offset_s": 0, "duration_s": 364.448, "initial_cpu": 0.945276, "initial_memory": 1.031602, "peer_bandwidths": {}}
+{"task_id": "T0147", "arrival_offset_s": 0, "duration_s": 249.877, "initial_cpu": 0.429411, "initial_memory": 1.189976, "peer_bandwidths": {"T0087": 0.7585}}
+{"task_id": "T0148", "arrival_offset_s": 0, "duration_s": 354.689, "initial_cpu": 0.036986, "initial_memory": 0.636995, "peer_bandwidths": {"T0234": 0.1517}}
+{"task_id": "T0149", "arrival_offset_s": 0, "duration_s": 550.903, "initial_cpu": 0.592977, "initial_memory": 2.134282, "peer_bandwidths": {}}
+{"task_id": "T0150", "arrival_offset_s": 0, "duration_s": 824.233, "initial_cpu": 0.719998, "initial_memory": 0.533022, "peer_bandwidths": {}}
+{"task_id": "T0151", "arrival_offset_s": 0, "duration_s": 672.463, "initial_cpu": 0.157492, "initial_memory": 1.645156, "peer_bandwidths": {}}
+{"task_id": "T0152", "arrival_offset_s": 0, "duration_s": 891.942, "initial_cpu": 0.837646, "initial_memory": 1.527054, "peer_bandwidths": {"T0249": 0.3034}}
+{"task_id": "T0153", "arrival_offset_s": 0, "duration_s": 792.851, "initial_cpu": 0.933756, "initial_memory": 0.640794, "peer_bandwidths": {}}
+{"task_id": "T0154", "arrival_offset_s": 0, "duration_s": 311.454, "initial_cpu": 0.558876, "initial_memory": 1.46994, "peer_bandwidths": {}}
+{"task_id": "T0155", "arrival_offset_s": 0, "duration_s": 482.889, "initial_cpu": 0.340317, "initial_memory": 0.622377, "peer_bandwidths": {}}
+{"task_id": "T0156", "arrival_offset_s": 0, "duration_s": 390.686, "initial_cpu": 0.670176, "initial_memory": 0.633605, "peer_bandwidths": {}}
+{"task_id": "T0157", "arrival_offset_s": 0, "duration_s": 188.727, "initial_cpu": 0.451592, "initial_memory": 1.009785, "peer_bandwidths": {}}
+{"task_id": "T0158", "arrival_offset_s": 0, "duration_s": 592.369, "initial_cpu": 0.475951, "initial_memory": 1.868401, "peer_bandwidths": {}}
+{"task_id": "T0159", "arrival_offset_s": 0, "duration_s": 373.041, "initial_cpu": 0.819072, "initial_memory": 1.18018, "peer_bandwidths": {}}
+{"task_id": "T0160", "arrival_offset_s": 0, "duration_s": 865.434, "initial_cpu": 0.376323, "initial_memory": 1.037211, "peer_bandwidths": {}}
+{"task_id": "T0161", "arrival_offset_s": 0, "duration_s": 244.285, "initial_cpu": 0.640105, "initial_memory": 1.526069, "peer_bandwidths": {}}
+{"task_id": "T0162", "arrival_offset_s": 0, "duration_s": 758.859, "initial_cpu": 0.917118, "initial_memory": 1.367017, "peer_bandwidths": {}}
+{"task_id": "T0163", "arrival_offset_s": 0, "duration_s": 182.524, "initial_cpu": 0.698404, "initial_memory": 1.111005, "peer_bandwidths": {}}
+{"task_id": "T0164", "arrival_offset_s": 0, "duration_s": 594.6, "initial_cpu": 0.8413, "initial_memory": 1.869652, "peer_bandwidths": {}}
+{"task_id": "T0165", "arrival_offset_s": 0, "duration_s": 876.345, "initial_cpu": 0.971502, "initial_memory": 1.811802, "peer_bandwidths": {"T0082": 0.4551}}
+{"task_id": "T0166", "arrival_offset_s": 0, "duration_s": 231.744, "initial_cpu": 0.288735, "initial_memory": 1.78823, "peer_bandwidths": {"T0103": 0.4551}}
+{"task_id": "T0167", "arrival_offset_s": 0, "duration_s": 600.403, "initial_cpu": 0.411918, "initial_memory": 1.408363, "peer_bandwidths": {}}
+{"task_id": "T0168", "arrival_offset_s": 0, "duration_s": 623.716, "initial_cpu": 1.109404, "initial_memory": 1.328184, "peer_bandwidths": {}}
+{"task_id": "T0169", "arrival_offset_s": 0, "duration_s": 425.582, "initial_cpu": 0.087846, "initial_memory": 2.400889, "peer_bandwidths": {"T0194": 0.3034}}
+{"task_id": "T0170", "arrival_offset_s": 0, "duration_s": 684.624, "initial_cpu": 0.977976, "initial_memory": 1.213148, "peer_bandwidths": {}}
+{"task_id": "T0171", "arrival_offset_s": 0, "duration_s": 696.109, "initial_cpu": 0.213724, "initial_memory": 0.369615, "peer_bandwidths": {}}
+{"task_id": "T0172", "arrival_offset_s": 0, "duration_s": 783.746, "initial_cpu": 0.30843, "initial_memory": 0.073144, "peer_bandwidths": {}}
+{"task_id": "T0173", "arrival_offset_s": 0, "duration_s": 593.201, "initial_cpu": 0.957867, "initial_memory": 1.114005, "peer_bandwidths": {}}
+{"task_id": "T0174", "arrival_offset_s": 0, "duration_s": 858.799, "initial_cpu": 0.266332, "initial_memory": 0.89391, "peer_bandwidths": {}}
+{"task_id": "T0175", "arrival_offset_s": 0, "duration_s": 826.464, "initial_cpu": 0.133267, "initial_memory": 1.396374, "peer_bandwidths": {}}
+{"task_id": "T0176", "arrival_offset_s": 0, "duration_s": 651.462, "initial_cpu": 0.942706, "initial_memory": 0.572425, "peer_bandwidths": {}}
+{"task_id": "T0177", "arrival_offset_s": 0, "duration_s": 844.194, "initial_cpu": 0.559702, "initial_memory": 1.632192, "peer_bandwidths": {}}
+{"task_id": "T0178", "arrival_offset_s": 0, "duration_s": 760.796, "initial_cpu": 0.395448, "initial_memory": 1.978025, "peer_bandwidths": {}}
+{"task_id": "T0179", "arrival_offset_s": 0, "duration_s": 212.253, "initial_cpu": 0.374306, "initial_memory": 0.206935, "peer_bandwidths": {}}
+{"task_id": "T0180", "arrival_offset_s": 0, "duration_s": 870.209, "initial_cpu": 0.834468, "initial_memory": 0.742199, "peer_bandwidths": {}}
+{"task_id": "T0181", "arrival_offset_s": 0, "duration_s": 309.813, "initial_cpu": 0.688707, "initial_memory": 1.987356, "peer_bandwidths": {}}
+{"task_id": "T0182", "arrival_offset_s": 0, "duration_s": 528.741, "initial_cpu": 1.379, "initial_memory": 0.456978, "peer_bandwidths": {}}
+{"task_id": "T0183", "arrival_offset_s": 0, "duration_s": 258.874, "initial_cpu": 0.656092, "initial_memory": 2.437515, "peer_bandwidths": {}}
+{"task_id": "T0184", "arrival_offset_s": 0, "duration_s": 408.806, "initial_cpu": 0.230641, "initial_memory": 1.764657, "peer_bandwidths": {}}
+{"task_id": "T0185", "arrival_offset_s": 0, "duration_s": 852.485, "initial_cpu": 0.317349, "initial_memory": 2.358977, "peer_bandwidths": {}}
+{"task_id": "T0186", "arrival_offset_s": 0, "duration_s": 235.561, "initial_cpu": 0.145511, "initial_memory": 0.586309, "peer_bandwidths": {}}
+{"task_id": "T0187", "arrival_offset_s": 0, "duration_s": 859.796, "initial_cpu": 1.071266, "initial_memory": 1.330315, "peer_bandwidths": {}}
+{"task_id": "T0188", "arrival_offset_s": 0, "duration_s": 743.916, "initial_cpu": 0.195308, "initial_memory": 0.422435, "peer_bandwidths": {}}
+{"task_id": "T0189", "arrival_offset_s": 0, "duration_s": 898.088, "initial_cpu": 0.853627, "initial_memory": 0.684626, "peer_bandwidths": {}}
+{"task_id": "T0190", "arrival_offset_s": 0, "duration_s": 383.486, "initial_cpu": 0.539244, "initial_memory": 2.370918, "peer_bandwidths": {}}
+{"task_id": "T0191", "arrival_offset_s": 0, "duration_s": 692.558, "initial_cpu": 0.480597, "initial_memory": 0.701071, "peer_bandwidths": {}}
+{"task_id": "T0192", "arrival_offset_s": 0, "duration_s": 854.822, "initial_cpu": 0.923882, "initial_memory": 0.871294, "peer_bandwidths": {}}
+{"task_id": "T0193", "arrival_offset_s": 0, "duration_s": 849.084, "initial_cpu": 0.813468, "initial_memory": 0.70652, "peer_bandwidths": {}}
+{"task_id": "T0194", "arrival_offset_s": 0, "duration_s": 556.293, "initial_cpu": 0.496872, "initial_memory": 0.999142, "peer_bandwidths": {}}
+{"task_id": "T0195", "arrival_offset_s": 0, "duration_s": 881.398, "initial_cpu": 0.391927, "initial_memory": 1.475973, "peer_bandwidths": {}}
+{"task_id": "T0196", "arrival_offset_s": 0, "duration_s": 853.999, "initial_cpu": 0.544415, "initial_memory": 0.354301, "peer_bandwidths": {}}
+{"task_id": "T0197", "arrival_offset_s": 0, "duration_s": 582.84, "initial_cpu": 0.26544, "initial_memory": 0.4702, "peer_bandwidths": {}}
+{"task_id": "T0198", "arrival_offset_s": 0, "duration_s": 193.0, "initial_cpu": 0.894001, "initial_memory": 1.00654, "peer_bandwidths": {}}
+{"task_id": "T0199", "arrival_offset_s": 0, "duration_s": 359.877, "initial_cpu": 0.205677, "initial_memory": 0.814732, "peer_bandwidths": {}}
+{"task_id": "T0200", "arrival_offset_s": 0, "duration_s": 497.865, "initial_cpu": 0.312598, "initial_memory": 0.330731, "peer_bandwidths": {"T0190": 0.4551}}
+{"task_id": "T0201", "arrival_offset_s": 0, "duration_s": 395.943, "initial_cpu": 0.661388, "initial_memory": 0.394346, "peer_bandwidths": {}}
+{"task_id": "T0202", "arrival_offset_s": 0, "duration_s": 774.723, "initial_cpu": 0.427047, "initial_memory": 0.808566, "peer_bandwidths": {}}
+{"task_id": "T0203", "arrival_offset_s": 0, "duration_s": 830.101, "initial_cpu": 0.328421, "initial_memory": 1.629798, "peer_bandwidths": {"T0270": 0.3034}}
+{"task_id": "T0204", "arrival_offset_s": 0, "duration_s": 405.776, "initial_cpu": 0.883544, "initial_memory": 1.113745, "peer_bandwidths": {}}
+{"task_id": "T0205", "arrival_offset_s": 0, "duration_s": 259.749, "initial_cpu": 0.51518, "initial_memory": 0.571138, "peer_bandwidths": {}}
+{"task_id": "T0206", "arrival_offset_s": 0, "duration_s": 628.569, "initial_cpu": 0.557465, "initial_memory": 0.851599, "peer_bandwidths": {}}
+{"task_id": "T0207", "arrival_offset_s": 0, "duration_s": 843.069, "initial_cpu": 0.384941, "initial_memory": 1.396995, "peer_bandwidths": {"T0294": 0.1517}}
+{"task_id": "T0208", "arrival_offset_s": 0, "duration_s": 522.135, "initial_cpu": 1.138967, "initial_memory": 0.951809, "peer_bandwidths": {"T0144": 0.1517}}
+{"task_id": "T0209", "arrival_offset_s": 0, "duration_s": 643.857, "initial_cpu": 0.730062, "initial_memory": 0.397307, "peer_bandwidths": {}}
+{"task_id": "T0210", "arrival_offset_s": 0, "duration_s": 631.769, "initial_cpu": 0.860522, "initial_memory": 1.01223, "peer_bandwidths": {}}
+{"task_id": "T0211", "arrival_offset_s": 0, "duration_s": 441.483, "initial_cpu": 0.579635, "initial_memory": 1.668035, "peer_bandwidths": {}}
+{"task_id": "T0212", "arrival_offset_s": 0, "duration_s": 799.106, "initial_cpu": 0.311085, "initial_memory": 1.314877, "peer_bandwidths": {}}
+{"task_id": "T0213", "arrival_offset_s": 0, "duration_s": 841.411, "initial_cpu": 0.708293, "initial_memory": 0.748469, "peer_bandwidths": {}}
+{"task_id": "T0214", "arrival_offset_s": 0, "duration_s": 657.54, "initial_cpu": 0.37474, "initial_memory": 1.795442, "peer_bandwidths": {}}
+{"task_id": "T0215", "arrival_offset_s": 0, "duration_s": 899.718, "initial_cpu": 0.584187, "initial_memory": 1.024793, "peer_bandwidths": {}}
+{"task_id": "T0216", "arrival_offset_s": 0, "duration_s": 391.267, "initial_cpu": 1.132711, "initial_memory": 0.573664, "peer_bandwidths": {}}
+{"task_id": "T0217", "arrival_offset_s": 0, "duration_s": 621.104, "initial_cpu": 1.177411, "initial_memory": 0.779285, "peer_bandwidths": {}}
+{"task_id": "T0218", "arrival_offset_s": 0, "duration_s": 206.167, "initial_cpu": 0.916151, "initial_memory": 0.864137, "peer_bandwidths": {}}
+{"task_id": "T0219", "arrival_offset_s": 0, "duration_s": 544.682, "initial_cpu": 0.979132, "initial_memory": 0.750958, "peer_bandwidths": {}}
+{"task_id": "T0220", "arrival_offset_s": 0, "duration_s": 800.553, "initial_cpu": 0.70886, "initial_memory": 0.473846, "peer_bandwidths": {}}
+{"task_id": "T0221", "arrival_offset_s": 0, "duration_s": 634.783, "initial_cpu": 0.261797, "initial_memory": 0.833027, "peer_bandwidths": {}}
+{"task_id": "T0222", "arrival_offset_s": 0, "duration_s": 849.397, "initial_cpu": 0.176161, "initial_memory": 1.598047, "peer_bandwidths": {"T0162": 0.3034}}
+{"task_id": "T0223", "arrival_offset_s": 0, "duration_s": 831.944, "initial_cpu": 1.072953, "initial_memory": 2.126817, "peer_bandwidths": {}}
+{"task_id": "T0224", "arrival_offset_s": 0, "duration_s": 251.4, "initial_cpu": 0.502622, "initial_memory": 1.018669, "peer_bandwidths": {}}
+{"task_id": "T0225", "arrival_offset_s": 0, "duration_s": 493.223, "initial_cpu": 0.20107, "initial_memory": 1.125419, "peer_bandwidths": {}}
+{"task_id": "T0226", "arrival_offset_s": 0, "duration_s": 254.167, "initial_cpu": 0.725883, "initial_memory": 0.814038, "peer_bandwidths": {}}
+{"task_id": "T0227", "arrival_offset_s": 0, "duration_s": 833.069, "initial_cpu": 0.082808, "initial_memory": 0.752991, "peer_bandwidths": {}}
+{"task_id": "T0228", "arrival_offset_s": 0, "duration_s": 402.439, "initial_cpu": 0.214307, "initial_memory": 1.097762, "peer_bandwidths": {}}
+{"task_id": "T0229", "arrival_offset_s": 0, "duration_s": 832.887, "initial_cpu": 0.700479, "initial_memory": 0.926932, "peer_bandwidths": {"T0131": 0.1517}}
+{"task_id": "T0230", "arrival_offset_s": 0, "duration_s": 814.776, "initial_cpu": 0.513971, "initial_memory": 0.408989, "peer_bandwidths": {}}
+{"task_id": "T0231", "arrival_offset_s": 0, "duration_s": 443.585, "initial_cpu": 0.664761, "initial_memory": 3.622131, "peer_bandwidths": {}}
+{"task_id": "T0232", "arrival_offset_s": 0, "duration_s": 648.683, "initial_cpu": 0.382049, "initial_memory": 0.612633, "peer_bandwidths": {}}
+{"task_id": "T0233", "arrival_offset_s": 0, "duration_s": 724.26, "initial_cpu": 0.870637, "initial_memory": 0.58012, "peer_bandwidths": {}}
+{"task_id": "T0234", "arrival_offset_s": 0, "duration_s": 338.989, "initial_cpu": 0.540199, "initial_memory": 0.278187, "peer_bandwidths": {}}
+{"task_id": "T0235", "arrival_offset_s": 0, "duration_s": 427.439, "initial_cpu": 0.992149, "initial_memory": 1.689604, "peer_bandwidths": {}}
+{"task_id": "T0236", "arrival_offset_s": 0, "duration_s": 396.374, "initial_cpu": 0.338232, "initial_memory": 1.351761, "peer_bandwidths": {}}
+{"task_id": "T0237", "arrival_offset_s": 0, "duration_s": 559.438, "initial_cpu": 0.736045, "initial_memory": 0.165182, "peer_bandwidths": {}}
+{"task_id": "T0238", "arrival_offset_s": 0, "duration_s": 223.622, "initial_cpu": 0.70915, "initial_memory": 1.808315, "peer_bandwidths": {}}
+{"task_id": "T0239", "arrival_offset_s": 0, "duration_s": 818.428, "initial_cpu": 0.290671, "initial_memory": 2.106281, "peer_bandwidths": {}}
+{"task_id": "T0240", "arrival_offset_s": 0, "duration_s": 304.035, "initial_cpu": 0.819382, "initial_memory": 0.736409, "peer_bandwidths": {}}
+{"task_id": "T0241", "arrival_offset_s": 0, "duration_s": 700.912, "initial_cpu": 1.230745, "initial_memory": 0.121459, "peer_bandwidths": {}}
+{"task_id": "T0242", "arrival_offset_s": 0, "duration_s": 533.748, "initial_cpu": 0.436168, "initial_memory": 1.319373, "peer_bandwidths": {}}
+{"task_id": "T0243", "arrival_offset_s": 0, "duration_s": 401.232, "initial_cpu": 0.638949, "initial_memory": 2.358299, "peer_bandwidths": {}}
+{"task_id": "T0244", "arrival_offset_s": 0, "duration_s": 607.248, "initial_cpu": 0.263848, "initial_memory": 0.422478, "peer_bandwidths": {"T0259": 0.6068}}
+{"task_id": "T0245", "arrival_offset_s": 0, "duration_s": 183.076, "initial_cpu": 0.416774, "initial_memory": 0.349594, "peer_bandwidths": {"T0283": 0.7585}}
+{"task_id": "T0246", "arrival_offset_s": 0, "duration_s": 767.483, "initial_cpu": 0.657826, "initial_memory": 1.787429, "peer_bandwidths": {"T0218": 0.1517}}
+{"task_id": "T0247", "arrival_offset_s": 0, "duration_s": 610.81, "initial_cpu": 0.179429, "initial_memory": 1.179582, "peer_bandwidths": {}}
+{"task_id": "T0248", "arrival_offset_s": 0, "duration_s": 778.565, "initial_cpu": 0.968369, "initial_memory": 1.140819, "peer_bandwidths": {}}
+{"task_id": "T0249", "arrival_offset_s": 0, "duration_s": 592.135, "initial_cpu": 0.337428, "initial_memory": 1.318727, "peer_bandwidths": {}}
+{"task_id": "T0250", "arrival_offset_s": 0, "duration_s": 328.753, "initial_cpu": 0.314846, "initial_memory": 2.069285, "peer_bandwidths": {}}
+{"task_id": "T0251", "arrival_offset_s": 0, "duration_s": 378.319, "initial_cpu": 0.352495, "initial_memory": 0.658491, "peer_bandwidths": {}}
+{"task_id": "T0252", "arrival_offset_s": 0, "duration_s": 692.815, "initial_cpu": 0.522879, "initial_memory": 0.034686, "peer_bandwidths": {}}
+{"task_id": "T0253", "arrival_offset_s": 0, "duration_s": 692.25, "initial_cpu": 0.576251, "initial_memory": 2.45495, "peer_bandwidths": {}}
+{"task_id": "T0254", "arrival_offset_s": 0, "duration_s": 262.066, "initial_cpu": 0.588187, "initial_memory": 2.019138, "peer_bandwidths": {"T0175": 0.4551}}
+{"task_id": "T0255", "arrival_offset_s": 0, "duration_s": 752.413, "initial_cpu": 0.626911, "initial_memory": 1.34544, "peer_bandwidths": {}}
+{"task_id": "T0256", "arrival_offset_s": 0, "duration_s": 396.766, "initial_cpu": 0.071133, "initial_memory": 0.546408, "peer_bandwidths": {}}
+{"task_id": "T0257", "arrival_offset_s": 0, "duration_s": 432.426, "initial_cpu": 0.453548, "initial_memory": 0.413404, "peer_bandwidths": {"T0252": 0.3034}}
+{"task_id": "T0258", "arrival_offset_s": 0, "duration_s": 641.885, "initial_cpu": 0.376714, "initial_memory": 1.411125, "peer_bandwidths": {}}
+{"task_id": "T0259", "arrival_offset_s": 0, "duration_s": 757.501, "initial_cpu": 0.22535, "initial_memory": 1.134585, "peer_bandwidths": {}}
+{"task_id": "T0260", "arrival_offset_s": 0, "duration_s": 631.129, "initial_cpu": 0.454214, "initial_memory": 1.201862, "peer_bandwidths": {}}
+{"task_id": "T0261", "arrival_offset_s": 0, "duration_s": 460.501, "initial_cpu": 0.440193, "initial_memory": 1.802898, "peer_bandwidths": {}}
+{"task_id": "T0262", "arrival_offset_s": 0, "duration_s": 531.659, "initial_cpu": 0.796393, "initial_memory": 0.66847, "peer_bandwidths": {}}
+{"task_id": "T0263", "arrival_offset_s": 0, "duration_s": 600.276, "initial_cpu": 1.232822, "initial_memory": 1.17878, "peer_bandwidths": {}}
+{"task_id": "T0264", "arrival_offset_s": 0, "duration_s": 739.419, "initial_cpu": 0.510472, "initial_memory": 0.698769, "peer_bandwidths": {}}
+{"task_id": "T0265", "arrival_offset_s": 0, "duration_s": 588.533, "initial_cpu": 0.853096, "initial_memory": 2.086668, "peer_bandwidths": {}}
+{"task_id": "T0266", "arrival_offset_s": 0, "duration_s": 436.921, "initial_cpu": 0.474117, "initial_memory": 1.242108, "peer_bandwidths": {}}
+{"task_id": "T0267", "arrival_offset_s": 0, "duration_s": 892.726, "initial_cpu": 0.671017, "initial_memory": 1.116138, "peer_bandwidths": {}}
+{"task_id": "T0268", "arrival_offset_s": 0, "duration_s": 268.289, "initial_cpu": 0.838695, "initial_memory": 0.092847, "peer_bandwidths": {}}
+{"task_id": "T0269", "arrival_offset_s": 0, "duration_s": 513.503, "initial_cpu": 0.708647, "initial_memory": 2.14537, "peer_bandwidths": {}}
+{"task_id": "T0270", "arrival_offset_s": 0, "duration_s": 688.896, "initial_cpu": 0.933817, "initial_memory": 0.893052, "peer_bandwidths": {}}
+{"task_id": "T0271", "arrival_offset_s": 0, "duration_s": 630.528, "initial_cpu": 1.12925, "initial_memory": 1.596459, "peer_bandwidths": {"T0038": 0.1517}}
+{"task_id": "T0272", "arrival_offset_s": 0, "duration_s": 738.776, "initial_cpu": 0.675038, "initial_memory": 1.284786, "peer_bandwidths": {}}
+{"task_id": "T0273", "arrival_offset_s": 0, "duration_s": 869.8, "initial_cpu": 0.638287, "initial_memory": 0.62074, "peer_bandwidths": {}}
+{"task_id": "T0274", "arrival_offset_s": 0, "duration_s": 552.503, "initial_cpu": 0.233907, "initial_memory": 1.074202, "peer_bandwidths": {}}
+{"task_id": "T0275", "arrival_offset_s": 0, "duration_s": 498.0, "initial_cpu": 0.462382, "initial_memory": 0.810764, "peer_bandwidths": {}}
+{"task_id": "T0276", "arrival_offset_s": 0, "duration_s": 189.397, "initial_cpu": 0.882877, "initial_memory": 1.451036, "peer_bandwidths": {"T0241": 0.3034}}
+{"task_id": "T0277", "arrival_offset_s": 0, "duration_s": 361.518, "initial_cpu": 0.91926, "initial_memory": 1.011856, "peer_bandwidths": {}}
+{"task_id": "T0278", "arrival_offset_s": 0, "duration_s": 546.568, "initial_cpu": 0.976023, "initial_memory": 1.019575, "peer_bandwidths": {}}
+{"task_id": "T0279", "arrival_offset_s": 0, "duration_s": 358.247, "initial_cpu": 0.901346, "initial_memory": 2.480697, "peer_bandwidths": {"T0205": 0.1517}}
+{"task_id": "T0280", "arrival_offset_s": 0, "duration_s": 456.213, "initial_cpu": 0.372599, "initial_memory": 1.41899, "peer_bandwidths": {}}
+{"task_id": "T0281", "arrival_offset_s": 0, "duration_s": 360.635, "initial_cpu": 0.260202, "initial_memory": 1.132813, "peer_bandwidths": {}}
+{"task_id": "T0282", "arrival_offset_s": 0, "duration_s": 524.949, "initial_cpu": 0.355787, "initial_memory": 1.125485, "peer_bandwidths": {}}
+{"task_id": "T0283", "arrival_offset_s": 0, "duration_s": 716.098, "initial_cpu": 0.550477, "initial_memory": 0.306313, "peer_bandwidths": {}}
+{"task_id": "T0284", "arrival_offset_s": 0, "duration_s": 264.272, "initial_cpu": 0.927205, "initial_memory": 2.000469, "peer_bandwidths": {}}
+{"task_id": "T0285", "arrival_offset_s": 0, "duration_s": 375.356, "initial_cpu": 0.992843, "initial_memory": 0.555497, "peer_bandwidths": {}}
+{"task_id": "T0286", "arrival_offset_s": 0, "duration_s": 652.949, "initial_cpu": 0.206837, "initial_memory": 0.507779, "peer_bandwidths": {}}
+{"task_id": "T0287", "arrival_offset_s": 0, "duration_s": 343.49, "initial_cpu": 0.930401, "initial_memory": 0.167422, "peer_bandwidths": {}}
+{"task_id": "T0288", "arrival_offset_s": 0, "duration_s": 271.035, "initial_cpu": 0.83669, "initial_memory": 1.904323, "peer_bandwidths": {}}
+{"task_id": "T0289", "arrival_offset_s": 0, "duration_s": 275.698, "initial_cpu": 0.269665, "initial_memory": 2.408751, "peer_bandwidths": {}}
+{"task_id": "T0290", "arrival_offset_s": 0, "duration_s": 577.838, "initial_cpu": 0.855072, "initial_memory": 1.899874, "peer_bandwidths": {}}
+{"task_id": "T0291", "arrival_offset_s": 0, "duration_s": 829.54, "initial_cpu": 0.091759, "initial_memory": 1.823285, "peer_bandwidths": {}}
+{"task_id": "T0292", "arrival_offset_s": 0, "duration_s": 747.359, "initial_cpu": 0.128607, "initial_memory": 0.984767, "peer_bandwidths": {}}
+{"task_id": "T0293", "arrival_offset_s": 0, "duration_s": 487.176, "initial_cpu": 0.815348, "initial_memory": 0.795153, "peer_bandwidths": {}}
+{"task_id": "T0294", "arrival_offset_s": 0, "duration_s": 830.089, "initial_cpu": 0.647368, "initial_memory": 1.655198, "peer_bandwidths": {}}
+{"task_id": "T0295", "arrival_offset_s": 0, "duration_s": 728.959, "initial_cpu": 0.958327, "initial_memory": 2.750452, "peer_bandwidths": {}}
+{"task_id": "T0296", "arrival_offset_s": 0, "duration_s": 828.017, "initial_cpu": 0.522276, "initial_memory": 1.174289, "peer_bandwidths": {}}
+{"task_id": "T0297", "arrival_offset_s": 0, "duration_s": 244.677, "initial_cpu": 0.228897, "initial_memory": 1.477148, "peer_bandwidths": {}}
+{"task_id": "T0298", "arrival_offset_s": 0, "duration_s": 326.288, "initial_cpu": 0.618878, "initial_memory": 3.450774, "peer_bandwidths": {}}
+{"task_id": "T0299", "arrival_offset_s": 0, "duration_s": 706.615, "initial_cpu": 0.469187, "initial_memory": 0.549015, "peer_bandwidths": {}}

@@ -131,6 +131,54 @@ uv run main.py --node-path dummy_data/nodes.jsonl --edge-path dummy_data/edges.j
 | `scripts/run_rtt_sweep_all.sh` | Runs all three RTT sweeps with `data/` + `plots/` + `logs/` defaults |
 | `scripts/run_dynamic_epoch_benchmark_all.sh` | Runs dynamic epoch benchmark across solver backends (e.g., CBC/SCIP) with standard `data/` + `plots/` + `logs/` outputs |
 | `scripts/run_resource_benchmark_all.sh` | Runs the resource benchmark (selftest → benchmark → plots) with standard `data/` + `plots/resource/` + `logs/` outputs; honors `RUNS`/`DATA_VOLUMES`/`REPEATS`/`*_CORES` env overrides |
+| `scripts/raw_data_prep.py` | Builds `data/raw_topology/{nodes,edges,tasks}.jsonl` from the `raw_data/` telemetry dump (see **raw_data experiment** below) |
+| `scripts/run_raw_data_assignment.py` | Sketch-vs-ES assignment experiment on the raw_data cluster: replays `synthetic_cpu_var.csv` per epoch, queries both backends, and drives two *independent* scheduling simulations |
+| `scripts/plot_raw_data_assignment.py` | Plots from that experiment → `plots/raw_data/{query_solver,assignment}.png` |
+
+### raw_data experiment
+
+Runs the paper's setup against a real cluster trace instead of uniform synthetic
+rows. Inputs come from a `raw_data/` dump (default `~/Downloads/raw_data/`):
+
+| File | Used as |
+|---|---|
+| `cpu_alloc.csv` − `pod_reqs.csv` | static node CPU capacity, `(allocatable − requests)/1000` cores |
+| `cpu_var.csv` | per-node memory capacity (max observed `memory_available`) |
+| `bw.csv` | topology — 79 observed links reduced to a **maximum spanning tree** (43 edges), because the MILP's path constraint assumes a unique path between node pairs |
+| `synthetic_cpu_var.csv` | per-epoch telemetry — 996,800 rows spanning exactly 300 s, i.e. one epoch, replayed per epoch with fresh lognormal jitter |
+
+Node resource state fed to the solver follows the dump's own formula
+(`cpu_available = allocatable − requests − usage`):
+
+```
+used_cpu    = telemetry_quantile(cpu_usage)             + running-task CPU
+used_memory = capacity − telemetry_quantile(mem_avail)  + running-task memory
+```
+
+Notes and current limitations:
+- **Tasks are synthetic.** `raw_data/` contains no task-level data (`cpu_var.csv`
+  is explicitly background load with no tasks running), so `raw_data_prep.py`
+  generates them per the paper's description (Rayleigh CPU/memory, Zipf bandwidth).
+- **Two metrics only** (`cpu_cores`, `memory_gb`). `raw_data/` has no per-node
+  network metric — `bw.csv` is per-edge — so the server runs against
+  `raw-data-config.yaml`, which drops `network_mbps`. The MILP's link-bandwidth
+  constraint is unaffected: it uses `bw.csv` edge capacity and synthetic task demand.
+- **Timestamps are bucketed into epochs** (`epoch = floor((t − t0) / 300 s)`) rather
+  than queried as a time range, keeping the ES filter a `term` match as in the
+  other sweeps.
+- 3 of the 47 nodes in `cpu_alloc.csv` (`UGS-17/18/19`) have no telemetry and are
+  dropped, leaving 44.
+- The workload as currently generated drains in ~4 epochs: all tasks arrive at
+  epoch 0 and the count-maximising objective packs the right-skewed small tasks.
+  Rolling arrivals (`arrival_offset_s` is written but not yet honored) are needed
+  for a long run.
+
+```bash
+# ES must be running on :9200; the script starts/stops the sketch server itself
+python scripts/raw_data_prep.py
+python scripts/run_raw_data_assignment.py --epochs 30
+python scripts/plot_raw_data_assignment.py
+```
 
 ### Benchmark output convention
 
