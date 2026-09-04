@@ -2,6 +2,13 @@
 
 Proof-of-concept network control demo for epoch-based task placement with approximate analytics layer.
 
+## Architecture
+
+![System architecture](docs/arch_diagram.png)
+
+The controller queries an approximate telemetry layer (Rust sketch server) instead of
+Elasticsearch, then solves task placement per epoch.
+
 ## Problem Specification
 
 ### Problem Definition
