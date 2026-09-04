@@ -11,10 +11,22 @@ Paper setup, but the cluster and the per-epoch telemetry come from raw_data/:
 Each epoch:
   1. the same rows are ingested into the sketch server and into Elasticsearch
   2. both are asked for per-node CPU/memory quantiles over that epoch
-  3. each backend's answer drives its OWN scheduling simulation -- independent
+  3. tasks whose `arrival_offset_s` falls in this epoch join the pending queue
+  4. each backend's answer drives its OWN scheduling simulation -- independent
      pending queues, running sets and completion clocks -- so the assignment
      counts accumulate the effect of the telemetry difference instead of being
      re-synchronised every epoch
+
+Tasks arrive on a rolling schedule (see raw_data_prep.py), so the queue keeps a
+backlog instead of draining after a few epochs. `--runs` repeats the whole
+trajectory with a fresh telemetry jitter draw and a restarted server, which is
+what separates a real telemetry effect from solver/jitter noise: a per-epoch
+gap of a few tasks means nothing at n=1.
+
+Every solve records its MILP status. `FEASIBLE` means the solve stopped at
+`--solver-time-limit-s` with a valid but not provably optimal solution -- such
+an epoch's assignment count is not attributable to the telemetry source, so it
+must be excluded (or the queue made smaller) rather than read as a result.
 
 Node resource state handed to the MILP is
     used_cpu    = telemetry_quantile(cpu_usage)            + running task CPU
@@ -54,7 +66,6 @@ from rtt_sweep_common import (  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SOLVER_ROOT = REPO_ROOT / "solver_experimental"
 DEFAULT_TOPOLOGY_DIR = REPO_ROOT / "data" / "raw_topology"
-DEFAULT_TELEMETRY = Path.home() / "Downloads" / "raw_data" / "synthetic_cpu_var.csv"
 
 MILLI = 1000.0
 BYTES_PER_GB = 1e9
@@ -65,15 +76,39 @@ BACKENDS = ("sketch", "es")
 # Args
 # ---------------------------------------------------------------------------
 
+def _default_raw_dir() -> Path:
+    """First existing of $RAW_DATA_DIR, ~/raw_data, ~/Downloads/raw_data."""
+    candidates = []
+    env = os.environ.get("RAW_DATA_DIR")
+    if env:
+        candidates.append(Path(env))
+    candidates += [Path.home() / "raw_data", Path.home() / "Downloads" / "raw_data"]
+    for c in candidates:
+        if c.is_dir():
+            return c
+    return candidates[-1]
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--telemetry-csv", type=Path, default=DEFAULT_TELEMETRY)
+    p.add_argument("--telemetry-csv", type=Path,
+                   default=_default_raw_dir() / "synthetic_cpu_var.csv")
     p.add_argument("--topology-dir", type=Path, default=DEFAULT_TOPOLOGY_DIR)
     p.add_argument("--out-csv", type=str, default="data/raw_data_assignment.csv")
     p.add_argument("--nodes-csv", type=str, default="data/raw_data_assignment_nodes.csv")
 
+    p.add_argument("--runs", type=int, default=1,
+                   help="Independent repeats. Each gets a fresh jitter draw and a restarted server.")
     p.add_argument("--epochs", type=int, default=10)
-    p.add_argument("--epoch-length-s", type=float, default=300.0)
+    p.add_argument("--epoch-length-s", type=float, default=300.0,
+                   help="Must match raw_data_prep.py --epoch-length-s.")
+    p.add_argument(
+        "--task-ttl-epochs", type=int, default=0,
+        help=(
+            "Drop a task after this many epochs in the pending queue (0 = never). "
+            "Guards against tasks that never fit growing the MILP without bound."
+        ),
+    )
     p.add_argument(
         "--rows-per-epoch", type=int, default=0,
         help="Subsample the telemetry to this many rows per epoch (0 = use all ~996,800).",
@@ -155,13 +190,13 @@ def load_telemetry(path: Path, keep_nodes: Sequence[str], rows_per_epoch: int, s
     return Telemetry(node_ids=sorted(keep), node_idx=node_idx, cpu_cores=cpu, mem_gb=mem)
 
 
-def epoch_values(tel: Telemetry, epoch: int, jitter: float, seed: int):
+def epoch_values(tel: Telemetry, epoch: int, jitter: float, seed: int, run: int = 0):
     """Values for one epoch: the same replay with fresh multiplicative jitter."""
     import numpy as np
 
     if jitter <= 0.0:
         return tel.cpu_cores, tel.mem_gb
-    rng = np.random.default_rng(seed + epoch)
+    rng = np.random.default_rng(seed + run * 1_000_003 + epoch)
     n = len(tel.cpu_cores)
     return (
         tel.cpu_cores * np.exp(rng.normal(0.0, jitter, n)).astype("float32"),
@@ -348,8 +383,10 @@ def load_solver_assets(topology_dir: Path) -> dict:
             bandwidth=sum(t.peer_bandwidths.values()), priority=1.0, communications=comms,
         )
     durations = {tid: t.duration_s for tid, t in raw_tasks.items()}
+    arrivals = sorted((t.arrival_offset_s, tid) for tid, t in raw_tasks.items())
     return {
         "nodes": nodes, "edges": edges, "tasks": tasks, "durations": durations,
+        "arrivals": arrivals,
         "NetworkControllerSolver": NetworkControllerSolver, "OrtNode": OrtNode,
     }
 
@@ -357,9 +394,23 @@ def load_solver_assets(topology_dir: Path) -> dict:
 @dataclass
 class SimState:
     """One backend's independent scheduling trajectory."""
-    pending: List[str]
+    unreleased: List[tuple]                                   # (arrival_offset_s, task_id), ascending
+    pending: List[str] = field(default_factory=list)
     running: Dict[str, tuple] = field(default_factory=dict)   # task_id -> (node_id, finish_epoch)
     completed: set = field(default_factory=set)
+    dropped: set = field(default_factory=set)
+    queued_since: Dict[str, int] = field(default_factory=dict)
+
+    def release(self, epoch: int, epoch_length_s: float) -> int:
+        """Admit tasks that arrive during this epoch."""
+        cutoff = (epoch + 1) * epoch_length_s
+        n = 0
+        while self.unreleased and self.unreleased[0][0] < cutoff:
+            _, tid = self.unreleased.pop(0)
+            self.pending.append(tid)
+            self.queued_since[tid] = epoch
+            n += 1
+        return n
 
     def retire(self, epoch: int) -> int:
         done = [t for t, (_, fin) in self.running.items() if fin <= epoch]
@@ -367,6 +418,19 @@ class SimState:
             self.running.pop(t)
             self.completed.add(t)
         return len(done)
+
+    def expire(self, epoch: int, ttl_epochs: int) -> int:
+        """Drop tasks that have waited too long, so the MILP stays bounded."""
+        if ttl_epochs <= 0:
+            return 0
+        stale = [t for t in self.pending if epoch - self.queued_since.get(t, epoch) >= ttl_epochs]
+        for t in stale:
+            self.pending.remove(t)
+            self.dropped.add(t)
+        return len(stale)
+
+    def drained(self) -> bool:
+        return not self.unreleased and not self.pending and not self.running
 
     def running_load(self, tasks: dict) -> Dict[str, tuple[float, float]]:
         load: Dict[str, list] = {}
@@ -397,7 +461,10 @@ def solve_for(assets: dict, telemetry_usage: Dict[str, Dict[str, float]], state:
                                                solver_backend=args.solver_backend)
     task_list = [assets["tasks"][t] for t in state.pending]
     t0 = time.perf_counter()
-    result = solver.solve(task_list, time_limit_s=args.solver_time_limit_s)
+    # A deadline miss with no solution found is recorded as `NOT_SOLVED` and zero
+    # placements rather than killing the run; the status column marks the epoch.
+    result = solver.solve(task_list, time_limit_s=args.solver_time_limit_s,
+                          raise_on_no_solution=False)
     return result, (time.perf_counter() - t0) * 1000.0
 
 
@@ -423,38 +490,25 @@ def telemetry_to_usage(readings: Dict[str, Dict[str, float]], assets: dict,
 # ---------------------------------------------------------------------------
 
 CSV_HEADER = [
-    "timestamp_utc", "epoch", "rows", "usage_quantile",
+    "timestamp_utc", "run", "epoch", "rows", "usage_quantile", "arrivals",
     "sketch_ingest_ms", "es_ingest_ms", "sketch_query_ms", "es_query_ms",
     "sketch_solver_ms", "es_solver_ms",
+    "sketch_solver_status", "es_solver_status",
     "sketch_assigned", "es_assigned",
     "sketch_pending_before", "es_pending_before",
     "sketch_running", "es_running",
     "sketch_completed", "es_completed",
+    "sketch_dropped", "es_dropped",
     "sketch_objective", "es_objective",
     "cpu_q_max_abs_err", "cpu_q_max_rel_err_pct", "mem_q_max_abs_err",
     "solver_backend",
 ]
 
 
-def main() -> None:
-    args = parse_args()
-    out_csv = resolve_repo_path(args.out_csv)
-    nodes_csv = resolve_repo_path(args.nodes_csv)
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
-
-    assets = load_solver_assets(args.topology_dir)
-    node_ids = sorted(assets["nodes"])
-    print(f"topology: {len(node_ids)} nodes, {len(assets['edges'])} edges, {len(assets['tasks'])} tasks")
-
-    q = args.usage_quantile
-    q_lo = round(100.0 - q, 6)
-    percents = sorted({q, q_lo})
-    print(f"update rule: used_cpu = p{q:g}(cpu_usage), used_mem = capacity - p{q_lo:g}(mem_available)")
-
-    print(f"loading telemetry from {args.telemetry_csv} ...", flush=True)
-    tel = load_telemetry(args.telemetry_csv, node_ids, args.rows_per_epoch, args.seed)
-    print(f"  {len(tel.node_idx):,} rows over {len(tel.node_ids)} nodes")
-
+def run_one(args: argparse.Namespace, run: int, tel: Telemetry, assets: dict,
+            node_ids: List[str], q: float, q_lo: float, percents: List[float],
+            writer, nwriter, fh, nfh) -> None:
+    """One independent trajectory: fresh queues, fresh jitter, restarted server."""
     reset_es_index(args)
 
     server_proc = None
@@ -462,16 +516,10 @@ def main() -> None:
         os.environ["NCS_CONFIG_PATH"] = str(
             REPO_ROOT / "single_node_server/network-control-server/raw-data-config.yaml"
         )
-        server_proc = start_server(resolve_repo_path(args.server_log), truncate_log=True)
+        server_proc = start_server(resolve_repo_path(args.server_log),
+                                   truncate_log=(run == 0))
 
-    states = {b: SimState(pending=sorted(assets["tasks"])) for b in BACKENDS}
-
-    fh = open(out_csv, "w", newline="")
-    writer = csv.writer(fh)
-    writer.writerow(CSV_HEADER)
-    nfh = open(nodes_csv, "w", newline="")
-    nwriter = csv.writer(nfh)
-    nwriter.writerow(["epoch", "node", "cpu_sketch", "cpu_es", "mem_avail_sketch", "mem_avail_es"])
+    states = {b: SimState(unreleased=list(assets["arrivals"])) for b in BACKENDS}
 
     try:
         if server_proc is not None:
@@ -479,8 +527,8 @@ def main() -> None:
                             args.connect_timeout, args.query_timeout)
 
         for epoch in range(args.epochs):
-            print(f"\n=== epoch {epoch} ===", flush=True)
-            cpu, mem = epoch_values(tel, epoch, args.epoch_jitter, args.seed)
+            print(f"\n=== run {run} epoch {epoch} ===", flush=True)
+            cpu, mem = epoch_values(tel, epoch, args.epoch_jitter, args.seed, run)
 
             s_ing, e_ing = ingest_epoch(args, tel, epoch, cpu, mem)
             print(f"  ingest: sketch={s_ing:.0f}ms es={e_ing:.0f}ms", flush=True)
@@ -497,15 +545,19 @@ def main() -> None:
                 if abs(ec) > 1e-9:
                     cpu_rel = max(cpu_rel, abs(sc - ec) / abs(ec) * 100.0)
                 mem_abs = max(mem_abs, abs(sm - em))
-                nwriter.writerow([epoch, nid, f"{sc:.6f}", f"{ec:.6f}", f"{sm:.6f}", f"{em:.6f}"])
+                nwriter.writerow([run, epoch, nid, f"{sc:.6f}", f"{ec:.6f}",
+                                  f"{sm:.6f}", f"{em:.6f}"])
             nfh.flush()
             print(f"  telemetry divergence: cpu max |Δ|={cpu_abs:.6f} cores "
                   f"({cpu_rel:.3f}%), mem max |Δ|={mem_abs:.6f} GB", flush=True)
 
             row: Dict[str, object] = {}
+            arrivals = 0
             for backend, readings in (("sketch", sketch_read), ("es", es_read)):
                 st = states[backend]
                 st.retire(epoch)
+                arrivals = st.release(epoch, args.epoch_length_s)
+                st.expire(epoch, args.task_ttl_epochs)
                 pending_before = len(st.pending)
                 usage = telemetry_to_usage(readings, assets, q, q_lo)
                 result, ms = solve_for(assets, usage, st, args)
@@ -518,39 +570,81 @@ def main() -> None:
                 st.pending = sorted(result.unassigned_tasks)
 
                 row[f"{backend}_solver_ms"] = ms
+                row[f"{backend}_solver_status"] = result.status
                 row[f"{backend}_assigned"] = len(result.decisions)
                 row[f"{backend}_pending_before"] = pending_before
                 row[f"{backend}_running"] = len(st.running)
                 row[f"{backend}_completed"] = len(st.completed)
+                row[f"{backend}_dropped"] = len(st.dropped)
                 row[f"{backend}_objective"] = result.objective_value
 
-            print(f"  assigned: sketch={row['sketch_assigned']} es={row['es_assigned']} | "
+            capped = [b for b in BACKENDS if row[f"{b}_solver_status"] != "OPTIMAL"]
+            print(f"  assigned: sketch={row['sketch_assigned']}/{row['sketch_pending_before']} "
+                  f"es={row['es_assigned']}/{row['es_pending_before']} | "
+                  f"arrivals={arrivals} | "
                   f"running s={row['sketch_running']} e={row['es_running']} | "
-                  f"completed s={row['sketch_completed']} e={row['es_completed']}", flush=True)
+                  f"completed s={row['sketch_completed']} e={row['es_completed']}"
+                  + (f" | NOT OPTIMAL: {','.join(capped)}" if capped else ""), flush=True)
 
             writer.writerow([
-                datetime.now(timezone.utc).isoformat(), epoch, len(tel.node_idx), q,
+                datetime.now(timezone.utc).isoformat(), run, epoch, len(tel.node_idx), q,
+                arrivals,
                 f"{s_ing:.3f}", f"{e_ing:.3f}", f"{s_qms:.3f}", f"{e_qms:.3f}",
                 f"{row['sketch_solver_ms']:.3f}", f"{row['es_solver_ms']:.3f}",
+                row["sketch_solver_status"], row["es_solver_status"],
                 row["sketch_assigned"], row["es_assigned"],
                 row["sketch_pending_before"], row["es_pending_before"],
                 row["sketch_running"], row["es_running"],
                 row["sketch_completed"], row["es_completed"],
+                row["sketch_dropped"], row["es_dropped"],
                 f"{row['sketch_objective']:.6f}", f"{row['es_objective']:.6f}",
                 f"{cpu_abs:.8f}", f"{cpu_rel:.6f}", f"{mem_abs:.8f}",
                 args.solver_backend,
             ])
             fh.flush()
 
-            if not states["sketch"].pending and not states["sketch"].running \
-               and not states["es"].pending and not states["es"].running:
-                print("both backends drained; stopping early.")
+            if all(states[b].drained() for b in BACKENDS):
+                print("both backends drained; ending this run.")
                 break
     finally:
-        fh.close()
-        nfh.close()
         if server_proc is not None:
             stop_server(server_proc)
+
+
+def main() -> None:
+    args = parse_args()
+    out_csv = resolve_repo_path(args.out_csv)
+    nodes_csv = resolve_repo_path(args.nodes_csv)
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+
+    assets = load_solver_assets(args.topology_dir)
+    node_ids = sorted(assets["nodes"])
+    arrival_span = max(a for a, _ in assets["arrivals"]) if assets["arrivals"] else 0.0
+    print(f"topology: {len(node_ids)} nodes, {len(assets['edges'])} edges, "
+          f"{len(assets['tasks'])} tasks arriving over {arrival_span:.0f}s "
+          f"(~{arrival_span / args.epoch_length_s:.0f} epochs)")
+    if arrival_span > args.epochs * args.epoch_length_s:
+        print(f"  note: --epochs {args.epochs} stops before the last arrival; "
+              f"raise it to {math.ceil(arrival_span / args.epoch_length_s)}+ to drain the queue")
+
+    q = args.usage_quantile
+    q_lo = round(100.0 - q, 6)
+    percents = sorted({q, q_lo})
+    print(f"update rule: used_cpu = p{q:g}(cpu_usage), used_mem = capacity - p{q_lo:g}(mem_available)")
+
+    print(f"loading telemetry from {args.telemetry_csv} ...", flush=True)
+    tel = load_telemetry(args.telemetry_csv, node_ids, args.rows_per_epoch, args.seed)
+    print(f"  {len(tel.node_idx):,} rows over {len(tel.node_ids)} nodes")
+
+    with open(out_csv, "w", newline="") as fh, open(nodes_csv, "w", newline="") as nfh:
+        writer = csv.writer(fh)
+        writer.writerow(CSV_HEADER)
+        nwriter = csv.writer(nfh)
+        nwriter.writerow(["run", "epoch", "node", "cpu_sketch", "cpu_es",
+                          "mem_avail_sketch", "mem_avail_es"])
+        for run in range(args.runs):
+            run_one(args, run, tel, assets, node_ids, q, q_lo, percents,
+                    writer, nwriter, fh, nfh)
 
     print(f"\nwrote {out_csv}")
     print(f"wrote {nodes_csv}")

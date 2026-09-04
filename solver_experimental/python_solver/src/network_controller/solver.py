@@ -24,7 +24,8 @@ Decision Variables
 Constraints
 -----------
 1. Task placement domain: each task is either assigned to exactly one eligible
-   node or skipped (`Σ_n x[t, n] + s_t = 1`).
+   node or skipped (`Σ_n x[t, n] + s_t = 1`). A task marked `must_assign` has
+   `s_t = 0` forced, so it may be moved but never dropped.
 2. Node capacity: the total CPU/memory consumed by placed tasks never exceeds
    the available capacity after accounting for existing workloads.
 3. Link capacity: the sum of flow routed over each physical link respects the
@@ -36,7 +37,12 @@ Constraints
 
 Objective
 ---------
-Maximise the total priority of assigned tasks.
+Maximise the total priority of assigned tasks, minus `migration_penalty`
+(lambda) for every task moved off its previous node:
+
+    max  sum_t priority_t * sum_n x[t, n]  -  lambda * sum_t move_t
+
+With lambda = 0 the migration term vanishes and reassignment is free.
 """
 
 from __future__ import annotations
@@ -49,6 +55,19 @@ from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 from ortools.linear_solver import pywraplp
 
 EdgeKey = Tuple[str, str]
+
+
+# `FEASIBLE` is what a solve that ran out of time reports: a solution exists and
+# satisfies every constraint, but optimality was not proven. Assignment counts
+# from such a solve are not attributable to the inputs.
+_STATUS_NAMES = {
+    pywraplp.Solver.OPTIMAL: "OPTIMAL",
+    pywraplp.Solver.FEASIBLE: "FEASIBLE",
+    pywraplp.Solver.INFEASIBLE: "INFEASIBLE",
+    pywraplp.Solver.UNBOUNDED: "UNBOUNDED",
+    pywraplp.Solver.ABNORMAL: "ABNORMAL",
+    pywraplp.Solver.NOT_SOLVED: "NOT_SOLVED",
+}
 
 
 def _normalise_edge(edge: EdgeKey, undirected: bool) -> EdgeKey:
@@ -108,6 +127,12 @@ class Task:
     priority: float = 1.0
     communications: Sequence[TaskCommunication] = field(default_factory=tuple)
     allowed_nodes: Optional[Sequence[str]] = None
+    must_assign: bool = False
+    """Forbid skipping this task. Use for workloads that are already running:
+    a reassignment epoch may move them, but dropping them is not a placement
+    decision the controller is allowed to make. Beware that an over-committed
+    cluster plus `must_assign` makes the model INFEASIBLE rather than merely
+    leaving tasks unplaced."""
 
     def __post_init__(self) -> None:
         if not isinstance(self.communications, tuple):
@@ -147,9 +172,26 @@ class AssignmentResult:
     unassigned_tasks: List[str]
     moves_used: int
     moved_tasks: List[str]
+    status: str = "OPTIMAL"
+    wall_time_ms: float = 0.0
+    best_bound: float = 0.0
 
     def assigned_tasks(self) -> List[str]:
         return list(self.decisions.keys())
+
+    def is_proven_optimal(self) -> bool:
+        """False when the solve stopped at the time limit with a feasible solution."""
+        return self.status == "OPTIMAL"
+
+    def relative_gap(self) -> float:
+        """How far the returned solution can be from the true optimum.
+
+        `best_bound` is the solver's proven bound on the objective, so this is
+        the honest answer to "could a better assignment exist?" -- 0.0 means the
+        solution is optimal, 0.02 means at most 2% more priority was reachable.
+        """
+        denom = max(abs(self.objective_value), 1e-9)
+        return abs(self.best_bound - self.objective_value) / denom
 
 
 class NetworkControllerSolver:
@@ -222,6 +264,9 @@ class NetworkControllerSolver:
         max_task_movements: Optional[int] = None,
         ilp_output_path: Optional[str | Path] = None,
         time_limit_s: Optional[float] = None,
+        raise_on_no_solution: bool = True,
+        mip_gap: Optional[float] = None,
+        migration_penalty: float = 0.0,
     ) -> AssignmentResult:
         """
         Optimise task placement subject to resource and migration constraints.
@@ -237,6 +282,23 @@ class NetworkControllerSolver:
         previous_assignments:
             Mapping from task_id to node_id describing last epoch's placements.
             Used to measure task movements.
+        mip_gap:
+            Relative MIP gap to stop at (e.g. 0.01 = accept a solution provably
+            within 1% of the optimum). Proving exact optimality of this model is
+            far more expensive than getting close to it, so a small gap turns a
+            time-limit-bound solve into a bounded-quality one; the returned
+            `best_bound` records the guarantee actually achieved.
+        raise_on_no_solution:
+            When False, a solve that hits `time_limit_s` without finding any
+            solution returns an empty `AssignmentResult` with
+            `status="NOT_SOLVED"` instead of raising. Genuinely infeasible or
+            unbounded models still raise.
+        migration_penalty:
+            Weight subtracted from the objective for each task moved off its
+            previous node (the paper's lambda; `max_task_movements` is its
+            gamma). Zero leaves the objective as pure assigned-priority, in
+            which case a reassignment is free and the solver will churn
+            placements whenever it is even marginally convenient.
         max_task_movements:
             Optional upper bound on the number of tasks allowed to move.
         ilp_output_path:
@@ -323,6 +385,8 @@ class NetworkControllerSolver:
             assign_sum = solver.Sum(x_vars[task.task_id].values())
             assign_sums[task.task_id] = assign_sum
             solver.Add(assign_sum + skip_var == 1)
+            if task.must_assign:
+                solver.Add(skip_var == 0)
 
         active_tasks = [task for task in tasks if task.task_id in assign_sums]
 
@@ -444,6 +508,9 @@ class NetworkControllerSolver:
         for task in active_tasks:
             for var in x_vars[task.task_id].values():
                 objective.SetCoefficient(var, task.priority)
+        if migration_penalty:
+            for move_var in move_vars.values():
+                objective.SetCoefficient(move_var, -float(migration_penalty))
         objective.SetMaximization()
 
         if ilp_output_path is not None:
@@ -452,9 +519,35 @@ class NetworkControllerSolver:
             lp_path.parent.mkdir(parents=True, exist_ok=True)
             lp_path.write_text(lp_content)
 
-        status = solver.Solve()
+        if mip_gap is not None and mip_gap > 0:
+            params = pywraplp.MPSolverParameters()
+            params.SetDoubleParam(pywraplp.MPSolverParameters.RELATIVE_MIP_GAP, mip_gap)
+            status = solver.Solve(params)
+        else:
+            status = solver.Solve()
+        status_name = _STATUS_NAMES.get(status, f"UNKNOWN({status})")
+        wall_time_ms = float(solver.WallTime())
         if status not in (pywraplp.Solver.OPTIMAL, pywraplp.Solver.FEASIBLE):
-            raise RuntimeError("No feasible solution found for the given inputs.")
+            # NOT_SOLVED means the time limit expired before any solution was
+            # found -- for a scheduler on a deadline that is a real outcome
+            # ("placed nothing this epoch"), not a broken model, so a caller can
+            # ask for it as a result instead of an exception. Every other status
+            # (INFEASIBLE, UNBOUNDED, ABNORMAL) is a modelling error and raises.
+            recoverable = status == pywraplp.Solver.NOT_SOLVED and not raise_on_no_solution
+            if not recoverable:
+                raise RuntimeError(
+                    f"No feasible solution found for the given inputs (status={status_name})."
+                )
+            return AssignmentResult(
+                objective_value=0.0,
+                decisions={},
+                unassigned_tasks=[task.task_id for task in active_tasks],
+                moves_used=0,
+                moved_tasks=[],
+                status=status_name,
+                wall_time_ms=wall_time_ms,
+                best_bound=0.0,
+            )
 
         assigned_nodes: Dict[str, str] = {}
         unassigned_tasks: List[str] = []
@@ -520,6 +613,10 @@ class NetworkControllerSolver:
         ]
 
         objective_value = solver.Objective().Value()
+        try:
+            best_bound = float(solver.Objective().BestBound())
+        except Exception:  # not every backend exposes a bound
+            best_bound = objective_value
 
         return AssignmentResult(
             objective_value=objective_value,
@@ -527,6 +624,9 @@ class NetworkControllerSolver:
             unassigned_tasks=unassigned_tasks,
             moves_used=moves_used,
             moved_tasks=moved_tasks,
+            status=status_name,
+            wall_time_ms=wall_time_ms,
+            best_bound=best_bound,
         )
 
     # ------------------------------------------------------------------ #

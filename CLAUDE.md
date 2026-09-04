@@ -76,7 +76,7 @@ The main Python package containing the task scheduler, query engine, telemetry e
 
 #### `python_solver/` — OR-Tools solver (more mature, independent)
 
-- `src/network_controller/solver.py` — `NetworkControllerSolver`: task placement via OR-Tools MILP with migration penalties
+- `src/network_controller/solver.py` — `NetworkControllerSolver`: task placement via OR-Tools MILP with migration penalties. `AssignmentResult` carries `status` (`OPTIMAL` / `FEASIBLE` / `NOT_SOLVED`), `wall_time_ms` and `best_bound` (with `relative_gap()`), so a caller can tell a proven-optimal solve from one that stopped at `time_limit_s`. `solve()` also takes `raise_on_no_solution=False` (return an empty result on a deadline miss instead of raising), `mip_gap` (stop within a relative gap), and `migration_penalty` — the paper's **λ**, subtracted from the objective per task moved off its previous node; `max_task_movements` is the paper's **γ**. `Task.must_assign` forbids skipping a task, so running workloads can be reassigned but never evicted
 - `src/network_controller/io.py` — JSON/CSV/JSONL I/O for nodes, tasks, edges, assignments
 - `tests/test_solver.py` — Unit tests
 - `examples/run_from_files.py` — Standalone usage example
@@ -131,14 +131,17 @@ uv run main.py --node-path dummy_data/nodes.jsonl --edge-path dummy_data/edges.j
 | `scripts/run_rtt_sweep_all.sh` | Runs all three RTT sweeps with `data/` + `plots/` + `logs/` defaults |
 | `scripts/run_dynamic_epoch_benchmark_all.sh` | Runs dynamic epoch benchmark across solver backends (e.g., CBC/SCIP) with standard `data/` + `plots/` + `logs/` outputs |
 | `scripts/run_resource_benchmark_all.sh` | Runs the resource benchmark (selftest → benchmark → plots) with standard `data/` + `plots/resource/` + `logs/` outputs; honors `RUNS`/`DATA_VOLUMES`/`REPEATS`/`*_CORES` env overrides |
-| `scripts/raw_data_prep.py` | Builds `data/raw_topology/{nodes,edges,tasks}.jsonl` from the `raw_data/` telemetry dump (see **raw_data experiment** below) |
-| `scripts/run_raw_data_assignment.py` | Sketch-vs-ES assignment experiment on the raw_data cluster: replays `synthetic_cpu_var.csv` per epoch, queries both backends, and drives two *independent* scheduling simulations |
-| `scripts/plot_raw_data_assignment.py` | Plots from that experiment → `plots/raw_data/{query_solver,assignment}.png` |
+| `scripts/raw_data_prep.py` | Builds `data/raw_topology/{nodes,edges,tasks}.jsonl` from the `raw_data/` telemetry dump. Generates a **rolling-arrival** workload sized by offered load (see **raw_data experiment** below) |
+| `scripts/run_raw_data_assignment.py` | Sketch-vs-ES assignment experiment on the raw_data cluster: replays `synthetic_cpu_var.csv` per epoch, queries both backends, and drives two *independent* scheduling simulations. `--runs N` repeats the trajectory for run-to-run error bars; every solve's MILP status is logged |
+| `scripts/plot_raw_data_assignment.py` | Plots from that experiment → `plots/raw_data/{query_solver,assignment}.png` plus `data/raw_data_assignment_summary.csv`; lines are means over runs with min..max bands |
+| `scripts/run_raw_data_completion.py` | **Completion-throughput experiment (paper Fig. 8/9/10)** on the raw_data cluster: static vs dynamic telemetry, γ/λ reassignments, per-task telemetry and a contention model. Scenario presets via `--figure 8\|9\|10\|all` |
+| `scripts/plot_raw_data_completion.py` | Plots that experiment → `plots/raw_data/completion_fig{8,9,10}.png` + `data/raw_data_completion_summary.csv`; prints the per-scenario `% vs static` table. One figure per comparison, each with its own baseline — nine series in one panel would force a repeated categorical hue |
 
 ### raw_data experiment
 
 Runs the paper's setup against a real cluster trace instead of uniform synthetic
-rows. Inputs come from a `raw_data/` dump (default `~/Downloads/raw_data/`):
+rows. Inputs come from a `raw_data/` dump — located via `$RAW_DATA_DIR`, else
+`~/raw_data/`, else `~/Downloads/raw_data/`:
 
 | File | Used as |
 |---|---|
@@ -168,16 +171,145 @@ Notes and current limitations:
   other sweeps.
 - 3 of the 47 nodes in `cpu_alloc.csv` (`UGS-17/18/19`) have no telemetry and are
   dropped, leaving 44.
-- The workload as currently generated drains in ~4 epochs: all tasks arrive at
-  epoch 0 and the count-maximising objective packs the right-skewed small tasks.
-  Rolling arrivals (`arrival_offset_s` is written but not yet honored) are needed
-  for a long run.
+- **The trace barely loads the cluster**: the background load leaves ~90% of CPU
+  (125.5 of 139.4 cores) and ~99.9% of memory free. Telemetry only enters the MILP
+  through that slack, so the workload has to push the cluster near saturation or
+  the telemetry source cannot change any decision.
+
+**Workload model.** Tasks arrive on a rolling schedule (`arrival_offset_s`, honored
+by the experiment) rather than all at epoch 0, and are sized by *offered load*
+rather than a total:
+
+```
+arrivals/epoch = --tasks-per-epoch, spread over --arrival-epochs
+offered load   = mean_task_cpu * tasks_per_epoch * mean_lifetime_epochs
+               = --load-factor * cluster_free_cpu
+```
+
+`--load-factor` just under 1 (default 0.95) is the operating point that matters:
+the cluster sits near saturation so marginal placements flip, while the pending
+queue stays ~60-100 tasks, small enough for the MILP to *prove* optimality inside
+`--solver-time-limit-s`. A queue of ~300 does not — SCIP returns `NOT_SOLVED`
+(no solution at all) at 60 s, which is why every solve's status is now recorded.
+Memory demand is sized separately (`--memory-load-factor`, default 0.6) so CPU
+stays the binding resource: the sketch/ES estimates diverge ~40% on CPU but
+~0.1% on memory, so a memory-bound workload would show nothing.
+
+Defaults produce 2400 tasks over 40 arrival epochs (60/epoch, mean 0.86 cores,
+p95 1.67, mean lifetime 2.25 epochs, realized load 0.92x free CPU).
+
+**Repeats.** `--runs N` re-runs the whole trajectory with a fresh telemetry jitter
+draw, a reset ES index and a restarted sketch server, writing a `run` column. The
+plot script then shows means with min..max bands and prints a per-metric
+mean ± sd table: at n=1 a 3-task gap between backends is indistinguishable from
+solver/jitter noise.
 
 ```bash
 # ES must be running on :9200; the script starts/stops the sketch server itself
 python scripts/raw_data_prep.py
-python scripts/run_raw_data_assignment.py --epochs 30
+python scripts/run_raw_data_assignment.py --runs 5 --epochs 45
 python scripts/plot_raw_data_assignment.py
+```
+
+Run from an env that has the solver deps (`cd solver_experimental && uv run python
+../scripts/run_raw_data_assignment.py ...`).
+
+**What this experiment can and cannot show.** It measures query latency, quantile
+accuracy and solver time (the paper's Fig. 4/6/7) on a real trace. It cannot show
+a sketch-vs-ES *assignment* difference, and neither can the paper — Fig. 9 reports
+Elasticsearch +14.3% vs the sketch layer +15.1% over a static baseline, i.e. a
+<1% difference. Every claim about assignment quality in the paper is made against
+a **static-telemetry baseline**, which this script does not have. That is
+`run_raw_data_completion.py`.
+
+### raw_data completion experiment (paper Fig. 8/9/10)
+
+Tests the other claim: *dynamic* estimates beat *static* ones, and approximate
+dynamic estimates capture that gain as well as exact ones. Three pieces the
+assignment experiment lacks make it measurable:
+
+1. **A static baseline** — a controller whose estimates never refresh: node
+   background frozen at its epoch-0 reading, every running task charged at its
+   original *request* instead of its measured usage (~45-50% mean CPU estimate
+   error, versus <1% for both sketch and ES).
+2. **Per-task telemetry** — the paper's update rule refreshes *running tasks*
+   ("a running task's CPU/memory estimate is set to the p50 quantile, unless it
+   approaches the current allocation, which triggers a 20% allocation increase"),
+   keyed by task id. raw_data has no task-level data, so each running task emits a
+   synthetic usage stream that drifts below its request and occasionally bursts
+   above it. Served from a second sketch index, `task-metrics` (see
+   `raw-data-full-config.yaml`), and an ES index `raw-task-metrics`.
+The MILP is bounded by a scheduling window (`--max-candidates`, default 80
+oldest pending tasks) and a reassignment-candidate cap
+(`--max-reassign-candidates`, default 40, drawn from the most over-committed
+nodes and limited to what the cluster's spare capacity can absorb). An
+over-subscribed workload grows the queue without limit, and an unbounded model
+stops being solvable to proven optimality — at which point scenario gaps become
+solver search artefacts. Both caps apply identically to every scenario. A
+running task offered for reassignment carries a dominant priority (100) rather
+than `must_assign`, because a node whose *estimated* load already exceeds
+capacity leaves nowhere to put its own tasks and makes the model INFEASIBLE;
+`evicted` should stay at 0 and is the column to check if a scenario looks wrong.
+
+3. **Contention** — "constrained tasks experience a performance penalty,
+   increasing their execution duration ... proportionally to their excess resource
+   demand." Each epoch a node's *true* load (exact background quantile + true task
+   usage) is compared to capacity; tasks on an over-committed node make partial
+   progress. Without this, a wrong estimate costs nothing and only MILP
+   tie-breaking noise is left to measure.
+
+Scenarios are independent trajectories over identical telemetry —
+`name:estimator:rule:gamma:lam`, with `estimator ∈ {static, sketch, es}` and
+`rule ∈ {request, p50, p90, avg, p50bump, window}`. Presets mirror the figures:
+
+| `--figure` | Scenarios | Paper's result |
+|---|---|---|
+| `8` | static, dynamic, reassign, dynamic+reassign | +21.4% / +8.6% / +1.8% |
+| `9` | static, sketch, es (all γ=10, λ=1) | ES +14.3%, sketch +15.1% |
+| `10` | static + p50 / p90 / avg / p50bump / window-avg | +14.1-20.8%, window-avg +8.5% |
+
+Fig. 8 measures against a static controller with **no** reassignments (the
+paper's reference); Fig. 9 and 10 measure against a static controller that
+*has* them, isolating the telemetry effect from the reassignment effect. The
+run script dedups scenarios shared between figures, so Fig. 9/10's baseline is
+stored under the name Fig. 8 gives it (`reassign`) and relabelled in the plot.
+
+`avg` is an **oracle**, not a competitor: work delivered over an epoch is
+usage x epoch length, so the contention model charges each task its *mean* usage
+— exactly what `avg` (sum/samples) reports. Its estimate error is 0 by
+construction and it bounds how much of any gap is estimator error at all.
+`window` averages that same statistic over `--window-epochs` past epochs, so it
+is stale rather than wrong (the paper's "recent window averaging" baseline).
+Observed mean CPU estimate error, 3-epoch smoke: static 50.3%, p90 12.6%,
+p50bump 4.9%, window 3.0%, p50 0.86%, avg 0%.
+
+**Workload calibration matters more than anything else here.** A task is
+*charged* its request when the controller has no telemetry but actually *uses*
+~0.77x of it. If requests alone fit inside the cluster, the static controller
+places everything too and no estimator can change the outcome — the experiment
+returns a null for a reason unrelated to telemetry. The assignment experiment's
+workload (`--load-factor 0.92`, sized on requests) is exactly that case: 83% of
+CPU requested, 63% actually used. So this experiment uses its own heavier
+workload, and the script prints the diagnostic and warns if it is too loose:
+
+```bash
+python scripts/raw_data_prep.py --load-factor 1.4 --memory-load-factor 0.8 \
+    --out-dir data/raw_topology_completion      # requests 122% of CPU, true usage 93%
+```
+
+`data/raw_topology_completion` is picked up automatically when present.
+
+Task communication is omitted (zero bandwidth demand → the link constraint is
+inactive), which both matches what the estimators estimate and keeps the MILP
+provably optimal — so a scenario gap is not solver search noise. Control-loop
+overhead is excluded by design, as in the paper, so background telemetry is
+subsampled (`--rows-per-epoch`, default 100k).
+
+```bash
+# ES on :9200; the script starts/stops its own sketch server on 10101
+cd solver_experimental
+uv run python ../scripts/run_raw_data_completion.py --figure all --runs 3 --epochs 30
+uv run python ../scripts/plot_raw_data_completion.py
 ```
 
 ### Benchmark output convention
@@ -252,6 +384,17 @@ python3 scripts/run_es_ingest_query_sweep.py
 python3 scripts/run_sketch_ingest_query_sweep.py
 python3 scripts/run_dynamic_epoch_benchmark.py --solver-backend SCIP --max-epochs 50 --rows-per-epoch 1000000
 bash scripts/run_dynamic_epoch_benchmark_all.sh
+
+# raw_data experiments (ES on :9200; each script runs its own sketch server)
+cd solver_experimental
+uv run python ../scripts/raw_data_prep.py                                          # topology + workload
+uv run python ../scripts/run_raw_data_assignment.py --runs 5 --epochs 45           # latency/accuracy (Fig 4/6/7)
+uv run python ../scripts/plot_raw_data_assignment.py
+uv run python ../scripts/raw_data_prep.py --load-factor 1.4 --memory-load-factor 0.8 \
+    --out-dir data/raw_topology_completion                                         # heavier workload
+uv run python ../scripts/run_raw_data_completion.py --figure all --runs 3 --epochs 30   # completions (Fig 8/9/10)
+uv run python ../scripts/plot_raw_data_completion.py
+cd ..
 
 # Resource benchmark (CPU + whole-process RSS via /proc). ES must already be running.
 python3 scripts/proc_monitor.py --selftest                       # verify PID resolution
