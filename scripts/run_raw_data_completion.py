@@ -19,8 +19,10 @@ Three things make that measurable, all of which the assignment script lacks:
    approaches the current allocation, which triggers a 20% allocation
    increase"), keyed by task id. raw_data has no task-level data, so each
    running task emits a synthetic usage stream that drifts away from its
-   request -- typically consuming less, occasionally bursting above it. A
-   static controller cannot see either.
+   request -- typically consuming less. raw_data/README.md says task CPU usage
+   should not spike ("there should be no such spikes for task cpu usage in this
+   implementation"), so bursts are off by default. A static controller sees
+   none of this drift.
 
 3. **Contention.** Placements have consequences: "constrained tasks experience
    a performance penalty, increasing their execution duration beyond their
@@ -44,13 +46,12 @@ the update rule. Spec: `name:estimator:rule:gamma:lam`, e.g.
     estimator  static | sketch | es
     rule       request | p50 | p90 | avg | p50bump | window
 
-Note that `avg` is an **oracle**, not a competitor: work delivered over an epoch
-is usage x epoch length, so the contention model charges each task its *mean*
-usage -- which is exactly what `avg` (sum/samples) reports. Its estimate error
-is 0 by construction, and it bounds how much of any scenario gap is estimator
-error at all. `window` averages the same statistic over the last
-`--window-epochs` epochs, so it is stale rather than wrong, which is the paper's
-"recent window averaging" baseline.
+`avg` (per-epoch mean) was an oracle while telemetry was reported unclipped.
+With `--clip-telemetry` it is not: the backend never sees usage above the
+allocation, so every statistic is biased low exactly when a task is squeezed.
+`window` averages that same clipped statistic over `--window-epochs` past
+epochs -- the paper's "recent window averaging" baseline, which its Fig. 10
+labels simply `avg`.
 
 The MILP is bounded by a scheduling window (`--max-candidates`, the oldest N
 pending tasks) and a reassignment-candidate cap (`--max-reassign-candidates`,
@@ -98,12 +99,10 @@ from rtt_sweep_common import (  # noqa: E402
     stop_server,
     wait_for_server,
 )
+from raw_data_epoch_slices import EpochSlice, build_epoch_slices  # noqa: E402
 from run_raw_data_assignment import (  # noqa: E402
-    Telemetry,
     _default_raw_dir,
     _pick,
-    epoch_values,
-    load_telemetry,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -117,7 +116,7 @@ SERVER_CONFIG = REPO_ROOT / "single_node_server/network-control-server/raw-data-
 
 MILLI = 1000.0
 BYTES_PER_GB = 1e9
-PERCENTS = [50.0, 90.0]
+PERCENTS = [50.0, 75.0, 90.0]
 # A running task offered for reassignment is worth far more than a new
 # placement, so the solver keeps it unless that is impossible. `must_assign`
 # would say this exactly, but a node whose *estimated* load already exceeds
@@ -131,7 +130,7 @@ PERCENTS = [50.0, 90.0]
 RUNNING_PRIORITY = 100.0
 
 ESTIMATORS = ("static", "sketch", "es")
-RULES = ("request", "p50", "p90", "avg", "p50bump", "window")
+RULES = ("request", "p50", "p90", "avg", "p50bump", "avgp50p75bump", "window")
 
 
 # ---------------------------------------------------------------------------
@@ -191,14 +190,18 @@ def preset(figure: str, gamma: int, lam: float) -> List[Scenario]:
             Scenario("es", "es", "p50", g, l),
         ]
     if figure == "10":
-        # Does the gain depend on a carefully chosen update rule?
+        # The paper plots: no rule, p50, p50 + 1.2x alloc,
+        # avg(p50, p75) + 1.2x alloc, and avg -- where its "avg" is the recent
+        # window averaging of [1] (307/283 = +8.5%, matching its text), not a
+        # per-epoch mean. p90 and the per-epoch mean are ours, kept as extras.
         return [
             Scenario("static", "static", "request", g, l),
             Scenario("p50", "sketch", "p50", g, l),
-            Scenario("p90", "sketch", "p90", g, l),
-            Scenario("avg", "sketch", "avg", g, l),
             Scenario("p50-1.2xalloc", "sketch", "p50bump", g, l),
+            Scenario("avg-p50p75-1.2xalloc", "sketch", "avgp50p75bump", g, l),
             Scenario("window-avg", "sketch", "window", g, l),
+            Scenario("p90", "sketch", "p90", g, l),
+            Scenario("avg-epoch", "sketch", "avg", g, l),
         ]
     raise ValueError(figure)
 
@@ -234,11 +237,14 @@ def parse_args() -> argparse.Namespace:
 
     p.add_argument("--runs", type=int, default=1)
     p.add_argument("--epochs", type=int, default=30)
-    p.add_argument("--epoch-length-s", type=float, default=300.0)
+    p.add_argument("--epoch-length-s", type=float, default=150.0,
+                   help="Paper uses 150 s. Must match raw_data_prep.py.")
     p.add_argument("--seed", type=int, default=20260903)
 
-    p.add_argument("--rows-per-epoch", type=int, default=100_000,
-                   help="Background telemetry rows per epoch (subsampled; overhead is excluded here).")
+    p.add_argument("--rows-per-epoch", type=int, default=1_000_000,
+                   help=("Rows each real trace slice is expanded to. Volume only "
+                         "matters for the latency figures; the quantile it carries "
+                         "is the same at 10k."))
     p.add_argument("--task-samples", type=int, default=200,
                    help="Usage samples emitted per running task per epoch.")
     p.add_argument("--epoch-jitter", type=float, default=0.02)
@@ -251,7 +257,8 @@ def parse_args() -> argparse.Namespace:
                    help="Lognormal sigma of a task's per-epoch usage drift.")
     p.add_argument("--usage-within-sigma", type=float, default=0.10,
                    help="Lognormal sigma of samples within one epoch.")
-    p.add_argument("--burst-prob", type=float, default=0.10)
+    p.add_argument("--burst-prob", type=float, default=0.0,
+                   help="raw_data/README.md: 'there should be no such spikes for task cpu usage', so bursts are off by default.")
     p.add_argument("--burst-factor", type=float, default=1.6)
     p.add_argument("--window-epochs", type=int, default=3,
                    help="Window length for the 'window' update rule.")
@@ -275,6 +282,27 @@ def parse_args() -> argparse.Namespace:
             "stay pinned and are charged as node load."
         ),
     )
+    p.add_argument(
+        "--enforce-allocation", action=argparse.BooleanOptionalAction, default=True,
+        help=(
+            "Cap what a running task may consume at the allocation the controller "
+            "reserved for it. Without this the update rule only changes a number "
+            "handed to the MILP and never what a task is allowed to use, which "
+            "leaves the update-rule comparison with no mechanism at all."
+        ),
+    )
+    p.add_argument(
+        "--clip-telemetry", action=argparse.BooleanOptionalAction, default=True,
+        help=(
+            "Report task telemetry clipped at the allocation, as the archived "
+            "emulator does. This is what makes the paper's 'unless it approaches "
+            "the current allocation' rule observable: unclipped, the controller "
+            "would simply read the true demand off the p50."
+        ),
+    )
+    p.add_argument("--p-scalable-lo", type=float, default=0.1,
+                   help="Amdahl scalable fraction, low end (archived emulator uses U(0.1, 0.9)).")
+    p.add_argument("--p-scalable-hi", type=float, default=0.9)
     p.add_argument("--solver-backend", type=str, choices=["CBC", "SCIP", "GLPK"], default="SCIP")
     p.add_argument("--solver-time-limit-s", type=float, default=60.0)
     p.add_argument("--mip-gap", type=float, default=0.0,
@@ -349,6 +377,12 @@ class TaskUsage:
         self.index = {tid: i for i, tid in enumerate(task_ids)}
         rng = np.random.default_rng(args.seed)
         self.base = rng.uniform(args.usage_base_lo, args.usage_base_hi, len(task_ids))
+        # Fraction of a task's work that is resource-bound, so being granted
+        # half of what it asked for does not simply halve its progress.
+        self.p_scalable = rng.uniform(args.p_scalable_lo, args.p_scalable_hi, len(task_ids))
+
+    def p(self, task_id: str) -> float:
+        return float(self.p_scalable[self.index[task_id]])
 
     def samples(self, task_id: str, epoch: int, run: int, request_cpu: float,
                 request_mem: float):
@@ -392,6 +426,8 @@ class Sim:
     moves: int = 0
     constrained_task_epochs: int = 0
     overcommitted_node_epochs: int = 0
+    grant_ratio_sum: float = 0.0
+    grant_ratio_n: int = 0
     window: Dict[str, collections.deque] = field(default_factory=dict)
     frozen_background: Dict[str, Dict[str, float]] | None = None
     remaining: Dict[str, float] = field(default_factory=dict)
@@ -490,6 +526,7 @@ def query_sketch(args: argparse.Namespace, index: str, keys: List[str]) -> Dict[
         for metric, short in (("cpu_cores", "cpu"), ("memory_gb", "mem")):
             vals = pct.get(metric, {})
             rec[f"{short}_p50"] = _pick(vals, 50.0)
+            rec[f"{short}_p75"] = _pick(vals, 75.0)
             rec[f"{short}_p90"] = _pick(vals, 90.0)
             rec[f"{short}_sum"] = float(tot.get(metric, 0.0))
         out[item["key"]] = rec
@@ -527,9 +564,11 @@ def query_es_grouped(args: argparse.Namespace, index: str, key_field: str,
     for b in r.json()["aggregations"]["by_key"]["buckets"]:
         out[b["key"]] = {
             "cpu_p50": _pick(b["cpu_pct"]["values"], 50.0),
+            "cpu_p75": _pick(b["cpu_pct"]["values"], 75.0),
             "cpu_p90": _pick(b["cpu_pct"]["values"], 90.0),
             "cpu_sum": float(b["cpu_sum"]["value"] or 0.0),
             "mem_p50": _pick(b["mem_pct"]["values"], 50.0),
+            "mem_p75": _pick(b["mem_pct"]["values"], 75.0),
             "mem_p90": _pick(b["mem_pct"]["values"], 90.0),
             "mem_sum": float(b["mem_sum"]["value"] or 0.0),
         }
@@ -588,38 +627,68 @@ def true_node_load(sim: Sim, assets: dict, usage: TaskUsage, epoch: int, run: in
     return {nid: (v[0], v[1]) for nid, v in load.items()}, per_task
 
 
-def advance(sim: Sim, assets: dict, node_load: Dict[str, tuple],
-            bg_true: Dict[str, tuple], epoch_length_s: float) -> tuple[int, int, int]:
-    """Charge one epoch of work, slowing tasks on over-committed nodes.
+def advance(sim: Sim, assets: dict, per_task: Dict[str, tuple],
+            bg_true: Dict[str, tuple], epoch_length_s: float, usage: TaskUsage,
+            args: argparse.Namespace) -> tuple[int, int, int]:
+    """Charge one epoch of work. Two things can hold a task back:
 
-    A node's background load is not schedulable, so the tasks on it share
-    whatever capacity is left; if they collectively want more than that, each
-    makes progress in proportion to the shortfall. This is the paper's
-    "performance penalty ... proportionally to their excess resource demand".
+      * **its allocation** -- it may not consume more than the controller
+        reserved for it, which is the archived emulator's mechanism and the
+        only channel through which an update rule can matter;
+      * **its node** -- the background load is not schedulable, so the tasks
+        sharing a node divide whatever is left, which is the channel through
+        which a placement decision (and the real trace) can matter.
+
+    Progress is then Amdahl-weighted by the task's scalable fraction: getting
+    half of what you asked for does not double your runtime unless all of your
+    work is resource-bound. This is the paper's "performance penalty ...
+    proportionally to their excess resource demand", read as covering both.
     """
-    served: Dict[str, float] = {}
+    by_node: Dict[str, List[str]] = collections.defaultdict(list)
+    for tid, rt in sim.running.items():
+        by_node[rt.node_id].append(tid)
+
+    grant: Dict[str, tuple] = {}
     overcommitted = 0
-    for nid, (cpu_cap, mem_cap) in assets["capacity"].items():
+    for nid, tids in by_node.items():
+        cpu_cap, mem_cap = assets["capacity"][nid]
         bg_cpu, bg_mem = bg_true.get(nid, (0.0, 0.0))
-        tot_cpu, tot_mem = node_load.get(nid, (bg_cpu, bg_mem))
-        task_cpu = max(tot_cpu - bg_cpu, 0.0)
-        task_mem = max(tot_mem - bg_mem, 0.0)
         free_cpu = max(cpu_cap - bg_cpu, 0.0)
         free_mem = max(mem_cap - bg_mem, 0.0)
-        s_cpu = 1.0 if task_cpu <= free_cpu else (free_cpu / task_cpu if task_cpu > 0 else 1.0)
-        s_mem = 1.0 if task_mem <= free_mem else (free_mem / task_mem if task_mem > 0 else 1.0)
-        s = min(s_cpu, s_mem)
-        served[nid] = s
-        if s < 1.0:
+
+        want_cpu: Dict[str, float] = {}
+        want_mem: Dict[str, float] = {}
+        for tid in tids:
+            rt = sim.running[tid]
+            t_cpu, t_mem = per_task.get(tid, (0.0, 0.0))
+            want_cpu[tid] = min(t_cpu, rt.alloc_cpu) if args.enforce_allocation else t_cpu
+            want_mem[tid] = min(t_mem, rt.alloc_mem) if args.enforce_allocation else t_mem
+
+        tot_cpu, tot_mem = sum(want_cpu.values()), sum(want_mem.values())
+        s_cpu = free_cpu / tot_cpu if tot_cpu > free_cpu and tot_cpu > 0 else 1.0
+        s_mem = free_mem / tot_mem if tot_mem > free_mem and tot_mem > 0 else 1.0
+        if s_cpu < 1.0 or s_mem < 1.0:
             overcommitted += 1
+        for tid in tids:
+            grant[tid] = (want_cpu[tid] * s_cpu, want_mem[tid] * s_mem)
 
     constrained = 0
+    ratios: List[float] = []
     done: List[str] = []
     for tid, rt in sim.running.items():
-        s = served.get(rt.node_id, 1.0)
-        if s < 1.0:
+        t_cpu, t_mem = per_task.get(tid, (0.0, 0.0))
+        g_cpu, g_mem = grant.get(tid, (t_cpu, t_mem))
+        ratio = 1.0
+        if t_cpu > 1e-9:
+            ratio = min(ratio, g_cpu / t_cpu)
+        if t_mem > 1e-9:
+            ratio = min(ratio, g_mem / t_mem)
+        ratio = max(0.0, min(1.0, ratio))
+        ratios.append(ratio)
+        if ratio < 1.0 - 1e-9:
             constrained += 1
-        rt.remaining_s -= epoch_length_s * s
+        pf = usage.p(tid)
+        rt.remaining_s -= epoch_length_s * ((1.0 - pf) + pf * ratio)
         sim.remaining[tid] = rt.remaining_s
         if rt.remaining_s <= 0.0:
             done.append(tid)
@@ -630,6 +699,9 @@ def advance(sim: Sim, assets: dict, node_load: Dict[str, tuple],
 
     sim.constrained_task_epochs += constrained
     sim.overcommitted_node_epochs += overcommitted
+    if ratios:
+        sim.grant_ratio_sum += sum(ratios)
+        sim.grant_ratio_n += len(ratios)
     return len(done), constrained, overcommitted
 
 
@@ -651,8 +723,13 @@ def task_estimate(sim: Sim, args: argparse.Namespace, tid: str, rt: RunTask,
         n = max(args.task_samples, 1)
         w.append((reading["cpu_sum"] / n, reading["mem_sum"] / n))
         return (statistics.fmean(c for c, _ in w), statistics.fmean(m for _, m in w))
-    if rule == "p50bump":
-        cpu, mem = reading["cpu_p50"], reading["mem_p50"]
+    if rule in ("p50bump", "avgp50p75bump"):
+        if rule == "p50bump":
+            cpu, mem = reading["cpu_p50"], reading["mem_p50"]
+        else:
+            # The paper's avg(p50, p75): a little tail headroom before the bump.
+            cpu = (reading["cpu_p50"] + reading["cpu_p75"]) / 2.0
+            mem = (reading["mem_p50"] + reading["mem_p75"]) / 2.0
         if cpu >= args.bump_threshold * rt.alloc_cpu:
             rt.alloc_cpu *= args.bump_factor
             cpu = rt.alloc_cpu
@@ -774,13 +851,33 @@ CSV_HEADER = [
     "timestamp_utc", "run", "epoch", "scenario", "estimator", "rule", "gamma", "lam",
     "arrivals", "pending_before", "assigned", "running", "completed_this_epoch",
     "completed_total", "evicted_total", "moves_this_epoch",
-    "constrained_tasks", "overcommitted_nodes",
+    "constrained_tasks", "overcommitted_nodes", "mean_grant_ratio",
     "solver_ms", "solver_status", "objective",
     "est_cpu_err_mean", "est_cpu_err_p90",
 ]
 
 
-def run_one(args: argparse.Namespace, run: int, tel: Telemetry, assets: dict,
+def epoch_background(slices: List[EpochSlice], epoch: int, jitter: float,
+                     seed: int, run: int):
+    """This epoch's background rows: slice `epoch % n`, with fresh jitter.
+
+    The slice index is what makes consecutive epochs see *different* real
+    background load; the jitter only keeps the ingested rows from being
+    byte-identical between runs.
+    """
+    import numpy as np
+
+    sl = slices[epoch % len(slices)]
+    if jitter <= 0.0:
+        return sl, sl.cpu_cores, sl.mem_gb
+    rng = np.random.default_rng([seed, run, epoch])
+    n = len(sl.cpu_cores)
+    return (sl,
+            (sl.cpu_cores * np.exp(rng.normal(0.0, jitter, n))).astype("float32"),
+            (sl.mem_gb * np.exp(rng.normal(0.0, jitter, n))).astype("float32"))
+
+
+def run_one(args: argparse.Namespace, run: int, tel: List[EpochSlice], assets: dict,
             scenarios: List[Scenario], usage: TaskUsage, writer, fh) -> None:
     import numpy as np
 
@@ -802,10 +899,11 @@ def run_one(args: argparse.Namespace, run: int, tel: Telemetry, assets: dict,
                             args.connect_timeout, args.query_timeout)
 
         for epoch in range(args.epochs):
-            cpu, mem = epoch_values(tel, epoch, args.epoch_jitter, args.seed, run)
+            sl, cpu, mem = epoch_background(tel, epoch, args.epoch_jitter,
+                                            args.seed, run)
 
             # --- background telemetry: one ingest, shared by every scenario ---
-            keys = [tel.node_ids[int(i)] for i in tel.node_idx]
+            keys = [node_ids[int(i)] for i in sl.node_idx]
             if need_sketch:
                 ingest_sketch(args, "cluster-metrics", "cluster", epoch, keys, cpu, mem)
             if need_es:
@@ -813,8 +911,8 @@ def run_one(args: argparse.Namespace, run: int, tel: Telemetry, assets: dict,
 
             # Ground truth straight from the arrays -- no estimator involved.
             bg_true: Dict[str, tuple] = {}
-            for i, nid in enumerate(tel.node_ids):
-                sel = tel.node_idx == i
+            for i, nid in enumerate(node_ids):
+                sel = sl.node_idx == i
                 if not sel.any():
                     continue
                 cap_mem = assets["capacity"][nid][1]
@@ -830,9 +928,9 @@ def run_one(args: argparse.Namespace, run: int, tel: Telemetry, assets: dict,
                 sim = sims[sc.name]
 
                 # 1. charge work with true usage, retire finished tasks
-                node_load, per_task = true_node_load(sim, assets, usage, epoch, run, bg_true)
+                _, per_task = true_node_load(sim, assets, usage, epoch, run, bg_true)
                 done, constrained, overcommitted = advance(
-                    sim, assets, node_load, bg_true, args.epoch_length_s)
+                    sim, assets, per_task, bg_true, args.epoch_length_s, usage, args)
 
                 # 2. new arrivals
                 arrivals = sim.release(epoch, args.epoch_length_s)
@@ -846,6 +944,14 @@ def run_one(args: argparse.Namespace, run: int, tel: Telemetry, assets: dict,
                     for tid in tids:
                         req_cpu, req_mem = assets["request"][tid]
                         c, m = usage.samples(tid, epoch, run, req_cpu, req_mem)
+                        if args.clip_telemetry:
+                            # The backend never sees more than the allocation --
+                            # saturating at it is the only observable signal that
+                            # the task wants more, which is what the paper's
+                            # "approaches the current allocation" rule reads.
+                            rt = sim.running[tid]
+                            c = c.clip(max=rt.alloc_cpu)
+                            m = m.clip(max=rt.alloc_mem)
                         t_keys.extend([prefix + tid] * len(c))
                         t_cpu.extend(c.tolist())
                         t_mem.extend(m.tolist())
@@ -861,6 +967,12 @@ def run_one(args: argparse.Namespace, run: int, tel: Telemetry, assets: dict,
                         rec = reads.get(prefix + tid)
                         est_cpu, est_mem = task_estimate(sim, args, tid, rt, rec)
                         rt.est_cpu, rt.est_mem = est_cpu, est_mem
+                        if args.enforce_allocation and sim.scenario.rule not in (
+                                "p50bump", "avgp50p75bump"):
+                            # Those two manage their own allocation; for the rest
+                            # the estimate *is* the reservation, so a rule that
+                            # under-estimates throttles its own tasks.
+                            rt.alloc_cpu, rt.alloc_mem = est_cpu, est_mem
                         true_cpu = per_task.get(tid, (est_cpu, 0.0))[0]
                         if true_cpu > 1e-9:
                             errs.append(abs(est_cpu - true_cpu) / true_cpu)
@@ -926,6 +1038,7 @@ def run_one(args: argparse.Namespace, run: int, tel: Telemetry, assets: dict,
                     arrivals, pending_before, len(result.decisions), len(sim.running),
                     done, len(sim.completed), sim.evicted, moved,
                     constrained, overcommitted,
+                    f"{(sim.grant_ratio_sum / sim.grant_ratio_n) if sim.grant_ratio_n else 1.0:.4f}",
                     f"{ms:.3f}", result.status, f"{result.objective_value:.6f}",
                     f"{statistics.fmean(errs) * 100:.4f}" if errs else "",
                     f"{sorted(errs)[int(0.9 * (len(errs) - 1))] * 100:.4f}" if errs else "",
@@ -968,8 +1081,13 @@ def main() -> None:
     warn_if_uncontended(args, assets)
 
     print(f"loading telemetry from {args.telemetry_csv} ...", flush=True)
-    tel = load_telemetry(args.telemetry_csv, node_ids, args.rows_per_epoch, args.seed)
-    print(f"  {len(tel.node_idx):,} background rows/epoch over {len(tel.node_ids)} nodes")
+    slice_nodes, tel = build_epoch_slices(
+        args.telemetry_csv.parent, node_ids, args.epoch_length_s,
+        args.rows_per_epoch, args.seed)
+    if slice_nodes != node_ids:
+        raise RuntimeError("topology nodes and trace nodes disagree")
+    print(f"  {len(tel)} real {args.epoch_length_s:g}s slices, "
+          f"~{len(tel[0].cpu_cores):,} rows each; epoch k replays slice k % {len(tel)}")
 
     usage = TaskUsage(args, sorted(assets["request"]))
 

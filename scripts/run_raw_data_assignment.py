@@ -119,7 +119,8 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--epoch-jitter", type=float, default=0.02,
-        help="Per-epoch lognormal sigma applied to telemetry values (0 disables; matches gen_synth.py).",
+        help=("Per-epoch lognormal sigma applied to telemetry values (0 disables). "
+              "The same 2% sigma gen_synth.py applies when building the fixture."),
     )
     p.add_argument("--seed", type=int, default=20260903)
 
