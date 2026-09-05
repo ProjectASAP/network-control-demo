@@ -70,13 +70,21 @@ else
 fi
 
 say "STEP 4/4  plots"
-$UV run python ../scripts/plot_raw_data_completion.py \
-  --csv data/raw_data_completion_fig810.csv \
-  --summary-csv data/raw_data_completion_fig810_summary.csv \
+# Absolute paths: the CWD here is solver_experimental/, and the plot scripts
+# resolve a *relative* --csv against the repo root, so either form works now --
+# but spelling it out keeps the two independent of that convention.
+$UV run python "$REPO/scripts/plot_raw_data_completion.py" \
+  --csv "$REPO/data/raw_data_completion_fig810.csv" \
+  --summary-csv "$REPO/data/raw_data_completion_fig810_summary.csv" \
   2>&1 | tee -a "$LOG_DIR/paper_plots_$STAMP.log"
-$UV run python ../scripts/plot_raw_data_completion.py \
-  --csv data/raw_data_completion_fig9.csv \
-  --summary-csv data/raw_data_completion_fig9_summary.csv \
+$UV run python "$REPO/scripts/plot_raw_data_completion.py" \
+  --csv "$REPO/data/raw_data_completion_fig9.csv" \
+  --summary-csv "$REPO/data/raw_data_completion_fig9_summary.csv" \
+  2>&1 | tee -a "$LOG_DIR/paper_plots_$STAMP.log"
+# Paper-layout versions of the same data (plots/raw_data/paper_style_2/).
+$UV run python "$REPO/scripts/plot_raw_data_paper_style.py" \
+  --completion-fig810-csv "$REPO/data/raw_data_completion_fig810.csv" \
+  --completion-fig9-csv "$REPO/data/raw_data_completion_fig9.csv" \
   2>&1 | tee -a "$LOG_DIR/paper_plots_$STAMP.log"
 
 say "DONE  fig810 rc=$RC810  fig9 rc=$RC9"

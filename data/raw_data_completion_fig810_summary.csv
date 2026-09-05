@@ -1,0 +1,10 @@
+scenario,estimator,rule,gamma,lam,runs,completed_mean,completed_sd,vs_static_pct,cpu_est_err_pct,constrained_task_epochs,moves,evicted,not_optimal_solves
+static,static,request,0,0.0,1,3200.00,0.00,+0.00,44.6013,1247.0,0.0,0,0
+reassign,static,request,10,1.0,1,3240.00,0.00,+1.25,44.4869,1236.0,8.0,0,0
+dynamic,sketch,p50,0,0.0,1,3906.00,0.00,+22.06,8.5013,9407.0,0.0,0,1
+dynamic+reassign,sketch,p50,10,1.0,1,3915.00,0.00,+22.34,8.3844,9379.0,100.0,0,1
+p50-1.2xalloc,sketch,p50bump,10,1.0,1,3759.00,0.00,+17.47,3.1498,2403.0,560.0,0,1
+avg-p50p75-1.2xalloc,sketch,avgp50p75bump,10,1.0,1,3624.00,0.00,+13.25,6.1868,1867.0,616.0,0,1
+window-avg,sketch,window,10,1.0,1,3884.00,0.00,+21.38,9.4899,8517.0,113.0,0,0
+p90,sketch,p90,10,1.0,1,3703.00,0.00,+15.72,11.6335,5907.0,114.0,0,0
+avg,sketch,avg,10,1.0,1,3942.00,0.00,+23.19,8.8908,9633.0,92.0,0,0

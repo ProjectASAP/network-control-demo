@@ -250,6 +250,13 @@ def main() -> None:
                    default=REPO_ROOT / "plots" / "raw_data" / "paper_style_2")
     p.add_argument("--solver-time-limit-ms", type=float, default=60_000.0)
     args = p.parse_args()
+    # Relative paths resolve against the repo root, not the CWD, so this works
+    # the same from the repo root and from solver_experimental/.
+    for field in ("assignment_csv", "completion_fig810_csv",
+                  "completion_fig9_csv", "out_dir"):
+        val = getattr(args, field)
+        if not val.is_absolute():
+            setattr(args, field, REPO_ROOT / val)
 
     assign = load(args.assignment_csv)
     comp810 = load(args.completion_fig810_csv)

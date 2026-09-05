@@ -87,7 +87,15 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--out-dir", type=Path, default=REPO_ROOT / "plots" / "raw_data")
     p.add_argument("--summary-csv", type=Path,
                    default=REPO_ROOT / "data" / "raw_data_completion_summary.csv")
-    return p.parse_args()
+    args = p.parse_args()
+    # Relative paths are resolved against the repo root, not the CWD, so the
+    # script behaves the same whether it is run from the repo root or from
+    # solver_experimental/ (which is where the uv env lives).
+    for field in ("csv", "out_dir", "summary_csv"):
+        val = getattr(args, field)
+        if not val.is_absolute():
+            setattr(args, field, REPO_ROOT / val)
+    return args
 
 
 # ---------------------------------------------------------------------------
@@ -317,12 +325,28 @@ def main() -> None:
         if r["scenario"] not in grouped:
             order.append(r["scenario"])
         grouped[r["scenario"]].append(r)
+    # `run_raw_data_completion.py --figure 9` names its arms static/sketch/es,
+    # while `--figure all` dedups them into the names Fig. 8 gives them. Map the
+    # split-run names onto the canonical ones so either CSV plots. In the split
+    # run "static" already carries gamma/lambda, i.e. it is Fig. 8's `reassign`.
+    if {"sketch", "es"} <= set(order) and "dynamic+reassign" not in order:
+        alias = {"static": "reassign", "sketch": "dynamic+reassign"}
+        order = [alias.get(n, n) for n in order]
+        grouped = {alias.get(n, n): v for n, v in grouped.items()}
+    # The oracle rule is written as `avg-epoch`; Fig. 10's spec calls it `avg`.
+    if "avg-epoch" in grouped and "avg" not in grouped:
+        order = ["avg" if n == "avg-epoch" else n for n in order]
+        grouped["avg"] = grouped.pop("avg-epoch")
+
     scens = {n: Scen(n, grouped[n]) for n in order}
 
     drawn = 0
     for fig_id, spec in FIGURES.items():
         present = [n for n in spec["series"] if n in scens]
-        if spec["baseline"] not in present or len(present) < 2:
+        # Every series a figure names must be present. A partial match would
+        # silently overwrite that figure with a subset of its arms -- the Fig. 9
+        # CSV contains two of Fig. 10's series, and vice versa.
+        if len(present) < len(spec["series"]):
             continue
         # More than five non-baseline series would force a repeated hue, and a
         # repeated hue identifies nothing. Trim rather than cycle.
