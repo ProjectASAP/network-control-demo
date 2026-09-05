@@ -1,0 +1,25 @@
+series,backend,metric,quantile,mean_rel_err_pct,sd_across_runs_pct
+"Approximate (DDSketch, alpha=1e-3)",sketch,cpu_cores,50,0.050416,0.005266
+"Approximate (DDSketch, alpha=1e-3)",sketch,cpu_cores,90,0.052697,0.013153
+"Approximate (DDSketch, alpha=1e-3)",sketch,memory_gb,50,0.045841,0.000664
+"Approximate (DDSketch, alpha=1e-3)",sketch,memory_gb,90,0.050022,0.000580
+"Approximate (DDSketch, alpha=1e-3)",sketch,network_mbps,50,0.050790,0.005042
+"Approximate (DDSketch, alpha=1e-3)",sketch,network_mbps,90,0.049393,0.004972
+"Approximate (KLL, k=200)",sketch,cpu_cores,50,0.620761,0.199538
+"Approximate (KLL, k=200)",sketch,cpu_cores,90,4.937812,3.012333
+"Approximate (KLL, k=200)",sketch,memory_gb,50,0.001790,0.000619
+"Approximate (KLL, k=200)",sketch,memory_gb,90,0.004297,0.001637
+"Approximate (KLL, k=200)",sketch,network_mbps,50,0.477164,0.063166
+"Approximate (KLL, k=200)",sketch,network_mbps,90,1.256992,0.185190
+Elasticsearch (default compression),es_default,cpu_cores,50,5.753445,0.945945
+Elasticsearch (default compression),es_default,cpu_cores,90,8.527217,1.109348
+Elasticsearch (default compression),es_default,memory_gb,50,0.000693,0.000204
+Elasticsearch (default compression),es_default,memory_gb,90,0.000712,0.000194
+Elasticsearch (default compression),es_default,network_mbps,50,0.274798,0.024328
+Elasticsearch (default compression),es_default,network_mbps,90,0.326599,0.031388
+Elasticsearch (compression 1000),es_compression,cpu_cores,50,0.114853,0.028436
+Elasticsearch (compression 1000),es_compression,cpu_cores,90,1.032106,0.524036
+Elasticsearch (compression 1000),es_compression,memory_gb,50,0.000107,0.000035
+Elasticsearch (compression 1000),es_compression,memory_gb,90,0.000153,0.000048
+Elasticsearch (compression 1000),es_compression,network_mbps,50,0.020559,0.002662
+Elasticsearch (compression 1000),es_compression,network_mbps,90,0.027608,0.003428
