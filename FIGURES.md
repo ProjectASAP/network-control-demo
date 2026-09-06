@@ -62,6 +62,12 @@ here by hand.
 | **9** | Sketch vs ES vs static, 10 runs | `data/<b>/raw_data_completion_fig9.csv` | `plots/<b>/fig9_sketch_vs_es.pdf` | same as Fig 8 |
 | **10** | Telemetry update rules | `data/<b>/raw_data_completion_fig810.csv` (same CSV as Fig 8) | `plots/<b>/fig10_update_rules.pdf` | same as Fig 8 |
 
+`raw_data_assignment.csv` is **10 independent runs x 10 epochs** (regenerated
+2026-09-06). Each run re-ingests with a fresh telemetry jitter draw and a
+restarted server, so Fig 4's and Fig 7's error bars are a real run-to-run
+spread; the earlier single-run version drew std = 0 at every epoch. One backend
+takes ~1h50m: `run_raw_data_assignment.py --runs 10 --epochs 10`.
+
 `<b>` is `kll` or `dd`. **Every plot script defaults to `kll`**; to draw the DD
 version, pass the same flags with `kll` swapped for `dd`.
 
@@ -111,12 +117,12 @@ means the two runs did not see the same values and the figure is not valid.
 
 ## Open items
 
-- **Fig 4 (and Fig 7) need a re-run with repeats.** `raw_data_assignment.csv`
-  holds a single run (`run=0`), one row per epoch, so the "mean ± std" the plot
-  draws has std = 0 at every epoch: the caps on those bars are zero-length, not
-  a spread. The paper's Fig 4 is `mean ± std, n=10 runs`. Re-run
-  `run_raw_data_assignment.py --runs 10` on each backend and redraw. Fig 7 comes
-  from the same CSV and has the same problem.
+- **Fig 7 does not support "solver time rarely exceeds 1 s".** Over 10 runs the
+  mean solver time is 11.7 s (KLL-fed) and 13.7 s (ES-fed), and 14-20 of 100
+  solves stop at the 60 s deadline without proving optimality. The per-epoch
+  error bars span an order of magnitude: solver time is dominated by which
+  telemetry draw it got, not by which backend supplied it. The paper's claim
+  needs rewording or the scheduling window needs shrinking.
 
 - **Fig 6's network arm is synthetic.** raw_data has no per-node network metric
   (`bw.csv` is per-edge), so `run_raw_data_accuracy.py` generates one. It is
@@ -176,8 +182,9 @@ Fig 4 / Fig 5, sketch server only:
 
 | | KLL | DD |
 |---|---|---|
-| Query latency (assignment run, all 43 epochs) | 5.46 ms | 5.38 ms |
-| Query latency (Fig 4 as drawn, first 10 epochs) | 5.8 ms vs ES 894 ms | 5.6 ms vs ES 847 ms |
+| Query latency (Fig 4: 10 runs x 10 epochs) | 5.82 +- 0.59 ms | 5.31 +- 0.77 ms |
+| Elasticsearch, same queries | 837.9 +- 219.0 ms | 808.3 +- 224.7 ms |
+| Latency reduction | 99.31% | 99.34% |
 | Query latency (resource run) | 4.09 ms | 3.49 ms |
 | CPU per query | 8.80 ms | 5.23 ms |
 | RSS mean / VmHWM | 12.2 / 12.4 MB | 14.9 / 15.1 MB |
