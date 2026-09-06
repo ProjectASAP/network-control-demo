@@ -312,6 +312,20 @@ uv run python ../scripts/run_raw_data_completion.py --figure all --runs 3 --epoc
 uv run python ../scripts/plot_raw_data_completion.py
 ```
 
+### Figure map (KLL vs DDSketch)
+
+Every paper figure exists twice — once per quantile backend — in two worktrees:
+
+| | checkout | branch |
+|---|---|---|
+| KLL (k=200) | `/users/yuanyc/network-control-demo` | `feat/raw-data-experiments` |
+| DDSketch (alpha=1e-3) | `/users/yuanyc/network-control-demo-dd` | `feat/ddsketch-variant` |
+
+The only source difference is `single_node_server/network-control-server/src/metrics/store.rs`.
+**`FIGURES.md` maps every figure to its CSV, its PNG and the script that draws
+it**, plus the traps (Fig 6's data is split across the two trees; `--log-y` is
+required for it to be readable). Read that before touching any figure.
+
 ### Benchmark output convention
 
 - **CSV output** defaults to `data/`
