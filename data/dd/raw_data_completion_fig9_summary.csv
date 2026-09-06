@@ -1,0 +1,4 @@
+scenario,estimator,rule,gamma,lam,runs,completed_mean,completed_sd,vs_static_pct,cpu_est_err_pct,constrained_task_epochs,moves,evicted,not_optimal_solves
+reassign,static,request,10,1.0,10,451.50,2.17,+0.00,44.2964,192.4,1.1,0,1
+dynamic+reassign,sketch,p50,10,1.0,10,506.20,2.44,+12.12,7.8326,1267.6,11.7,0,1
+es,es,p50,10,1.0,10,505.60,2.07,+11.98,7.7938,1263.2,12.3,0,0

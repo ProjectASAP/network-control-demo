@@ -466,9 +466,9 @@ def prune_stale(out_dir: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plot resource benchmark figures")
-    parser.add_argument("--summary-csv", default="data/resource_benchmark.csv")
-    parser.add_argument("--ingestion-csv", default="data/resource_ingestion.csv")
-    parser.add_argument("--out-dir", default="plots/resource")
+    parser.add_argument("--summary-csv", default="data/kll/resource_benchmark.csv")
+    parser.add_argument("--ingestion-csv", default="data/kll/resource_ingestion.csv")
+    parser.add_argument("--out-dir", default="plots/kll/resource")
     parser.add_argument("--shape", default="default", help="query_shape to plot")
     parser.add_argument("--no-prune", action="store_true",
                         help="Keep files the script no longer produces (default: prune)")

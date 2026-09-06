@@ -314,22 +314,38 @@ uv run python ../scripts/plot_raw_data_completion.py
 
 ### Figure map (KLL vs DDSketch)
 
-Every paper figure exists twice — once per quantile backend — in two worktrees:
+Every paper figure exists twice — once per quantile backend. The experiments run
+in two worktrees, whose only source difference is
+`single_node_server/network-control-server/src/metrics/store.rs`:
 
 | | checkout | branch |
 |---|---|---|
 | KLL (k=200) | `/users/yuanyc/network-control-demo` | `feat/raw-data-experiments` |
 | DDSketch (alpha=1e-3) | `/users/yuanyc/network-control-demo-dd` | `feat/ddsketch-variant` |
 
-The only source difference is `single_node_server/network-control-server/src/metrics/store.rs`.
+Figures are drawn on the **`raw_data_plot`** branch, which carries *both*
+datasets in one checkout, split by backend:
+
+```
+data/kll/  data/dd/  data/combined/     data/raw_topology{,_completion}/  (shared inputs)
+plots/kll/ plots/dd/ plots/combined/
+```
+
+`data/kll/` and `data/dd/` use the same filenames, so switching backend is one
+path segment. Every plot script defaults to `kll`. The `run_*` experiment
+scripts still write to `data/<name>.csv`, so re-running an experiment means
+copying its output into `data/kll/` or `data/dd/` by hand.
+
 **`FIGURES.md` maps every figure to its CSV, its PNG and the script that draws
-it**, plus the traps (Fig 6's data is split across the two trees; `--log-y` is
-required for it to be readable). Read that before touching any figure.
+it**, plus the traps (`--log-y` is required for Fig 6 to be readable; relative
+`--csv` paths resolve against the repo root, not the CWD). Read that before
+touching any figure.
 
 ### Benchmark output convention
 
-- **CSV output** defaults to `data/`
-- **Plot output** defaults to `plots/`
+- **CSV output** defaults to `data/` (figure data on `raw_data_plot` lives in
+  `data/kll/` and `data/dd/`)
+- **Plot output** defaults to `plots/` (likewise `plots/kll/`, `plots/dd/`)
 - **Log output** defaults to `logs/`
 
 ### `evaluate_demo.sh` — Full pipeline

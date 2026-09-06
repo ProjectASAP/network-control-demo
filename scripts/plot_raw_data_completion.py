@@ -83,10 +83,10 @@ FIGURES: dict[str, dict] = {
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--csv", type=Path, default=REPO_ROOT / "data" / "raw_data_completion.csv")
-    p.add_argument("--out-dir", type=Path, default=REPO_ROOT / "plots" / "raw_data")
+    p.add_argument("--csv", type=Path, default=REPO_ROOT / "data" / "kll" / "raw_data_completion.csv")
+    p.add_argument("--out-dir", type=Path, default=REPO_ROOT / "plots" / "kll" / "raw_data")
     p.add_argument("--summary-csv", type=Path,
-                   default=REPO_ROOT / "data" / "raw_data_completion_summary.csv")
+                   default=REPO_ROOT / "data" / "kll" / "raw_data_completion_summary.csv")
     args = p.parse_args()
     # Relative paths are resolved against the repo root, not the CWD, so the
     # script behaves the same whether it is run from the repo root or from

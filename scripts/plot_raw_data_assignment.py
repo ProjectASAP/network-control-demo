@@ -52,10 +52,10 @@ BACKENDS = (("sketch", SKETCH, "Sketch server", 3.2), ("es", ES, "Elasticsearch"
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--csv", type=Path, default=REPO_ROOT / "data" / "raw_data_assignment.csv")
-    p.add_argument("--out-dir", type=Path, default=REPO_ROOT / "plots" / "raw_data")
+    p.add_argument("--csv", type=Path, default=REPO_ROOT / "data" / "kll" / "raw_data_assignment.csv")
+    p.add_argument("--out-dir", type=Path, default=REPO_ROOT / "plots" / "kll" / "raw_data")
     p.add_argument("--summary-csv", type=Path,
-                   default=REPO_ROOT / "data" / "raw_data_assignment_summary.csv")
+                   default=REPO_ROOT / "data" / "kll" / "raw_data_assignment_summary.csv")
     p.add_argument("--solver-time-limit-ms", type=float, default=60_000.0,
                    help="Drawn as the MILP deadline; must match the experiment.")
     p.add_argument("--tasks-jsonl", type=Path,

@@ -54,14 +54,14 @@ DPI = 200
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--csv", type=Path, default=REPO_ROOT / "data" / "raw_data_accuracy.csv")
+    p.add_argument("--csv", type=Path, default=REPO_ROOT / "data" / "kll" / "raw_data_accuracy.csv")
     p.add_argument("--sketch-label", default="Approximate (Sketch)")
     p.add_argument("--extra-sketch-csv", type=Path, default=None,
                    help="Second accuracy CSV; its sketch arm is added as a fourth series.")
     p.add_argument("--extra-sketch-label", default="Approximate (second sketch)")
-    p.add_argument("--out", type=Path, default=REPO_ROOT / "plots" / "raw_data" / "fig6_accuracy.png")
+    p.add_argument("--out", type=Path, default=REPO_ROOT / "plots" / "kll" / "raw_data" / "fig6_accuracy.png")
     p.add_argument("--summary-csv", type=Path,
-                   default=REPO_ROOT / "data" / "raw_data_accuracy_summary.csv")
+                   default=REPO_ROOT / "data" / "kll" / "raw_data_accuracy_summary.csv")
     p.add_argument("--log-y", action="store_true",
                    help="Log y axis -- readable when the arms differ by 100x.")
     args = p.parse_args()
