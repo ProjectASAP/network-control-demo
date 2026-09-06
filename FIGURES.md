@@ -109,6 +109,23 @@ means the two runs did not see the same values and the figure is not valid.
 
 ---
 
+## Open items
+
+- **Fig 4 (and Fig 7) need a re-run with repeats.** `raw_data_assignment.csv`
+  holds a single run (`run=0`), one row per epoch, so the "mean ± std" the plot
+  draws has std = 0 at every epoch: the caps on those bars are zero-length, not
+  a spread. The paper's Fig 4 is `mean ± std, n=10 runs`. Re-run
+  `run_raw_data_assignment.py --runs 10` on each backend and redraw. Fig 7 comes
+  from the same CSV and has the same problem.
+
+- **Fig 6's network arm is synthetic.** raw_data has no per-node network metric
+  (`bw.csv` is per-edge), so `run_raw_data_accuracy.py` generates one. It is
+  measured for accuracy only -- `network_mbps` is dropped in both
+  `raw-data-config.yaml` and `raw-data-full-config.yaml`, so no assignment or
+  completion result depends on it. Decide whether that arm belongs in the paper.
+
+---
+
 ## Things that will bite you
 
 - **Fig 4 and Fig 7 are truncated to 10 epochs** (`--latency-epochs`,
