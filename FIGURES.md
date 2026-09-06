@@ -109,6 +109,10 @@ means the two runs did not see the same values and the figure is not valid.
 
 ## Things that will bite you
 
+- **Fig 4 and Fig 7 are truncated to 10 epochs** (`--latency-epochs`,
+  default 10; `0` plots all 43). The assignment run is much longer than
+  either figure needs, and drawing all of it just shrinks the bars.
+
 - **`--log-y` exists for a reason.** Fig 6's arms span five orders of magnitude
   (0.0001% to 8.5%); on a linear axis DDSketch's bar is invisible in the CPU
   panel. Both versions are on disk; the `_log` one is the readable one.
@@ -153,7 +157,8 @@ Fig 4 / Fig 5, sketch server only:
 
 | | KLL | DD |
 |---|---|---|
-| Query latency (assignment run, 43 epochs) | 5.46 ms | 5.38 ms |
+| Query latency (assignment run, all 43 epochs) | 5.46 ms | 5.38 ms |
+| Query latency (Fig 4 as drawn, first 10 epochs) | 5.8 ms vs ES 894 ms | 5.6 ms vs ES 847 ms |
 | Query latency (resource run) | 4.09 ms | 3.49 ms |
 | CPU per query | 8.80 ms | 5.23 ms |
 | RSS mean / VmHWM | 12.2 / 12.4 MB | 14.9 / 15.1 MB |

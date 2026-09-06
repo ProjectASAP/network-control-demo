@@ -100,7 +100,7 @@ def _epoch_ticks(ax, epochs: list[int], x: np.ndarray, stride: int) -> None:
 
 def plot_latency(rows: list[dict], series, ylabel: str, out_path: Path,
                  time_limit_ms: float | None = None,
-                 stride: int = 3) -> None:
+                 stride: int = 1) -> None:
     epochs = sorted({int(r["epoch"]) for r in rows})
     x = np.arange(len(epochs), dtype=float)
     n = len(series)
@@ -240,6 +240,9 @@ def main() -> None:
     p.add_argument("--out-dir", type=Path,
                    default=REPO_ROOT / "plots" / "kll")
     p.add_argument("--solver-time-limit-ms", type=float, default=60_000.0)
+    p.add_argument("--latency-epochs", type=int, default=10,
+                   help="Epochs to show in Fig 4 and Fig 7 (the earliest N of "
+                        "the assignment run). 0 plots every epoch.")
     args = p.parse_args()
     # Relative paths resolve against the repo root, not the CWD, so this works
     # the same from the repo root and from solver_experimental/.
@@ -250,6 +253,11 @@ def main() -> None:
             setattr(args, field, REPO_ROOT / val)
 
     assign = load(args.assignment_csv)
+    if args.latency_epochs:
+        # Fig 4 and Fig 7 make their point over a handful of epochs; the run is
+        # much longer, and plotting all of it just shrinks the bars.
+        keep = sorted({int(r["epoch"]) for r in assign})[:args.latency_epochs]
+        assign = [r for r in assign if int(r["epoch"]) in set(keep)]
     comp810 = load(args.completion_fig810_csv)
     comp9 = load(args.completion_fig9_csv)
     n_runs9 = len({r["run"] for r in comp9})
