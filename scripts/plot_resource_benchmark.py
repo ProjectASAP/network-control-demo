@@ -37,6 +37,13 @@ from typing import Dict, List, Tuple
 import matplotlib
 
 matplotlib.use("Agg")
+# Embed TrueType rather than Type 3 fonts: IEEE/ACM PDF checkers reject
+# Type 3, which is matplotlib's default for PDF output.
+matplotlib.rcParams["pdf.fonttype"] = 42
+matplotlib.rcParams["ps.fonttype"] = 42
+
+# Output extension, set from --format.
+EXT = "pdf"
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
@@ -162,7 +169,7 @@ def emit_bar_family(by_epoch, variants: dict, ylabel: str, title_prefix: str,
                     out_dir: Path, stem: str, log_y: bool = True) -> None:
     for variant, series in variants.items():
         plot_epoch_bars(by_epoch, series, ylabel, title_prefix,
-                        out_dir / f"{stem}_{variant}.png", log_y=log_y)
+                        out_dir / f"{stem}_{variant}.{EXT}", log_y=log_y)
 
 
 def _label_ms(m: float) -> str:
@@ -454,11 +461,11 @@ EXPECTED_STEMS = (
 
 
 def prune_stale(out_dir: Path) -> None:
-    expected = {f"{s}.png" for s in EXPECTED_STEMS}
-    for png in out_dir.glob("*.png"):
-        if png.name not in expected:
-            png.unlink()
-            print(f"[plot] removed stale {png.name}")
+    expected = {f"{s}.{EXT}" for s in EXPECTED_STEMS}
+    for path in out_dir.glob(f"*.{EXT}"):
+        if path.name not in expected:
+            path.unlink()
+            print(f"[plot] removed stale {path.name}")
 
 
 def main() -> None:
@@ -467,9 +474,13 @@ def main() -> None:
     parser.add_argument("--ingestion-csv", default="data/kll/resource_ingestion.csv")
     parser.add_argument("--out-dir", default="plots/kll/resource")
     parser.add_argument("--shape", default="default", help="query_shape to plot")
+    parser.add_argument("--format", default="pdf", choices=["pdf", "png"],
+                        help="Output format. pdf is vector and is what LaTeX wants.")
     parser.add_argument("--no-prune", action="store_true",
                         help="Keep files the script no longer produces (default: prune)")
     args = parser.parse_args()
+    global EXT
+    EXT = args.format
 
     summary_csv = _resolve(args.summary_csv)
     ingest_csv = _resolve(args.ingestion_csv)
@@ -490,14 +501,14 @@ def main() -> None:
                    ("es_default", "Elastic Search", ES_DEFAULT_COLOR),
                    ("es_large", "Elastic Search (comp 1000)", ES_LARGE_COLOR)],
                   "CPU time per query (all threads, ms)", "CPU per Query: Sketch vs Elasticsearch",
-                  out_dir / "query_cpu_headline.png")
+                  out_dir / f"query_cpu_headline.{EXT}")
     if ing_rows:
         plot_headline(ing_rows, "ingest_cpu_ms",
                       [("server", "Approximate", SERVER_COLOR),
                        ("es", "Elastic Search", ES_DEFAULT_COLOR)],
                       "Ingestion CPU time per epoch (all threads, ms)",
                       "Ingestion CPU: Sketch vs Elasticsearch",
-                      out_dir / "ingestion_cpu_headline.png")
+                      out_dir / f"ingestion_cpu_headline.{EXT}")
 
     # --- comparison CPU bars per epoch (sketch vs ES) ---
     emit_bar_family(by_epoch_metric(rows, "cpu_per_query_ms"), QUERY_VARIANTS,
@@ -514,14 +525,14 @@ def main() -> None:
              "ylabel": "CPU time per query (all threads, ms)", "title": "CPU during query"},
         bottom={"rows": rows, "col": "rss_mean_mb",
                 "ylabel": "Whole-process RSS (MB)", "title": "Memory during query"},
-        suptitle="Approximate Layer resource usage during query", out_path=out_dir / "sketch_query.png")
+        suptitle="Approximate Layer resource usage during query", out_path=out_dir / f"sketch_query.{EXT}")
     if ing_rows:
         plot_sketch_pair(
             top={"rows": ing_rows, "col": "ingest_cpu_ms",
                  "ylabel": "Ingestion CPU time per epoch (all threads, ms)", "title": "CPU during ingestion"},
             bottom={"rows": rows, "col": "rss_idle_mb",
                     "ylabel": "Whole-process RSS (MB)", "title": "Memory after ingestion"},
-            suptitle="Approximate Layer resource usage during ingestion", out_path=out_dir / "sketch_ingestion.png")
+            suptitle="Approximate Layer resource usage during ingestion", out_path=out_dir / f"sketch_ingestion.{EXT}")
 
     # --- combined horizontal views: one figure for CPU (log scale), one for memory ---
     if ing_rows:
@@ -533,7 +544,7 @@ def main() -> None:
                    "ylabel": "CPU time per query (all threads, ms)",
                    "title": "CPU during query"},
             suptitle="Approximate Layer CPU usage",
-            out_path=out_dir / "sketch_cpu.png", log_y=True)
+            out_path=out_dir / f"sketch_cpu.{EXT}", log_y=True)
     plot_sketch_horizontal_pair(
         left={"rows": rows, "col": "rss_idle_mb",
               "ylabel": "Whole-process RSS (MB)",
@@ -542,7 +553,7 @@ def main() -> None:
                "ylabel": "Whole-process RSS (MB)",
                "title": "Memory during query"},
         suptitle="Approximate Layer memory usage",
-        out_path=out_dir / "sketch_memory.png")
+        out_path=out_dir / f"sketch_memory.{EXT}")
 
     # --- combined two-panel resource figure: CPU (log) | memory, each with
     #     ingestion vs query bars grouped per epoch ---
@@ -552,7 +563,7 @@ def main() -> None:
             query_cpu={"rows": rows, "col": "cpu_per_query_ms"},
             ingest_mem={"rows": rows, "col": "rss_idle_mb"},
             query_mem={"rows": rows, "col": "rss_mean_mb"},
-            out_path=out_dir / "sketch_resource.png")
+            out_path=out_dir / f"sketch_resource.{EXT}")
 
     if not args.no_prune:
         prune_stale(out_dir)

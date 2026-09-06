@@ -17,7 +17,9 @@ plots/
 ```
 
 `plots/` holds **only** the paper figures -- `fig4` through `fig10`, one flat
-file each, in `plots/kll/` and `plots/dd/`. Everything else the plot scripts can
+file each, in `plots/kll/` and `plots/dd/`, as **vector PDF** for `\includegraphics`.
+Fonts are embedded as TrueType (`pdf.fonttype = 42`), not Type 3, which IEEE and
+ACM PDF checkers reject. `--format png` (or a `.png` `--out` for Fig 6) still works. Everything else the plot scripts can
 emit (per-run diagnostics, the resource script's 13-file family, the alternate
 completion renderings) is regenerable and is not kept.
 
@@ -52,13 +54,13 @@ here by hand.
 
 | Fig | What it shows | Data (CSV) | Plot (PNG) | Regenerate the plot with |
 |---|---|---|---|---|
-| **4** | Query latency, sketch vs ES | `data/<b>/raw_data_assignment.csv` | `plots/<b>/fig4_query_latency.png` | `scripts/plot_raw_data_paper_style.py` |
-| **5** | CPU + RSS per query and per ingest | `data/<b>/resource_benchmark.csv`, `data/<b>/resource_ingestion.csv`, sidecars in `data/<b>/resource_benchmark_raw/` | `plots/<b>/fig5_resource_usage.png` | `scripts/plot_resource_benchmark.py` (see caveat below) |
-| **6** | Quantile error vs ground truth | `data/<b>/raw_data_accuracy.csv` | `plots/<b>/fig6_accuracy.png` | `scripts/plot_raw_data_accuracy.py` |
-| **7** | Solver runtime, sketch- vs ES-fed | `data/<b>/raw_data_assignment.csv` | `plots/<b>/fig7_solver_runtime.png` | `scripts/plot_raw_data_paper_style.py` |
-| **8** | Completions: static / reassign / dynamic | `data/<b>/raw_data_completion_fig810.csv` | `plots/<b>/fig8_completion.png` | `scripts/plot_raw_data_paper_style.py` |
-| **9** | Sketch vs ES vs static, 10 runs | `data/<b>/raw_data_completion_fig9.csv` | `plots/<b>/fig9_sketch_vs_es.png` | same as Fig 8 |
-| **10** | Telemetry update rules | `data/<b>/raw_data_completion_fig810.csv` (same CSV as Fig 8) | `plots/<b>/fig10_update_rules.png` | same as Fig 8 |
+| **4** | Query latency, sketch vs ES | `data/<b>/raw_data_assignment.csv` | `plots/<b>/fig4_query_latency.pdf` | `scripts/plot_raw_data_paper_style.py` |
+| **5** | CPU + RSS per query and per ingest | `data/<b>/resource_benchmark.csv`, `data/<b>/resource_ingestion.csv`, sidecars in `data/<b>/resource_benchmark_raw/` | `plots/<b>/fig5_resource_usage.pdf` | `scripts/plot_resource_benchmark.py` (see caveat below) |
+| **6** | Quantile error vs ground truth | `data/<b>/raw_data_accuracy.csv` | `plots/<b>/fig6_accuracy.pdf` | `scripts/plot_raw_data_accuracy.py` |
+| **7** | Solver runtime, sketch- vs ES-fed | `data/<b>/raw_data_assignment.csv` | `plots/<b>/fig7_solver_runtime.pdf` | `scripts/plot_raw_data_paper_style.py` |
+| **8** | Completions: static / reassign / dynamic | `data/<b>/raw_data_completion_fig810.csv` | `plots/<b>/fig8_completion.pdf` | `scripts/plot_raw_data_paper_style.py` |
+| **9** | Sketch vs ES vs static, 10 runs | `data/<b>/raw_data_completion_fig9.csv` | `plots/<b>/fig9_sketch_vs_es.pdf` | same as Fig 8 |
+| **10** | Telemetry update rules | `data/<b>/raw_data_completion_fig810.csv` (same CSV as Fig 8) | `plots/<b>/fig10_update_rules.pdf` | same as Fig 8 |
 
 `<b>` is `kll` or `dd`. **Every plot script defaults to `kll`**; to draw the DD
 version, pass the same flags with `kll` swapped for `dd`.
@@ -72,16 +74,16 @@ cd solver_experimental
 uv run python ../scripts/plot_raw_data_accuracy.py \
     --csv data/dd/raw_data_accuracy.csv \
     --sketch-label "Approximate (DDSketch, alpha=1e-3)" \
-    --out plots/dd/fig6_accuracy.png --log-y
+    --out plots/dd/fig6_accuracy.pdf --log-y
 ```
 
 **Three scripts still write outside `plots/<b>/` and will re-create pruned
 directories if run as-is:**
 
 - `plot_resource_benchmark.py` writes a 13-file family into
-  `plots/<b>/resource/`; Fig 5 is its `sketch_resource.png`. It also **prunes**.
-  Send it to a scratch dir and copy `sketch_resource.png` to
-  `plots/<b>/fig5_resource_usage.png`, or trim the script when Fig 5 is reworked.
+  `plots/<b>/resource/`; Fig 5 is its `sketch_resource.pdf`. It also **prunes**.
+  Send it to a scratch dir and copy `sketch_resource.pdf` to
+  `plots/<b>/fig5_resource_usage.pdf`, or trim the script when Fig 5 is reworked.
 - `plot_raw_data_assignment.py` and `plot_raw_data_completion.py` default to
   `plots/<b>/raw_data/` and produce diagnostics and alternate renderings of Fig
   8/9/10 that are deliberately not kept.

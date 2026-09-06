@@ -27,6 +27,10 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
+# Embed TrueType rather than Type 3 fonts: IEEE/ACM PDF checkers reject
+# Type 3, which is matplotlib's default for PDF output.
+matplotlib.rcParams["pdf.fonttype"] = 42
+matplotlib.rcParams["ps.fonttype"] = 42
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
@@ -59,9 +63,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--extra-sketch-csv", type=Path, default=None,
                    help="Second accuracy CSV; its sketch arm is added as a fourth series.")
     p.add_argument("--extra-sketch-label", default="Approximate (second sketch)")
-    p.add_argument("--out", type=Path, default=REPO_ROOT / "plots" / "kll" / "fig6_accuracy.png")
+    p.add_argument("--out", type=Path, default=REPO_ROOT / "plots" / "kll" / "fig6_accuracy.pdf")
     p.add_argument("--summary-csv", type=Path,
                    default=REPO_ROOT / "data" / "kll" / "raw_data_accuracy_summary.csv")
+    # --out drives the format: matplotlib picks the writer from the suffix,
+    # so passing a .png path still works.
     p.add_argument("--log-y", action="store_true",
                    help="Log y axis -- readable when the arms differ by 100x.")
     args = p.parse_args()

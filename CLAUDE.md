@@ -328,11 +328,12 @@ datasets in one checkout, split by backend:
 
 ```
 data/kll/  data/dd/  data/combined/     data/raw_topology{,_completion}/  (shared inputs)
-plots/kll/ plots/dd/                    exactly fig4..fig10, one flat file each
+plots/kll/ plots/dd/                    exactly fig4..fig10.pdf, one flat file each
 ```
 
 `data/kll/` and `data/dd/` use the same filenames, so switching backend is one
-path segment. Every plot script defaults to `kll`. The `run_*` experiment
+path segment. Figures are vector PDF with TrueType-embedded fonts, ready for
+`\includegraphics`; pass `--format png` for a raster copy. Every plot script defaults to `kll`. The `run_*` experiment
 scripts still write to `data/<name>.csv`, so re-running an experiment means
 copying its output into `data/kll/` or `data/dd/` by hand.
 

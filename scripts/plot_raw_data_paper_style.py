@@ -32,6 +32,10 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
+# Embed TrueType rather than Type 3 fonts: IEEE/ACM PDF checkers reject
+# Type 3, which is matplotlib's default for PDF output.
+matplotlib.rcParams["pdf.fonttype"] = 42
+matplotlib.rcParams["ps.fonttype"] = 42
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
@@ -42,6 +46,19 @@ LABEL_FS = 17
 TICK_FS = 15
 LEGEND_FS = 14
 DPI = 220
+# Output formats, set from --format.  Vector PDF is what goes into LaTeX.
+FORMATS = ["pdf"]
+
+
+def _save(fig, stem: Path, **kw) -> list[Path]:
+    """Write `stem` once per requested format; returns the paths written."""
+    stem.parent.mkdir(parents=True, exist_ok=True)
+    out = []
+    for ext in FORMATS:
+        path = stem.with_suffix(f".{ext}")
+        fig.savefig(path, **kw)
+        out.append(path)
+    return out
 
 SERVER_COLOR = "#2a9d8f"   # "Approximate" everywhere in the archive
 ES_COLOR = "#f28e2b"       # "Elastic Search"
@@ -134,10 +151,10 @@ def plot_latency(rows: list[dict], series, ylabel: str, out_path: Path,
     legend = ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.22),
                        ncol=min(3, n), fontsize=LEGEND_FS, frameon=False)
 
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(out_path, dpi=DPI, bbox_inches="tight", bbox_extra_artists=[legend])
+    written = _save(fig, out_path, dpi=DPI, bbox_inches="tight",
+                    bbox_extra_artists=[legend])
     plt.close(fig)
-    print(f"[plot] wrote {out_path}  (means: "
+    print(f"[plot] wrote {', '.join(str(p) for p in written)}  (means: "
           + ", ".join(f"{k} {v:,.1f} ms" for k, v in means.items()) + ")")
 
 
@@ -219,10 +236,9 @@ def plot_completion(rows: list[dict], scenarios, out_path: Path,
         ax.annotate(fmt.format(value), xy=(last_epoch + 0.015 * last_epoch, y),
                     ha="left", va="center", color=color, fontweight="bold")
 
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=PAPER_DPI, bbox_inches="tight")
+    written = _save(fig, out_path, dpi=PAPER_DPI, bbox_inches="tight")
     plt.close(fig)
-    print(f"[plot] wrote {out_path}  (final: "
+    print(f"[plot] wrote {', '.join(str(p) for p in written)}  (final: "
           + ", ".join(f"{l} {v:,.1f}" for l, v in zip(labels, finals)) + ")")
 
 
@@ -240,6 +256,8 @@ def main() -> None:
     p.add_argument("--out-dir", type=Path,
                    default=REPO_ROOT / "plots" / "kll")
     p.add_argument("--solver-time-limit-ms", type=float, default=60_000.0)
+    p.add_argument("--format", default="pdf", choices=["pdf", "png", "both"],
+                   help="Output format. pdf is vector and is what LaTeX wants.")
     p.add_argument("--latency-epochs", type=int, default=10,
                    help="Epochs to show in Fig 4 and Fig 7 (the earliest N of "
                         "the assignment run). 0 plots every epoch.")
@@ -251,6 +269,9 @@ def main() -> None:
         val = getattr(args, field)
         if not val.is_absolute():
             setattr(args, field, REPO_ROOT / val)
+
+    global FORMATS
+    FORMATS = ["pdf", "png"] if args.format == "both" else [args.format]
 
     assign = load(args.assignment_csv)
     if args.latency_epochs:
@@ -267,7 +288,7 @@ def main() -> None:
         [("Approximate Query", "sketch_query_ms", SERVER_COLOR),
          ("Elasticsearch Query", "es_query_ms", ES_COLOR)],
         ylabel="Query Time (ms)",
-        out_path=args.out_dir / "fig4_query_latency.png",
+        out_path=args.out_dir / "fig4_query_latency",
     )
 
     # Fig. 7 -- solver runtime on approximate vs ES-derived telemetry.
@@ -276,7 +297,7 @@ def main() -> None:
         [("Solver (Approximate Input)", "sketch_solver_ms", GREEN),
          ("Solver (Elastic Search Input)", "es_solver_ms", PURPLE)],
         ylabel="Solver Time (ms)",
-        out_path=args.out_dir / "fig7_solver_runtime.png",
+        out_path=args.out_dir / "fig7_solver_runtime",
         time_limit_ms=args.solver_time_limit_ms,
     )
 
@@ -288,7 +309,7 @@ def main() -> None:
          ("static (reassignments)", "reassign", "cyan"),
          ("dynamic (no reassignments)", "dynamic", "orange"),
          ("dynamic (reassignments)", "dynamic+reassign", "red")],
-        out_path=args.out_dir / "fig8_completion.png",
+        out_path=args.out_dir / "fig8_completion",
     )
 
     # Fig. 9 -- approximate layer vs Elasticsearch as the telemetry source,
@@ -298,7 +319,7 @@ def main() -> None:
         [("static", "static", "blue"),
          ("elastic (compression = 100)", "es", "teal"),
          ("approx", "sketch", "orange")],
-        out_path=args.out_dir / "fig9_sketch_vs_es.png",
+        out_path=args.out_dir / "fig9_sketch_vs_es",
         errorbars=True,
         fmt="{:.1f}",
     )
@@ -314,7 +335,7 @@ def main() -> None:
          ("avg", "window-avg", "purple"),
          ("p90 (ours)", "p90", "grey"),
          ("per-epoch avg (ours)", "avg-epoch", "brown")],
-        out_path=args.out_dir / "fig10_update_rules.png",
+        out_path=args.out_dir / "fig10_update_rules",
     )
 
 
