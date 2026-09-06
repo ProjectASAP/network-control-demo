@@ -59,7 +59,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--extra-sketch-csv", type=Path, default=None,
                    help="Second accuracy CSV; its sketch arm is added as a fourth series.")
     p.add_argument("--extra-sketch-label", default="Approximate (second sketch)")
-    p.add_argument("--out", type=Path, default=REPO_ROOT / "plots" / "kll" / "raw_data" / "fig6_accuracy.png")
+    p.add_argument("--out", type=Path, default=REPO_ROOT / "plots" / "kll" / "fig6_accuracy.png")
     p.add_argument("--summary-csv", type=Path,
                    default=REPO_ROOT / "data" / "kll" / "raw_data_accuracy_summary.csv")
     p.add_argument("--log-y", action="store_true",

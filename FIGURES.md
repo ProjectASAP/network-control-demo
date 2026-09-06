@@ -13,8 +13,13 @@ data/
   raw_topology/            shared input (topology + workload) -- identical for both
   raw_topology_completion/ shared input, heavier workload
 plots/
-  kll/  dd/  combined/     same split
+  kll/  dd/                exactly the seven paper figures, per backend
 ```
+
+`plots/` holds **only** the paper figures -- `fig4` through `fig10`, one flat
+file each, in `plots/kll/` and `plots/dd/`. Everything else the plot scripts can
+emit (per-run diagnostics, the resource script's 13-file family, the alternate
+completion renderings) is regenerable and is not kept.
 
 `data/kll/` and `data/dd/` hold the **same filenames**, so switching backend is
 just swapping one path segment. (`data/kll/` additionally has
@@ -47,25 +52,45 @@ here by hand.
 
 | Fig | What it shows | Data (CSV) | Plot (PNG) | Regenerate the plot with |
 |---|---|---|---|---|
-| **4** | Query latency, sketch vs ES | `data/<b>/raw_data_assignment.csv` | `plots/<b>/raw_data/paper_style_2/fig4_query_latency.png` | `scripts/plot_raw_data_paper_style.py` |
-| **5** | CPU + RSS per query and per ingest | `data/<b>/resource_benchmark.csv`, `data/<b>/resource_ingestion.csv`, sidecars in `data/<b>/resource_benchmark_raw/` | `plots/<b>/resource/*.png` (headline: `query_cpu_headline.png`, `sketch_resource.png`) | `scripts/plot_resource_benchmark.py` |
-| **6** | Quantile error vs ground truth | `data/kll/raw_data_accuracy.csv`, `data/dd/raw_data_accuracy.csv` | combined (4 series): `plots/combined/fig6_accuracy_kll_vs_dd{,_log}.png`<br>DD only: `plots/dd/raw_data/fig6_accuracy{,_log}.png` | `scripts/plot_raw_data_accuracy.py` |
-| **7** | Solver runtime, sketch- vs ES-fed | `data/<b>/raw_data_assignment.csv` | `plots/<b>/raw_data/paper_style_2/fig7_solver_runtime.png` | `scripts/plot_raw_data_paper_style.py` |
-| **8** | Completions: static / reassign / dynamic | `data/<b>/raw_data_completion_fig810.csv` | `plots/<b>/raw_data/paper_style_2/fig8_completion.png`<br>alt: `plots/<b>/raw_data/completion_fig8.png` | `scripts/plot_raw_data_paper_style.py`<br>alt: `scripts/plot_raw_data_completion.py` |
-| **9** | Sketch vs ES vs static, 10 runs | `data/<b>/raw_data_completion_fig9.csv` | `plots/<b>/raw_data/paper_style_2/fig9_sketch_vs_es.png`<br>alt: `plots/<b>/raw_data/completion_fig9.png` | same as Fig 8 |
-| **10** | Telemetry update rules | `data/<b>/raw_data_completion_fig810.csv` (same CSV as Fig 8) | `plots/<b>/raw_data/paper_style_2/fig10_update_rules.png`<br>alt: `plots/<b>/raw_data/completion_fig10.png` | same as Fig 8 |
+| **4** | Query latency, sketch vs ES | `data/<b>/raw_data_assignment.csv` | `plots/<b>/fig4_query_latency.png` | `scripts/plot_raw_data_paper_style.py` |
+| **5** | CPU + RSS per query and per ingest | `data/<b>/resource_benchmark.csv`, `data/<b>/resource_ingestion.csv`, sidecars in `data/<b>/resource_benchmark_raw/` | `plots/<b>/fig5_resource_usage.png` | `scripts/plot_resource_benchmark.py` (see caveat below) |
+| **6** | Quantile error vs ground truth | `data/<b>/raw_data_accuracy.csv` | `plots/<b>/fig6_accuracy.png` | `scripts/plot_raw_data_accuracy.py` |
+| **7** | Solver runtime, sketch- vs ES-fed | `data/<b>/raw_data_assignment.csv` | `plots/<b>/fig7_solver_runtime.png` | `scripts/plot_raw_data_paper_style.py` |
+| **8** | Completions: static / reassign / dynamic | `data/<b>/raw_data_completion_fig810.csv` | `plots/<b>/fig8_completion.png` | `scripts/plot_raw_data_paper_style.py` |
+| **9** | Sketch vs ES vs static, 10 runs | `data/<b>/raw_data_completion_fig9.csv` | `plots/<b>/fig9_sketch_vs_es.png` | same as Fig 8 |
+| **10** | Telemetry update rules | `data/<b>/raw_data_completion_fig810.csv` (same CSV as Fig 8) | `plots/<b>/fig10_update_rules.png` | same as Fig 8 |
 
 `<b>` is `kll` or `dd`. **Every plot script defaults to `kll`**; to draw the DD
 version, pass the same flags with `kll` swapped for `dd`.
 
-Two extra plots that are not paper figures but come from the same runs:
-`plots/<b>/raw_data/assignment.png` and `plots/<b>/raw_data/query_solver.png`
-(`scripts/plot_raw_data_assignment.py`, fed by `data/<b>/raw_data_assignment.csv`).
+Fig 4/7/8/9/10 come out of one `plot_raw_data_paper_style.py` run, already named
+correctly, so `--out-dir plots/<b>` is all it needs. Fig 6 is one
+`plot_raw_data_accuracy.py` run per backend, with `--log-y`:
 
-### Fig 6, the combined KLL-vs-DD figure
+```bash
+cd solver_experimental
+uv run python ../scripts/plot_raw_data_accuracy.py \
+    --csv data/dd/raw_data_accuracy.csv \
+    --sketch-label "Approximate (DDSketch, alpha=1e-3)" \
+    --out plots/dd/fig6_accuracy.png --log-y
+```
 
-Both CSVs are now in this checkout, so it is one command with ordinary relative
-paths:
+**Three scripts still write outside `plots/<b>/` and will re-create pruned
+directories if run as-is:**
+
+- `plot_resource_benchmark.py` writes a 13-file family into
+  `plots/<b>/resource/`; Fig 5 is its `sketch_resource.png`. It also **prunes**.
+  Send it to a scratch dir and copy `sketch_resource.png` to
+  `plots/<b>/fig5_resource_usage.png`, or trim the script when Fig 5 is reworked.
+- `plot_raw_data_assignment.py` and `plot_raw_data_completion.py` default to
+  `plots/<b>/raw_data/` and produce diagnostics and alternate renderings of Fig
+  8/9/10 that are deliberately not kept.
+
+### The combined KLL-vs-DD Fig 6
+
+A single Fig 6 carrying all four arms (KLL, DDSketch, ES default, ES 1000) is not
+one of the kept figures, but both accuracy CSVs are in this checkout, so it is one
+command with ordinary relative paths:
 
 ```bash
 cd solver_experimental
@@ -74,11 +99,10 @@ uv run python ../scripts/plot_raw_data_accuracy.py \
     --sketch-label "Approximate (KLL, k=200)" \
     --extra-sketch-csv data/dd/raw_data_accuracy.csv \
     --extra-sketch-label "Approximate (DDSketch, alpha=1e-3)" \
-    --out plots/combined/fig6_accuracy_kll_vs_dd.png \
-    --summary-csv data/combined/raw_data_accuracy_kll_vs_dd_summary.csv --log-y
+    --out <somewhere outside plots/> --log-y
 ```
 
-The script warns if the two CSVs' Elasticsearch arms disagree — that warning
+The script warns if the two CSVs' Elasticsearch arms disagree -- that warning
 means the two runs did not see the same values and the figure is not valid.
 
 ---

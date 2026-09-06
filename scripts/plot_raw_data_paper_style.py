@@ -247,7 +247,7 @@ def main() -> None:
     p.add_argument("--completion-fig9-csv", type=Path,
                    default=REPO_ROOT / "data" / "kll" / "raw_data_completion_fig9.csv")
     p.add_argument("--out-dir", type=Path,
-                   default=REPO_ROOT / "plots" / "kll" / "raw_data" / "paper_style_2")
+                   default=REPO_ROOT / "plots" / "kll")
     p.add_argument("--solver-time-limit-ms", type=float, default=60_000.0)
     args = p.parse_args()
     # Relative paths resolve against the repo root, not the CWD, so this works

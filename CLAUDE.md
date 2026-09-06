@@ -328,7 +328,7 @@ datasets in one checkout, split by backend:
 
 ```
 data/kll/  data/dd/  data/combined/     data/raw_topology{,_completion}/  (shared inputs)
-plots/kll/ plots/dd/ plots/combined/
+plots/kll/ plots/dd/                    exactly fig4..fig10, one flat file each
 ```
 
 `data/kll/` and `data/dd/` use the same filenames, so switching backend is one
