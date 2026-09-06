@@ -38,7 +38,6 @@ import numpy as np  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # --- house style for the latency figures (verbatim from the archived scripts)
-TITLE_FS = 19
 LABEL_FS = 17
 TICK_FS = 15
 LEGEND_FS = 14
@@ -99,8 +98,8 @@ def _epoch_ticks(ax, epochs: list[int], x: np.ndarray, stride: int) -> None:
 # Fig. 4 / Fig. 7 -- per-epoch latency bars (plot_multi_run_query.py style)
 # ---------------------------------------------------------------------------
 
-def plot_latency(rows: list[dict], series, ylabel: str, title_prefix: str,
-                 subtitle: str, out_path: Path, time_limit_ms: float | None = None,
+def plot_latency(rows: list[dict], series, ylabel: str, out_path: Path,
+                 time_limit_ms: float | None = None,
                  stride: int = 3) -> None:
     epochs = sorted({int(r["epoch"]) for r in rows})
     x = np.arange(len(epochs), dtype=float)
@@ -129,8 +128,6 @@ def plot_latency(rows: list[dict], series, ylabel: str, title_prefix: str,
     ax.set_yscale("log")
     ax.grid(axis="y", alpha=0.3, which="major")
     ax.tick_params(axis="both", labelsize=TICK_FS)
-    ax.set_title(f"{title_prefix}\nApproximate Layer vs Elasticsearch\n{subtitle}",
-                 fontsize=TITLE_FS, pad=14)
     _epoch_ticks(ax, epochs, x, stride)
     ax.set_ylim(top=ax.get_ylim()[1] * (3.0 if time_limit_ms is not None else 1.6))
 
@@ -186,9 +183,8 @@ def _spread_labels(values: list[float], min_gap: float) -> list[float]:
     return ys
 
 
-def plot_completion(rows: list[dict], scenarios, title: str, out_path: Path,
+def plot_completion(rows: list[dict], scenarios, out_path: Path,
                     errorbars: bool = False, fmt: str = "{:.0f}",
-                    caption: str | None = None,
                     xlabel: str = COMPLETION_XLABEL) -> None:
     """One panel: cumulative mean curves, boxed upper-left legend, bold
     coloured final values at the right end of each line -- the paper's layout."""
@@ -209,7 +205,6 @@ def plot_completion(rows: list[dict], scenarios, title: str, out_path: Path,
     last_epoch = max(epochs)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(YLABEL)
-    ax.set_title(title)
     ax.legend(loc="upper left")
 
     # Room at the right for the value labels, and enough headroom that the
@@ -223,10 +218,6 @@ def plot_completion(rows: list[dict], scenarios, title: str, out_path: Path,
     for value, y, color in zip(finals, ys, colors):
         ax.annotate(fmt.format(value), xy=(last_epoch + 0.015 * last_epoch, y),
                     ha="left", va="center", color=color, fontweight="bold")
-
-    if caption:
-        ax.text(0.5, -0.135, caption, transform=ax.transAxes, ha="center",
-                va="top", fontsize=9)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=PAPER_DPI, bbox_inches="tight")
@@ -262,18 +253,12 @@ def main() -> None:
     comp810 = load(args.completion_fig810_csv)
     comp9 = load(args.completion_fig9_csv)
     n_runs9 = len({r["run"] for r in comp9})
-    n_epochs = len({int(r["epoch"]) for r in assign})
-    rows_per_epoch = int(assign[0]["rows"])
-
     # Fig. 4 -- query latency comparison (older 300 s assignment run).
     plot_latency(
         assign,
         [("Approximate Query", "sketch_query_ms", SERVER_COLOR),
          ("Elasticsearch Query", "es_query_ms", ES_COLOR)],
         ylabel="Query Time (ms)",
-        title_prefix="Query Time Comparison",
-        subtitle=(f"({n_epochs} epochs of {ASSIGNMENT_EPOCH_S} s, "
-                  f"{rows_per_epoch:,} rows/epoch; mean 5.5 ms vs 942 ms)"),
         out_path=args.out_dir / "fig4_query_latency.png",
     )
 
@@ -283,9 +268,6 @@ def main() -> None:
         [("Solver (Approximate Input)", "sketch_solver_ms", GREEN),
          ("Solver (Elastic Search Input)", "es_solver_ms", PURPLE)],
         ylabel="Solver Time (ms)",
-        title_prefix="Solver Time Comparison",
-        subtitle=(f"({n_epochs} epochs of {ASSIGNMENT_EPOCH_S} s; bars at the "
-                  f"dashed line hit the MILP deadline)"),
         out_path=args.out_dir / "fig7_solver_runtime.png",
         time_limit_ms=args.solver_time_limit_ms,
     )
@@ -298,7 +280,6 @@ def main() -> None:
          ("static (reassignments)", "reassign", "cyan"),
          ("dynamic (no reassignments)", "dynamic", "orange"),
          ("dynamic (reassignments)", "dynamic+reassign", "red")],
-        title="Effect of Real-time Telemetry Information on Task Completion Throughput",
         out_path=args.out_dir / "fig8_completion.png",
     )
 
@@ -309,8 +290,6 @@ def main() -> None:
         [("static", "static", "blue"),
          ("elastic (compression = 100)", "es", "teal"),
          ("approx", "sketch", "orange")],
-        title=("Tasks Completed Using Drop-in Layer vs Elasticsearch Quantiles "
-               f"(mean \u00b1 std, n = {n_runs9} runs)"),
         out_path=args.out_dir / "fig9_sketch_vs_es.png",
         errorbars=True,
         fmt="{:.1f}",
@@ -327,11 +306,7 @@ def main() -> None:
          ("avg", "window-avg", "purple"),
          ("p90 (ours)", "p90", "grey"),
          ("per-epoch avg (ours)", "avg-epoch", "brown")],
-        title="Effect of Dynamic Telemetry Update Rule on Number of Tasks Completed",
         out_path=args.out_dir / "fig10_update_rules.png",
-        caption=("p90 and per-epoch avg are ours, not the paper's.\n"
-                 "The paper's \u201cavg\u201d is the recent-window averaging "
-                 "of its reference [1], i.e. our window-avg rule."),
     )
 
 

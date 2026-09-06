@@ -370,7 +370,7 @@ def _draw_sketch_two_series(ax, ingest: dict, query: dict, ylabel: str,
 
 def plot_sketch_resource(ingest_cpu: dict, query_cpu: dict,
                          ingest_mem: dict, query_mem: dict,
-                         suptitle: str, out_path: Path) -> None:
+                         out_path: Path) -> None:
     """Two-panel sketch-server-only figure: CPU (log y) on the left, memory on
     the right; each panel groups ingestion vs query bars per epoch.
     """
@@ -384,15 +384,12 @@ def plot_sketch_resource(ingest_cpu: dict, query_cpu: dict,
         axes[1], ingest=ingest_mem, query=query_mem,
         ylabel="Whole-process RSS (MB)", title="Memory",
         font_scale=font_scale, log_y=False, show_legend=False)
-    n = max(n_top, n_bot)
-    fig.suptitle(f"{suptitle}  (mean ± std, n={n} runs)",
-                 fontsize=BAR_TITLE_FS * font_scale, y=0.99)
     # Single shared legend centered below both panels.
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, fontsize=BAR_LEGEND_FS * font_scale,
                frameon=False, loc="lower center", ncol=2,
                bbox_to_anchor=(0.5, -0.01))
-    fig.tight_layout(rect=(0, 0.04, 1, 0.96))
+    fig.tight_layout(rect=(0, 0.04, 1, 1.0))
     plt.savefig(out_path, dpi=220, bbox_inches="tight", pad_inches=0.3)
     plt.close(fig)
     print(f"[plot] wrote {out_path}")
@@ -555,7 +552,6 @@ def main() -> None:
             query_cpu={"rows": rows, "col": "cpu_per_query_ms"},
             ingest_mem={"rows": rows, "col": "rss_idle_mb"},
             query_mem={"rows": rows, "col": "rss_mean_mb"},
-            suptitle="Approximate Layer resource usage",
             out_path=out_dir / "sketch_resource.png")
 
     if not args.no_prune:

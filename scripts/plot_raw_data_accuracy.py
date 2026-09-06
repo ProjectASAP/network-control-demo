@@ -153,19 +153,13 @@ def main() -> None:
                 ax.spines[side].set_visible(False)
 
     fig.supylabel("Mean rel. error (%)", fontsize=LABEL_FS + 1)
-    fig.suptitle("Mean Rel. Error vs Ground Truth\n"
-                 f"(per-run mean over {len({r['key'] for r in rows})} keys; "
-                 f"mean +- sd across n={n_runs} runs)", fontsize=TITLE_FS + 2)
-    # Lay the axes out first, then park the legend and the note in the margin
-    # the rect reserved for them. `bbox_inches="tight"` is deliberately not used:
-    # it re-crops the figure and drags the two into the panels.
-    fig.tight_layout(rect=(0.035, 0.085, 1.0, 0.93))
+    # Lay the axes out first, then park the legend in the margin the rect
+    # reserves for it.  `bbox_inches="tight"` is deliberately not used: it
+    # re-crops the figure and drags the legend into the panels.
+    fig.tight_layout(rect=(0.035, 0.055, 1.0, 0.995))
     handles, labels = axes[0][0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=min(3, len(series)),
-               fontsize=LEGEND_FS, frameon=False, bbox_to_anchor=(0.5, 0.032))
-    note = ("network is synthetic: raw_data has no per-node network metric; "
-            "CPU and memory are drawn from the real trace")
-    fig.text(0.5, 0.008, note, ha="center", fontsize=LEGEND_FS - 2, color="#666666")
+               fontsize=LEGEND_FS, frameon=False, bbox_to_anchor=(0.5, 0.006))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.out, dpi=DPI)
     plt.close(fig)
