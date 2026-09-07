@@ -62,11 +62,25 @@ here by hand.
 | **9** | Sketch vs ES vs static, 10 runs | `data/<b>/raw_data_completion_fig9.csv` | `plots/<b>/fig9_sketch_vs_es.pdf` | same as Fig 8 |
 | **10** | Telemetry update rules | `data/<b>/raw_data_completion_fig810.csv` (same CSV as Fig 8) | `plots/<b>/fig10_update_rules.pdf` | same as Fig 8 |
 
-`raw_data_assignment.csv` is **10 independent runs x 10 epochs** (regenerated
-2026-09-06). Each run re-ingests with a fresh telemetry jitter draw and a
-restarted server, so Fig 4's and Fig 7's error bars are a real run-to-run
-spread; the earlier single-run version drew std = 0 at every epoch. One backend
-takes ~1h50m: `run_raw_data_assignment.py --runs 10 --epochs 10`.
+**`data/dd/raw_data_assignment.csv` is the current Fig 4 / Fig 7 data**
+(regenerated 2026-09-07): 10 independent runs x 10 epochs, **150 s epochs**,
+**996,800 telemetry rows per epoch**, and a timed query matching the paper's
+Fig 4 caption -- p50/p90/p100 percentiles **plus a cumulative sum** over CPU and
+memory, one batched request to the sketch layer and one request per node to
+Elasticsearch. Each run re-ingests with a fresh jitter draw and a restarted
+server, so the error bars are a real run-to-run spread. Reproduce with the 150 s
+workload in `data/raw_topology_150s/` (~1h40m):
+
+```bash
+uv run python ../scripts/raw_data_prep.py --epoch-length-s 150 \
+    --out-dir data/raw_topology_150s
+uv run python ../scripts/run_raw_data_assignment.py --runs 10 --epochs 10 \
+    --epoch-length-s 150 --topology-dir data/raw_topology_150s
+```
+
+**`data/kll/raw_data_assignment.csv` is superseded**: 300 s epochs and a single
+p50 query. The paper uses the DD figures, so KLL was deliberately not re-run --
+do not compare the two backends on Fig 4 or Fig 7.
 
 `<b>` is `kll` or `dd`. **Every plot script defaults to `kll`**; to draw the DD
 version, pass the same flags with `kll` swapped for `dd`.
@@ -117,12 +131,16 @@ means the two runs did not see the same values and the figure is not valid.
 
 ## Open items
 
-- **Fig 7 does not support "solver time rarely exceeds 1 s".** Over 10 runs the
-  mean solver time is 11.7 s (KLL-fed) and 13.7 s (ES-fed), and 14-20 of 100
-  solves stop at the 60 s deadline without proving optimality. The per-epoch
-  error bars span an order of magnitude: solver time is dominated by which
-  telemetry draw it got, not by which backend supplied it. The paper's claim
-  needs rewording or the scheduling window needs shrinking.
+- **Fig 7 splits into two regimes, and the paper's "rarely exceeds 1 s" only
+  covers one.** In the **7 of 10** epochs where the pending batch fits the
+  cluster, solver time is **98-296 ms** (sketch-fed) and every solve is proven
+  optimal -- well under the 810 ms an Elasticsearch telemetry query costs. In
+  epochs 5, 6 and 7 the batch does **not** fit (`assigned < pending_before`), so
+  the solver must also prove which subset to admit: 19-42 s, and 15 of those 30
+  solves reach the 60 s deadline. The split tracks whether the batch fits, not
+  which backend supplied the telemetry (mean 10.9 s sketch-fed vs 9.5 s ES-fed
+  overall). Check the `assigned` and `pending_before` columns before reading
+  anything else into a slow epoch.
 
 - **Fig 6's network arm is synthetic.** raw_data has no per-node network metric
   (`bw.csv` is per-edge), so `run_raw_data_accuracy.py` generates one. It is
@@ -182,9 +200,9 @@ Fig 4 / Fig 5, sketch server only:
 
 | | KLL | DD |
 |---|---|---|
-| Query latency (Fig 4: 10 runs x 10 epochs) | 5.82 +- 0.59 ms | 5.31 +- 0.77 ms |
-| Elasticsearch, same queries | 837.9 +- 219.0 ms | 808.3 +- 224.7 ms |
-| Latency reduction | 99.31% | 99.34% |
+| Query latency (Fig 4) | *superseded, 300 s + p50 only* | **5.61 +- 0.70 ms** |
+| Elasticsearch, same queries | | **810.1 +- 240.3 ms** |
+| Latency reduction | | **99.31%** (144x) |
 | Query latency (resource run) | 4.09 ms | 3.49 ms |
 | CPU per query | 8.80 ms | 5.23 ms |
 | RSS mean / VmHWM | 12.2 / 12.4 MB | 14.9 / 15.1 MB |
