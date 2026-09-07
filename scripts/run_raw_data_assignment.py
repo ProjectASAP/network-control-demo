@@ -122,6 +122,14 @@ def parse_args() -> argparse.Namespace:
         help=("Per-epoch lognormal sigma applied to telemetry values (0 disables). "
               "The same 2% sigma gen_synth.py applies when building the fixture."),
     )
+    p.add_argument("--query-percents", type=str, default="50,90,100",
+                   help=("Percentiles the timed query asks for. The paper's Fig 4 "
+                         "measures a combined p50/p90/p100 query; --usage-quantile "
+                         "and its complement are always added, since the solver "
+                         "reads those."))
+    p.add_argument("--query-aggs", type=str, default="percentiles,sum",
+                   help=("Aggregations the timed query asks for. 'sum' is the "
+                         "cumulative sum the paper's Fig 4 caption describes."))
     p.add_argument("--seed", type=int, default=20260903)
 
     p.add_argument("--solver-backend", type=str, choices=["CBC", "SCIP", "GLPK"], default="SCIP")
@@ -295,11 +303,12 @@ def _pick(values: dict, q: float) -> float:
     raise KeyError(f"percentile {q} not in {list(values)}")
 
 
-def query_sketch(args: argparse.Namespace, nodes: List[str], percents: List[float]):
+def query_sketch(args: argparse.Namespace, nodes: List[str], percents: List[float],
+                 aggs: List[str]):
     payload = {
         "keys": nodes,
         "fields": ["cpu_cores", "memory_gb"],
-        "aggs": ["percentiles"],
+        "aggs": aggs,
         "percents": percents,
     }
     t0 = time.perf_counter()
@@ -318,19 +327,24 @@ def query_sketch(args: argparse.Namespace, nodes: List[str], percents: List[floa
     return out, elapsed
 
 
-def query_es(args: argparse.Namespace, nodes: List[str], percents: List[float], epoch: int):
+def query_es(args: argparse.Namespace, nodes: List[str], percents: List[float], epoch: int,
+             aggs: List[str]):
     headers = es_headers(args.es_api_key)
     url = f"{args.es_url}/{args.es_index}/_search"
+    es_aggs: Dict[str, dict] = {}
+    if "percentiles" in aggs:
+        es_aggs["cpu_pct"] = {"percentiles": {"field": "cpu", "percents": percents}}
+        es_aggs["mem_pct"] = {"percentiles": {"field": "mem", "percents": percents}}
+    if "sum" in aggs:
+        es_aggs["cpu_sum"] = {"sum": {"field": "cpu"}}
+        es_aggs["mem_sum"] = {"sum": {"field": "mem"}}
     out: Dict[str, Dict[str, float]] = {}
     t0 = time.perf_counter()
     for node in nodes:
         body = {
             "size": 0,
             "query": {"bool": {"filter": [{"term": {"node": node}}, {"term": {"epoch": epoch}}]}},
-            "aggs": {
-                "cpu_pct": {"percentiles": {"field": "cpu", "percents": percents}},
-                "mem_pct": {"percentiles": {"field": "mem", "percents": percents}},
-            },
+            "aggs": es_aggs,
         }
         r = requests.post(url, headers=headers, json=body, params={"request_cache": "false"},
                           timeout=(args.connect_timeout, args.query_timeout))
@@ -508,7 +522,7 @@ CSV_HEADER = [
 
 def run_one(args: argparse.Namespace, run: int, tel: Telemetry, assets: dict,
             node_ids: List[str], q: float, q_lo: float, percents: List[float],
-            writer, nwriter, fh, nfh) -> None:
+            query_aggs: List[str], writer, nwriter, fh, nfh) -> None:
     """One independent trajectory: fresh queues, fresh jitter, restarted server."""
     reset_es_index(args)
 
@@ -534,8 +548,8 @@ def run_one(args: argparse.Namespace, run: int, tel: Telemetry, assets: dict,
             s_ing, e_ing = ingest_epoch(args, tel, epoch, cpu, mem)
             print(f"  ingest: sketch={s_ing:.0f}ms es={e_ing:.0f}ms", flush=True)
 
-            sketch_read, s_qms = query_sketch(args, node_ids, percents)
-            es_read, e_qms = query_es(args, node_ids, percents, epoch)
+            sketch_read, s_qms = query_sketch(args, node_ids, percents, query_aggs)
+            es_read, e_qms = query_es(args, node_ids, percents, epoch, query_aggs)
             print(f"  query:  sketch={s_qms:.1f}ms es={e_qms:.1f}ms", flush=True)
 
             cpu_abs, cpu_rel, mem_abs = 0.0, 0.0, 0.0
@@ -630,7 +644,12 @@ def main() -> None:
 
     q = args.usage_quantile
     q_lo = round(100.0 - q, 6)
-    percents = sorted({q, q_lo})
+    # The timed query is the paper's combined query; q and q_lo must be in it
+    # because telemetry_to_usage() reads those two percentiles back.
+    query_aggs = [a.strip() for a in args.query_aggs.split(",") if a.strip()]
+    percents = sorted({q, q_lo} | {float(x) for x in args.query_percents.split(",") if x.strip()})
+    print(f"timed query: percentiles {percents} + aggs {query_aggs} "
+          f"over cpu_cores and memory_gb")
     print(f"update rule: used_cpu = p{q:g}(cpu_usage), used_mem = capacity - p{q_lo:g}(mem_available)")
 
     print(f"loading telemetry from {args.telemetry_csv} ...", flush=True)
@@ -645,7 +664,7 @@ def main() -> None:
                           "mem_avail_sketch", "mem_avail_es"])
         for run in range(args.runs):
             run_one(args, run, tel, assets, node_ids, q, q_lo, percents,
-                    writer, nwriter, fh, nfh)
+                    query_aggs, writer, nwriter, fh, nfh)
 
     print(f"\nwrote {out_csv}")
     print(f"wrote {nodes_csv}")
