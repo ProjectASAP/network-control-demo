@@ -48,10 +48,12 @@ METRIC_LABEL = {
 }
 METRIC_ORDER = ["cpu_cores", "memory_gb", "network_mbps"]
 
-TITLE_FS = 15
-LABEL_FS = 13
-TICK_FS = 11
-LEGEND_FS = 12
+# Scaled up 1.6x: the figure is ~11 in wide and lands at a fraction of that in
+# a two-column layout, so print-size legibility needs generous point sizes here.
+TITLE_FS = 24
+LABEL_FS = 21
+TICK_FS = 18
+LEGEND_FS = 18
 DPI = 200
 
 
@@ -162,10 +164,13 @@ def main() -> None:
     # Lay the axes out first, then park the legend in the margin the rect
     # reserves for it.  `bbox_inches="tight"` is deliberately not used: it
     # re-crops the figure and drags the legend into the panels.
-    fig.tight_layout(rect=(0.035, 0.055, 1.0, 0.995))
+    fig.tight_layout(rect=(0.045, 0.135, 1.0, 0.995))
     handles, labels = axes[0][0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=min(3, len(series)),
-               fontsize=LEGEND_FS, frameon=False, bbox_to_anchor=(0.5, 0.006))
+    # Two columns, not three: at this point size three long labels run off both
+    # edges, and bbox_inches="tight" is not available to rescue them.
+    fig.legend(handles, labels, loc="lower center", ncol=min(2, len(series)),
+               fontsize=LEGEND_FS, frameon=False, bbox_to_anchor=(0.5, 0.010),
+               columnspacing=1.4, handlelength=1.8, handletextpad=0.6)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.out, dpi=DPI)
     plt.close(fig)
