@@ -61,7 +61,7 @@ here by hand.
 | **7** | Solver runtime, sketch- vs ES-fed | `data/<b>/raw_data_assignment.csv` | `plots/<b>/fig7_solver_runtime.pdf` | `scripts/plot_raw_data_paper_style.py` |
 | **8** | Completions: static / reassign / dynamic | `data/<b>/raw_data_completion_fig810.csv` (`--completion-fig8-csv`) | `plots/<b>/fig8_completion.pdf` | `scripts/plot_raw_data_paper_style.py` |
 | **9** | Sketch vs ES vs static, 10 runs | `data/<b>/raw_data_completion_fig9.csv` | `plots/<b>/fig9_sketch_vs_es.pdf` | same as Fig 8 |
-| **10** | Telemetry update rules | `--completion-fig10-csv`; falls back to Fig 8's CSV with a warning | `plots/<b>/fig10_update_rules.pdf` | same as Fig 8 |
+| **10** | Telemetry update rules | `data/dd/raw_data_completion_fig10.csv` (`--completion-fig10-csv`) | `plots/<b>/fig10_update_rules.pdf` | same as Fig 8 |
 
 **`data/dd/raw_data_assignment.csv` is the current Fig 4 / Fig 7 data**
 (regenerated 2026-09-07): 10 independent runs x 10 epochs, **150 s epochs**,
@@ -169,6 +169,46 @@ means the two runs did not see the same values and the figure is not valid.
 
 ---
 
+**Fig 10 now has its own run, under within-epoch spike bursts.** With the
+original `uniform` burst mode a burst scaled a whole epoch, so p50, p90 and the
+mean all moved together and no burst setting changed the ranking of the update
+rules -- window averaging tied p50 exactly (476 vs 476 on a 20-epoch probe).
+`--burst-mode spike` makes `--burst-prob` the share of an epoch's samples that
+spike, which is the "outlier distortion" of Sec. II-B and the only regime in
+which a quantile can beat an average.
+
+The committed run: DDSketch alpha=0.001, `--burst-mode spike --burst-prob 0.20
+--burst-factor 1.6`, `--usage-base-lo 0.4464 --usage-base-hi 0.8482` (chosen so
+the mean load stays at 90%, matching Fig 8, so the only difference is the
+*shape* of task usage), 150 epochs, 1 run, the paper's five series (~31 min):
+
+| series | completed | vs static | est. CPU error |
+|---|---|---|---|
+| p50 | 4061 | **+25.46%** | 16.23% |
+| p50 + 1.2x alloc | 3984 | +23.08% | 8.60% |
+| avg (window averaging) | 3930 | +21.41% | 8.72% |
+| avg(p50, p75) + 1.2x alloc | 3794 | +17.21% | 3.49% |
+| no rule | 3237 | -- | 45.12% |
+
+**What this does and does not support.** The two plain quantile rules now beat
+recent window averaging, by 4.1 and 1.7 points -- so "the best quantile rule
+outperforms window averaging" holds. The paper's stronger claim, quantile
+statistics *as a class*, does not: `avg(p50, p75) + 1.2x alloc` loses to window
+averaging by 4.2 points, and window averaging lands third of five, not last.
+Window averaging's own number never moved (+21.4% with and without spikes);
+spikes changed the p50 end.
+
+Note also that estimate accuracy does not order the completions: p50 has the
+worst error of any dynamic rule (16.23%) and the most completions, while
+`avg(p50, p75) + 1.2x alloc` has the best error (3.49%) and the fewest.
+
+`--burst-prob 0.20`, `--burst-factor 1.6` and the spike mode itself are **our
+choices** -- the paper gives no burst numbers, only the qualitative "often
+bursty and highly volatile". They belong in the paper's text.
+
+Fig 8 is untouched by all of this: it keeps `raw_data_completion_fig810.csv`,
+and `--burst-mode` defaults to `uniform` with an identical RNG stream.
+
 ## Things that will bite you
 
 - **Fig 4 and Fig 7 are truncated to 10 epochs** (`--latency-epochs`,
@@ -185,7 +225,11 @@ means the two runs did not see the same values and the figure is not valid.
   `../data/kll/x.csv` typed from `solver_experimental/` is therefore *wrong* —
   write `data/kll/x.csv`.
 
-- **A figure is only drawn when every series it names is present.** Feeding the
+- **A figure is only drawn when every series it names is present, silently.**
+  Fig 10's `p50` series was mapped to the scenario name `dynamic+reassign`,
+  which is what the *shared* CSV called it after dedup; the standalone Fig 10 run
+  names it `p50`, so the figure was skipped with no error until the mapping was
+  fixed. Check the `[plot] wrote` lines actually list every figure you expect. Feeding the
   Fig 9 CSV to `plot_raw_data_completion.py` used to silently overwrite Fig 10
   with a two-series subset.
 

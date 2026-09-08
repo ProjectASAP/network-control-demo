@@ -359,7 +359,9 @@ def main() -> None:
     plot_completion(
         comp10,
         [("no rule", "static", "blue"),
-         ("p50", "dynamic+reassign", "cornflowerblue"),
+         # Fig 10 has its own CSV now, in which this scenario is simply "p50";
+         # in the shared file it was stored under Fig 8's name, dynamic+reassign.
+         ("p50", "p50", "cornflowerblue"),
          ("p50 + 1.2x alloc", "p50-1.2xalloc", "orange"),
          ("avg(p50, p75) + 1.2x alloc", "avg-p50p75-1.2xalloc", "olive"),
          ("avg", "window-avg", "purple")],
