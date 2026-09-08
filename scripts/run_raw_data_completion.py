@@ -260,6 +260,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--burst-prob", type=float, default=0.0,
                    help="raw_data/README.md: 'there should be no such spikes for task cpu usage', so bursts are off by default.")
     p.add_argument("--burst-factor", type=float, default=1.6)
+    p.add_argument("--burst-mode", choices=["uniform", "spike"], default="uniform",
+                   help=("'uniform': --burst-prob is the chance the whole epoch is "
+                         "scaled by --burst-factor (the original behaviour). "
+                         "'spike': --burst-prob is the share of an epoch's samples "
+                         "that spike, so the burst is a within-epoch outlier."))
     p.add_argument("--window-epochs", type=int, default=3,
                    help="Window length for the 'window' update rule.")
     p.add_argument("--bump-threshold", type=float, default=0.90,
@@ -392,11 +397,24 @@ class TaskUsage:
         i = self.index[task_id]
         rng = np.random.default_rng([a.seed, run, i, epoch])
         mult = self.base[i] * math.exp(rng.normal(0.0, a.usage_drift_sigma))
-        if rng.random() < a.burst_prob:
-            mult *= a.burst_factor
+        if a.burst_mode == "uniform":
+            # A burst scales the whole epoch, so every sample moves by the same
+            # factor: p50, p90 and the mean all shift together and the shape of
+            # the within-epoch distribution is unchanged.  Kept as the default so
+            # that existing runs reproduce, including their RNG stream.
+            if rng.random() < a.burst_prob:
+                mult *= a.burst_factor
         k = a.task_samples
         cpu = request_cpu * mult * np.exp(rng.normal(0.0, a.usage_within_sigma, k))
         mem = request_mem * mult * np.exp(rng.normal(0.0, a.usage_within_sigma, k))
+        if a.burst_mode == "spike" and a.burst_prob > 0.0:
+            # A burst is an outlier inside the epoch: only a --burst-prob share of
+            # the samples spikes.  This is the "outlier distortion" of Sec. II-B --
+            # it pulls the mean away from the median, which is the only regime in
+            # which a quantile can beat an average.
+            hit = rng.random(k) < a.burst_prob
+            cpu[hit] *= a.burst_factor
+            mem[hit] *= a.burst_factor
         return cpu.astype("float32"), mem.astype("float32")
 
 
