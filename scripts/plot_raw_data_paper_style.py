@@ -332,17 +332,18 @@ def main() -> None:
         fmt="{:.1f}",
     )
 
-    # Fig. 10 -- dynamic telemetry update rules: the paper's five first, then
-    # our two extras.
+    # Fig. 10 -- dynamic telemetry update rules, the paper's five series only.
+    # The CSV also holds `p90` and `avg-epoch` (a single-epoch mean); both are
+    # ours, not the paper's, and the second is not something the approximate
+    # layer can actually serve -- it maintains a sum but no count, so the mean
+    # only exists because the harness knows --task-samples out of band.
     plot_completion(
         comp810,
         [("no rule", "static", "blue"),
          ("p50", "dynamic+reassign", "cornflowerblue"),
          ("p50 + 1.2x alloc", "p50-1.2xalloc", "orange"),
          ("avg(p50, p75) + 1.2x alloc", "avg-p50p75-1.2xalloc", "olive"),
-         ("avg", "window-avg", "purple"),
-         ("p90 (ours)", "p90", "grey"),
-         ("per-epoch avg (ours)", "avg-epoch", "brown")],
+         ("avg", "window-avg", "purple")],
         out_path=args.out_dir / "fig10_update_rules",
     )
 
