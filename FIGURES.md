@@ -54,6 +54,7 @@ here by hand.
 
 | Fig | What it shows | Data (CSV) | Plot (PNG) | Regenerate the plot with |
 |---|---|---|---|---|
+| **2** | ES query share of the control loop (motivation) | `data/es_ingest_query_sweep_summary.csv` (no backend split -- Elasticsearch only) | `plots/dd/fig2_query_ratio.pdf` | `scripts/plot_es_sweep_query_ratio.py` |
 | **4** | Query latency, sketch vs ES | `data/<b>/raw_data_assignment.csv` | `plots/<b>/fig4_query_latency.pdf` | `scripts/plot_raw_data_paper_style.py` |
 | **5** | CPU + RSS per query and per ingest | `data/<b>/resource_benchmark.csv`, `data/<b>/resource_ingestion.csv`, sidecars in `data/<b>/resource_benchmark_raw/` | `plots/<b>/fig5_resource_usage.pdf` | `scripts/plot_resource_benchmark.py` (see caveat below) |
 | **6** | Quantile error vs ground truth | `data/<b>/raw_data_accuracy.csv` | `plots/<b>/fig6_accuracy.pdf` | `scripts/plot_raw_data_accuracy.py` |
@@ -107,6 +108,14 @@ directories if run as-is:**
 - `plot_raw_data_assignment.py` and `plot_raw_data_completion.py` default to
   `plots/<b>/raw_data/` and produce diagnostics and alternate renderings of Fig
   8/9/10 that are deliberately not kept.
+
+**Fig 2 has no backend variant.** It measures Elasticsearch's query time as a
+share of query + solver across ingest row counts, so there is nothing for a
+sketch backend to change; it lives in `plots/dd/` only because that is where the
+paper's figure set is assembled. Its data was recovered from the
+`archive/data-plots` branch. Note its caption's "approaches 40% even for just a
+few thousand data points" overstates the data: the ratio is 23-24% at 2k-8k rows
+and reaches 40% only past 64k, topping out at 53.9% at 1.02M rows.
 
 ### The combined KLL-vs-DD Fig 6
 

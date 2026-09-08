@@ -15,13 +15,18 @@ import csv
 from pathlib import Path
 from typing import Dict, List
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+
+# Embed TrueType rather than Type 3 fonts: IEEE/ACM PDF checkers reject
+# Type 3, which is matplotlib's default for PDF output.
+matplotlib.rcParams["pdf.fonttype"] = 42
+matplotlib.rcParams["ps.fonttype"] = 42
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-TITLE_FS = 17
 LABEL_FS = 15
 TICK_FS = 13
 LEGEND_FS = 13
@@ -47,7 +52,7 @@ def main() -> None:
     p.add_argument("--summary-csv", type=str,
                    default="data/es_ingest_query_sweep_summary.csv")
     p.add_argument("--out", type=str,
-                   default="plots/es_sweep_query_ratio.png")
+                   default="plots/dd/fig2_query_ratio.pdf")
     p.add_argument("--task-count", type=int, default=30,
                    help="Used only for plot annotation")
     args = p.parse_args()
@@ -87,11 +92,6 @@ def main() -> None:
     ax.set_ylim(0, 100)
     ax.grid(axis="y", alpha=0.3)
     ax.tick_params(axis="both", labelsize=TICK_FS)
-    ax.set_title(
-        "Query Bottleneck in Edge Resource Allocation",
-        fontsize=TITLE_FS,
-        pad=14,
-    )
     ax.set_xticks(x)
     ax.set_xticklabels([f"{r:,}" for r in rows], rotation=30, ha="right")
 
