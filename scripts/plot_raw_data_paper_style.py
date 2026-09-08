@@ -62,8 +62,6 @@ def _save(fig, stem: Path, **kw) -> list[Path]:
 
 SERVER_COLOR = "#2a9d8f"   # "Approximate" everywhere in the archive
 ES_COLOR = "#f28e2b"       # "Elastic Search"
-PURPLE = "#b07aa1"
-GREEN = "#59a14f"
 
 BAR_KW = dict(capsize=3, edgecolor="black", linewidth=0.4,
               error_kw={"linewidth": 1, "ecolor": "black"})
@@ -294,8 +292,10 @@ def main() -> None:
     # Fig. 7 -- solver runtime on approximate vs ES-derived telemetry.
     plot_latency(
         assign,
-        [("Solver (Approximate Input)", "sketch_solver_ms", GREEN),
-         ("Solver (Elastic Search Input)", "es_solver_ms", PURPLE)],
+        # Same teal/orange as Fig 4: both figures contrast the approximate layer
+        # against Elasticsearch, so the colour should mean the same thing twice.
+        [("Solver (Approximate Input)", "sketch_solver_ms", SERVER_COLOR),
+         ("Solver (Elastic Search Input)", "es_solver_ms", ES_COLOR)],
         ylabel="Solver Time (ms)",
         out_path=args.out_dir / "fig7_solver_runtime",
         time_limit_ms=args.solver_time_limit_ms,
