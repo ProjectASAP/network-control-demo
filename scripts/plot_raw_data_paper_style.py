@@ -68,6 +68,12 @@ BAR_KW = dict(capsize=3, edgecolor="black", linewidth=0.4,
 
 # --- paper style for the completion figures --------------------------------
 PAPER_FIGSIZE = (9.0, 6.5)
+# The completion figures (8, 9, 10) used matplotlib's 10 pt defaults on a 9 in
+# canvas, which is a ~3 pt label once the figure is scaled into a column.
+COMPLETION_LABEL_FS = 18
+COMPLETION_TICK_FS = 15
+COMPLETION_LEGEND_FS = 15
+COMPLETION_ANNOT_FS = 15
 PAPER_DPI = 150
 # Epoch length is a property of the *run*, not of the plotting code: the
 # completion CSVs come from 150 s epochs, the (older) assignment CSV from 300 s.
@@ -218,21 +224,23 @@ def plot_completion(rows: list[dict], scenarios, out_path: Path,
         labels.append(label)
 
     last_epoch = max(epochs)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(YLABEL)
-    ax.legend(loc="upper left")
+    ax.set_xlabel(xlabel, fontsize=COMPLETION_LABEL_FS)
+    ax.set_ylabel(YLABEL, fontsize=COMPLETION_LABEL_FS)
+    ax.tick_params(axis="both", labelsize=COMPLETION_TICK_FS)
+    ax.legend(loc="upper left", fontsize=COMPLETION_LEGEND_FS)
 
     # Room at the right for the value labels, and enough headroom that the
     # topmost (possibly nudged) label still sits inside the axes.
-    ax.set_xlim(right=last_epoch + 0.13 * last_epoch)
+    ax.set_xlim(right=last_epoch + 0.17 * last_epoch)
     y0, y1 = ax.get_ylim()
-    ys = _spread_labels(finals, 0.030 * (y1 - y0))
+    ys = _spread_labels(finals, 0.042 * (y1 - y0))
     ax.set_ylim(min(y0, min(ys) - 0.035 * (y1 - y0)),
                 max(y1, max(ys) + 0.035 * (y1 - y0)))
 
     for value, y, color in zip(finals, ys, colors):
         ax.annotate(fmt.format(value), xy=(last_epoch + 0.015 * last_epoch, y),
-                    ha="left", va="center", color=color, fontweight="bold")
+                    ha="left", va="center", color=color, fontweight="bold",
+                    fontsize=COMPLETION_ANNOT_FS)
 
     written = _save(fig, out_path, dpi=PAPER_DPI, bbox_inches="tight")
     plt.close(fig)
