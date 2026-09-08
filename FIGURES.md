@@ -59,9 +59,9 @@ here by hand.
 | **5** | CPU + RSS per query and per ingest | `data/<b>/resource_benchmark.csv`, `data/<b>/resource_ingestion.csv`, sidecars in `data/<b>/resource_benchmark_raw/` | `plots/<b>/fig5_resource_usage.pdf` | `scripts/plot_resource_benchmark.py` (see caveat below) |
 | **6** | Quantile error vs ground truth | `data/<b>/raw_data_accuracy.csv` | `plots/<b>/fig6_accuracy.pdf` | `scripts/plot_raw_data_accuracy.py` |
 | **7** | Solver runtime, sketch- vs ES-fed | `data/<b>/raw_data_assignment.csv` | `plots/<b>/fig7_solver_runtime.pdf` | `scripts/plot_raw_data_paper_style.py` |
-| **8** | Completions: static / reassign / dynamic | `data/<b>/raw_data_completion_fig810.csv` | `plots/<b>/fig8_completion.pdf` | `scripts/plot_raw_data_paper_style.py` |
+| **8** | Completions: static / reassign / dynamic | `data/<b>/raw_data_completion_fig810.csv` (`--completion-fig8-csv`) | `plots/<b>/fig8_completion.pdf` | `scripts/plot_raw_data_paper_style.py` |
 | **9** | Sketch vs ES vs static, 10 runs | `data/<b>/raw_data_completion_fig9.csv` | `plots/<b>/fig9_sketch_vs_es.pdf` | same as Fig 8 |
-| **10** | Telemetry update rules | `data/<b>/raw_data_completion_fig810.csv` (same CSV as Fig 8) | `plots/<b>/fig10_update_rules.pdf` | same as Fig 8 |
+| **10** | Telemetry update rules | `--completion-fig10-csv`; falls back to Fig 8's CSV with a warning | `plots/<b>/fig10_update_rules.pdf` | same as Fig 8 |
 
 **`data/dd/raw_data_assignment.csv` is the current Fig 4 / Fig 7 data**
 (regenerated 2026-09-07): 10 independent runs x 10 epochs, **150 s epochs**,
@@ -116,6 +116,16 @@ paper's figure set is assembled. Its data was recovered from the
 `archive/data-plots` branch. Note its caption's "approaches 40% even for just a
 few thousand data points" overstates the data: the ratio is 23-24% at 2k-8k rows
 and reaches 40% only past 64k, topping out at 53.9% at 1.02M rows.
+
+**Fig 8 and Fig 10 take separate CSVs on purpose.** Fig 8 asks whether
+refreshing the estimates helps at all, so it runs on the faithful workload and
+should not move. Fig 10 is a sensitivity study over update rules, so it may run
+under different assumptions -- notably bursty task usage, which is the regime
+the paper's own quantile argument (Sec. II-B, "CPU utilization is often bursty
+and highly volatile") targets, and which `--burst-prob` disables by default
+because `raw_data/README.md` says task CPU does not spike in that testbed.
+Passing no `--completion-fig10-csv` makes Fig 10 reuse Fig 8's file and prints a
+warning; that is only correct while the two genuinely share a workload.
 
 ### The combined KLL-vs-DD Fig 6
 

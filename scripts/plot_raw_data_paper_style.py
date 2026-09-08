@@ -14,8 +14,15 @@ feeds Fig. 4 / Fig. 7 is still the older 300 s run and is labelled separately.
 Inputs (already on disk; nothing is re-run):
   data/raw_data_assignment.csv           -- 1 run x 43 epochs (300 s epochs),
                                             sketch vs Elasticsearch
-  data/raw_data_completion_fig810.csv    -- 1 run x 150 epochs x 9 scenarios
+  data/raw_data_completion_fig8.csv      -- 1 run x 150 epochs, Fig 8's scenarios
+  data/raw_data_completion_fig10.csv     -- 1 run x 150 epochs, Fig 10's scenarios
   data/raw_data_completion_fig9.csv      -- 10 runs x 21 epochs x 3 scenarios
+
+Fig 8 and Fig 10 read separate files on purpose. Fig 8 asks whether refreshing
+the estimates helps at all, so it runs on the faithful workload. Fig 10 is a
+sensitivity study over update rules, so it may run under different assumptions
+(e.g. bursty task usage, the regime the paper's quantile argument targets), and
+must not drag Fig 8 with it.
 
 Outputs -> plots/raw_data/paper_style_2/
   fig4_query_latency.png    fig7_solver_runtime.png
@@ -255,8 +262,12 @@ def main() -> None:
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--assignment-csv", type=Path,
                    default=REPO_ROOT / "data" / "kll" / "raw_data_assignment.csv")
-    p.add_argument("--completion-fig810-csv", type=Path,
+    p.add_argument("--completion-fig8-csv", type=Path,
                    default=REPO_ROOT / "data" / "kll" / "raw_data_completion_fig810.csv")
+    p.add_argument("--completion-fig10-csv", type=Path, default=None,
+                   help=("Fig 10's own scenarios. Defaults to --completion-fig8-csv "
+                         "with a warning, which is only right while the two share "
+                         "a workload."))
     p.add_argument("--completion-fig9-csv", type=Path,
                    default=REPO_ROOT / "data" / "kll" / "raw_data_completion_fig9.csv")
     p.add_argument("--out-dir", type=Path,
@@ -270,9 +281,11 @@ def main() -> None:
     args = p.parse_args()
     # Relative paths resolve against the repo root, not the CWD, so this works
     # the same from the repo root and from solver_experimental/.
-    for field in ("assignment_csv", "completion_fig810_csv",
+    for field in ("assignment_csv", "completion_fig8_csv", "completion_fig10_csv",
                   "completion_fig9_csv", "out_dir"):
         val = getattr(args, field)
+        if val is None:            # --completion-fig10-csv is optional
+            continue
         if not val.is_absolute():
             setattr(args, field, REPO_ROOT / val)
 
@@ -285,7 +298,13 @@ def main() -> None:
         # much longer, and plotting all of it just shrinks the bars.
         keep = sorted({int(r["epoch"]) for r in assign})[:args.latency_epochs]
         assign = [r for r in assign if int(r["epoch"]) in set(keep)]
-    comp810 = load(args.completion_fig810_csv)
+    comp8 = load(args.completion_fig8_csv)
+    if args.completion_fig10_csv is None:
+        print("[plot] note: --completion-fig10-csv not given; Fig 10 falls back to "
+              f"{args.completion_fig8_csv.name}, so both figures share one workload.")
+        comp10 = comp8
+    else:
+        comp10 = load(args.completion_fig10_csv)
     comp9 = load(args.completion_fig9_csv)
     n_runs9 = len({r["run"] for r in comp9})
     # Fig. 4 -- query latency comparison (older 300 s assignment run).
@@ -312,7 +331,7 @@ def main() -> None:
     # Fig. 8 -- effect of real-time telemetry / reassignments.  One run, so no
     # error bars.
     plot_completion(
-        comp810,
+        comp8,
         [("static (no reassignments)", "static", "blue"),
          ("static (reassignments)", "reassign", "cyan"),
          ("dynamic (no reassignments)", "dynamic", "orange"),
@@ -338,7 +357,7 @@ def main() -> None:
     # layer can actually serve -- it maintains a sum but no count, so the mean
     # only exists because the harness knows --task-samples out of band.
     plot_completion(
-        comp810,
+        comp10,
         [("no rule", "static", "blue"),
          ("p50", "dynamic+reassign", "cornflowerblue"),
          ("p50 + 1.2x alloc", "p50-1.2xalloc", "orange"),
